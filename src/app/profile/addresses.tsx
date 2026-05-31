@@ -6,6 +6,8 @@ import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import * as Location from 'expo-location';
 import { Button } from '../../components/Button';
+import { LocationSearchModal, LocationResult } from '../../components/LocationSearchModal';
+import { useTheme } from '../../theme/ThemeContext';
 
 async function reverseGeocodeAddress(lat: number, lng: number) {
   if (Platform.OS === 'web') {
@@ -20,7 +22,7 @@ async function reverseGeocodeAddress(lat: number, lng: number) {
       city: `${a?.city || a?.town || a?.village || ''}, ${a?.state || ''} ${a?.postcode || ''}`.trim(),
     };
   } else {
-    return null; // signal to use expo-location's geocoder
+    return null;
   }
 }
 
@@ -37,8 +39,10 @@ const INITIAL_ADDRESSES: Address[] = [
 ];
 
 export default function AddressesScreen() {
+  const { colors } = useTheme();
   const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLocationSearch, setShowLocationSearch] = useState(false);
 
   const handleUseCurrentLocation = async () => {
     setIsLoading(true);
@@ -59,11 +63,9 @@ export default function AddressesScreen() {
       let city: string;
 
       if (webResult) {
-        // Web: used Nominatim
         street = webResult.street;
         city = webResult.city;
       } else {
-        // Native: use expo-location geocoder
         const geocode = await Location.reverseGeocodeAsync({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
@@ -94,57 +96,79 @@ export default function AddressesScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f0' }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       <WebHeader />
-      
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#eceae6' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile')} style={{ padding: 8, marginRight: 8, marginLeft: -8 }}>
-          <Ionicons name="arrow-back" size={24} color="#222022" />
+          <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </Pressable>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: '#222022' }}>Shipping Addresses</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Shipping Addresses</Text>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
-        
-        {/* Action Button */}
-        <View style={{ marginBottom: 32 }}>
+        <View style={{ marginBottom: 32, gap: 12 }}>
           {isLoading ? (
-            <View style={{ padding: 16, alignItems: 'center' }}>
-              <ActivityIndicator color="#c3d809" />
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#6b696b', marginTop: 8 }}>Locating...</Text>
+            <View style={{ padding: 16, alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.inkMuted, marginTop: 8 }}>Locating...</Text>
             </View>
           ) : (
             <Button title="Use Current Location" onPress={handleUseCurrentLocation} />
           )}
+
+          <Pressable
+            onPress={() => setShowLocationSearch(true)}
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.surfaceSoft : colors.surface,
+              padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceMuted,
+              alignItems: 'center', justifyContent: 'center', flexDirection: 'row'
+            })}
+          >
+            <Ionicons name="search" size={20} color={colors.ink} style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>Search for Address</Text>
+          </Pressable>
         </View>
 
-        {/* Address List */}
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#222022', marginBottom: 16 }}>Saved Addresses</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Saved Addresses</Text>
         <View style={{ gap: 16 }}>
           {addresses.map(addr => (
-            <View key={addr.id} style={{ 
-              backgroundColor: '#ffffff', borderRadius: 20, padding: 20, 
-              borderWidth: 1, borderColor: addr.isDefault ? '#c3d809' : '#eceae6',
-              shadowColor: '#222022', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 
+            <View key={addr.id} style={{
+              backgroundColor: colors.surface, borderRadius: 20, padding: 20,
+              borderWidth: 1, borderColor: addr.isDefault ? colors.primary : colors.surfaceMuted,
+              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: colors.isDark ? 0.3 : 0.05, shadowRadius: 10, elevation: 2
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name={addr.name === 'Home' ? "home" : "location"} size={20} color="#222022" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#222022' }}>{addr.name}</Text>
+                  <Ionicons name={addr.name === 'Home' ? "home" : "location"} size={20} color={colors.ink} style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>{addr.name}</Text>
                 </View>
                 {addr.isDefault && (
-                  <View style={{ backgroundColor: '#c3d80920', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#7a8a05', textTransform: 'uppercase' }}>Default</Text>
+                  <View style={{ backgroundColor: colors.primaryGhost, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.primaryDim, textTransform: 'uppercase' }}>Default</Text>
                   </View>
                 )}
               </View>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: '#6b696b', marginBottom: 2 }}>{addr.street}</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: '#6b696b' }}>{addr.city}</Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginBottom: 2 }}>{addr.street}</Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>{addr.city}</Text>
             </View>
           ))}
         </View>
       </ScrollView>
+
+      <LocationSearchModal
+        visible={showLocationSearch}
+        onClose={() => setShowLocationSearch(false)}
+        onSelectLocation={(loc: LocationResult) => {
+          const newAddress: Address = {
+            id: Date.now().toString(),
+            name: loc.name,
+            street: loc.street,
+            city: loc.city,
+          };
+          setAddresses(prev => [newAddress, ...prev]);
+          setShowLocationSearch(false);
+        }}
+      />
     </SafeAreaView>
   );
 }

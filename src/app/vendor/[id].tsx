@@ -12,6 +12,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
+import { useTheme } from '../../theme/ThemeContext';
 
 // ─── Mock Vendor Data ────────────────────────────────────────────────────────
 const VENDORS: Record<string, {
@@ -119,14 +120,15 @@ const getFallbackVendor = (id: string) => ({
   productList: [],
 });
 
-const StatBox = ({ value, label }: { value: string; label: string }) => (
+const StatBox = ({ value, label, colors }: { value: string; label: string; colors: any }) => (
   <View style={{ alignItems: 'center', flex: 1 }}>
-    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: '#222022' }}>{value}</Text>
-    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: '#6b696b', marginTop: 2 }}>{label}</Text>
+    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>{value}</Text>
+    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{label}</Text>
   </View>
 );
 
 export default function VendorStorefront() {
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vendor = VENDORS[id as string] ?? getFallbackVendor(id as string);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -137,7 +139,7 @@ export default function VendorStorefront() {
     n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f0' }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       {/* Back Button (absolute over banner) */}
       <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 56 : 16, left: 16, zIndex: 20 }}>
         <Pressable
@@ -159,7 +161,7 @@ export default function VendorStorefront() {
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* ─── Banner ─── */}
-        <View style={{ height: 200, width: '100%', backgroundColor: '#eceae6' }}>
+        <View style={{ height: 200, width: '100%', backgroundColor: colors.surfaceMuted }}>
           <Image
             source={{ uri: vendor.bannerUrl }}
             style={{ width: '100%', height: '100%' }}
@@ -174,15 +176,15 @@ export default function VendorStorefront() {
 
         {/* ─── Profile Section ─── */}
         <View style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: colors.surface,
           paddingHorizontal: 24,
           paddingBottom: 24,
           borderBottomLeftRadius: 28,
           borderBottomRightRadius: 28,
-          shadowColor: '#222022',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: colors.isDark ? 0.3 : 0.05,
+          shadowRadius: 24,
           elevation: 4,
         }}>
           {/* Avatar + Follow Row */}
@@ -190,9 +192,9 @@ export default function VendorStorefront() {
             {/* Avatar */}
             <View style={{
               width: 80, height: 80, borderRadius: 40,
-              borderWidth: 3, borderColor: '#ffffff',
+              borderWidth: 3, borderColor: colors.surface,
               overflow: 'hidden',
-              shadowColor: '#222022',
+              shadowColor: '#000',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.15,
               shadowRadius: 10,
@@ -201,6 +203,37 @@ export default function VendorStorefront() {
               <Image source={{ uri: vendor.avatarUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
             </View>
 
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
+            <Pressable
+              onPress={() => router.push(`/chat/${vendor.id}` as any)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 18,
+                paddingVertical: 11,
+                borderRadius: 24,
+                backgroundColor: colors.surfaceSoft,
+                borderWidth: 1.5,
+                borderColor: colors.surfaceMuted,
+                opacity: pressed ? 0.85 : 1,
+                marginRight: 10,
+              })}
+            >
+              <Ionicons
+                name="chatbubble-ellipses"
+                size={16}
+                color={colors.inkMuted}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 14,
+                color: colors.inkMuted,
+              }}>
+                Message
+              </Text>
+            </Pressable>
+            
             {/* Follow Button */}
             <Pressable
               onPress={() => setIsFollowing(!isFollowing)}
@@ -210,51 +243,52 @@ export default function VendorStorefront() {
                 paddingHorizontal: 22,
                 paddingVertical: 11,
                 borderRadius: 24,
-                backgroundColor: isFollowing ? '#f5f5f0' : '#222022',
+                backgroundColor: isFollowing ? colors.surfaceSoft : colors.ink,
                 borderWidth: isFollowing ? 1.5 : 0,
-                borderColor: '#eceae6',
+                borderColor: colors.surfaceMuted,
                 opacity: pressed ? 0.85 : 1,
               })}
             >
               <Ionicons
                 name={isFollowing ? 'checkmark' : 'add'}
                 size={16}
-                color={isFollowing ? '#6b696b' : '#ffffff'}
+                color={isFollowing ? colors.inkMuted : colors.surface}
                 style={{ marginRight: 6 }}
               />
               <Text style={{
                 fontFamily: 'Inter_600SemiBold',
                 fontSize: 14,
-                color: isFollowing ? '#6b696b' : '#ffffff',
+                color: isFollowing ? colors.inkMuted : colors.surface,
               }}>
                 {isFollowing ? 'Following' : 'Follow'}
               </Text>
             </Pressable>
           </View>
+          </View>
 
           {/* Name + Handle */}
           <View style={{ marginTop: 14, marginBottom: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: '#222022', marginRight: 8 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, marginRight: 8 }}>
                 {vendor.name}
               </Text>
               {vendor.verified && (
                 <View style={{
                   width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: '#3a7ef5',
+                  backgroundColor: colors.info,
                   alignItems: 'center', justifyContent: 'center',
                 }}>
                   <Ionicons name="checkmark" size={13} color="#ffffff" />
                 </View>
               )}
             </View>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: '#9e9c9e', marginTop: 2 }}>
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 2 }}>
               {vendor.handle}
             </Text>
           </View>
 
           {/* Description */}
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: '#6b696b', lineHeight: 22, marginBottom: 16 }}>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, lineHeight: 22, marginBottom: 16 }}>
             {vendor.description}
           </Text>
 
@@ -262,11 +296,11 @@ export default function VendorStorefront() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
             {vendor.tags.map(tag => (
               <View key={tag} style={{
-                backgroundColor: '#c3d80918',
-                borderWidth: 1, borderColor: '#c3d80960',
+                backgroundColor: colors.primaryGhost,
+                borderWidth: 1, borderColor: colors.primaryBorder,
                 borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
               }}>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#7a8a05' }}>{tag}</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.primaryDim }}>{tag}</Text>
               </View>
             ))}
           </View>
@@ -274,24 +308,24 @@ export default function VendorStorefront() {
           {/* Stats */}
           <View style={{
             flexDirection: 'row',
-            backgroundColor: '#f5f5f0',
+            backgroundColor: colors.surfaceSoft,
             borderRadius: 18,
             paddingVertical: 18,
             paddingHorizontal: 8,
           }}>
-            <StatBox value={String(vendor.products)} label="Products" />
-            <View style={{ width: 1, backgroundColor: '#eceae6' }} />
-            <StatBox value={formatNumber(vendor.followers)} label="Followers" />
-            <View style={{ width: 1, backgroundColor: '#eceae6' }} />
-            <StatBox value={String(vendor.rating)} label="Rating" />
-            <View style={{ width: 1, backgroundColor: '#eceae6' }} />
-            <StatBox value={formatNumber(vendor.reviews)} label="Reviews" />
+            <StatBox value={String(vendor.products)} label="Products" colors={colors} />
+            <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
+            <StatBox value={formatNumber(vendor.followers)} label="Followers" colors={colors} />
+            <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
+            <StatBox value={String(vendor.rating)} label="Rating" colors={colors} />
+            <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
+            <StatBox value={formatNumber(vendor.reviews)} label="Reviews" colors={colors} />
           </View>
 
           {/* Joined */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14 }}>
-            <Ionicons name="calendar-outline" size={14} color="#9e9c9e" style={{ marginRight: 5 }} />
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: '#9e9c9e' }}>
+            <Ionicons name="calendar-outline" size={14} color={colors.inkGhost} style={{ marginRight: 5 }} />
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>
               Member since {vendor.joined}
             </Text>
           </View>
@@ -300,18 +334,18 @@ export default function VendorStorefront() {
         {/* ─── Products Grid ─── */}
         <View style={{ paddingHorizontal: 20, paddingTop: 32 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: '#222022', letterSpacing: -0.3 }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, letterSpacing: -0.3 }}>
               All Products
             </Text>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: '#9e9c9e' }}>
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost }}>
               {vendor.productList.length} items
             </Text>
           </View>
 
           {vendor.productList.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 64 }}>
-              <Ionicons name="cube-outline" size={64} color="#eceae6" style={{ marginBottom: 16 }} />
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: '#9e9c9e' }}>
+              <Ionicons name="cube-outline" size={64} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: colors.inkGhost }}>
                 No products yet
               </Text>
             </View>

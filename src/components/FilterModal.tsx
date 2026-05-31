@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, Modal, Pressable, ScrollView, Animated } from 'react-native';
+import React from 'react';
+import { View, Text, Modal, Pressable, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
+import { useTheme } from '../theme/ThemeContext';
 
 interface FilterModalProps {
   visible: boolean;
@@ -9,9 +10,10 @@ interface FilterModalProps {
 }
 
 export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
-  const [priceRange, setPriceRange] = useState([0, 500]);
-  const [selectedCondition, setSelectedCondition] = useState('New');
-  const [selectedAvailability, setSelectedAvailability] = useState('In Stock');
+  const { colors } = useTheme();
+  const [priceRange, setPriceRange] = React.useState([0, 500]);
+  const [selectedCondition, setSelectedCondition] = React.useState('New');
+  const [selectedAvailability, setSelectedAvailability] = React.useState('In Stock');
 
   const conditions = ['New', 'Refurbished', 'Used'];
   const availabilities = ['In Stock', 'Pre-order', 'Out of Stock'];
@@ -23,15 +25,15 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(34,32,34,0.45)' }}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(34,32,34,0.55)' }}>
         <View style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: colors.surface,
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           height: '80%',
-          shadowColor: '#222022',
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: -10 },
-          shadowOpacity: 0.1,
+          shadowOpacity: 0.2,
           shadowRadius: 20,
           elevation: 10,
         }}>
@@ -43,60 +45,60 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
             paddingHorizontal: 24,
             paddingVertical: 20,
             borderBottomWidth: 1,
-            borderBottomColor: '#eceae6',
+            borderBottomColor: colors.surfaceMuted,
           }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: '#222022' }}>Refine Results</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Refine Results</Text>
             <Pressable
               onPress={onClose}
               style={{
                 width: 40, height: 40, borderRadius: 20,
-                backgroundColor: '#f5f5f0',
+                backgroundColor: colors.surfaceSoft,
                 alignItems: 'center', justifyContent: 'center'
               }}
             >
-              <Ionicons name="close" size={24} color="#222022" />
+              <Ionicons name="close" size={24} color={colors.ink} />
             </Pressable>
           </View>
 
           <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 24 }} showsVerticalScrollIndicator={false}>
             {/* Price Range */}
             <View style={{ marginBottom: 32 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#222022', marginBottom: 16 }}>Price Range</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Price Range</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{
-                  flex: 1, backgroundColor: '#f5f5f0', height: 52, borderRadius: 16,
-                  alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eceae6'
+                  flex: 1, backgroundColor: colors.surfaceSoft, height: 52, borderRadius: 16,
+                  alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.surfaceMuted
                 }}>
-                  <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 15, color: '#6b696b' }}>${priceRange[0]}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 15, color: colors.inkMuted }}>${priceRange[0]}</Text>
                 </View>
-                <Text style={{ marginHorizontal: 16, color: '#9e9c9e', fontSize: 20 }}>-</Text>
+                <Text style={{ marginHorizontal: 16, color: colors.inkGhost, fontSize: 20 }}>-</Text>
                 <View style={{
-                  flex: 1, backgroundColor: '#f5f5f0', height: 52, borderRadius: 16,
-                  alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eceae6'
+                  flex: 1, backgroundColor: colors.surfaceSoft, height: 52, borderRadius: 16,
+                  alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.surfaceMuted
                 }}>
-                  <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 15, color: '#6b696b' }}>${priceRange[1]}+</Text>
+                  <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 15, color: colors.inkMuted }}>${priceRange[1]}+</Text>
                 </View>
               </View>
             </View>
 
             {/* Condition */}
             <View style={{ marginBottom: 32 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#222022', marginBottom: 16 }}>Condition</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Condition</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                 {conditions.map(cond => (
                   <Pressable
                     key={cond}
                     onPress={() => setSelectedCondition(cond)}
                     style={{
-                      backgroundColor: selectedCondition === cond ? '#c3d80920' : '#ffffff',
+                      backgroundColor: selectedCondition === cond ? colors.primaryGhost : colors.surfaceSoft,
                       borderWidth: selectedCondition === cond ? 2 : 1,
-                      borderColor: selectedCondition === cond ? '#c3d809' : '#eceae6',
+                      borderColor: selectedCondition === cond ? colors.primary : colors.surfaceMuted,
                       paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20,
                     }}
                   >
                     <Text style={{
                       fontFamily: 'Inter_600SemiBold', fontSize: 14,
-                      color: selectedCondition === cond ? '#222022' : '#6b696b'
+                      color: selectedCondition === cond ? colors.ink : colors.inkMuted
                     }}>{cond}</Text>
                   </Pressable>
                 ))}
@@ -105,22 +107,22 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
 
             {/* Availability */}
             <View style={{ marginBottom: 40 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#222022', marginBottom: 16 }}>Availability</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Availability</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                 {availabilities.map(avail => (
                   <Pressable
                     key={avail}
                     onPress={() => setSelectedAvailability(avail)}
                     style={{
-                      backgroundColor: selectedAvailability === avail ? '#c3d80920' : '#ffffff',
+                      backgroundColor: selectedAvailability === avail ? colors.primaryGhost : colors.surfaceSoft,
                       borderWidth: selectedAvailability === avail ? 2 : 1,
-                      borderColor: selectedAvailability === avail ? '#c3d809' : '#eceae6',
+                      borderColor: selectedAvailability === avail ? colors.primary : colors.surfaceMuted,
                       paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20,
                     }}
                   >
                     <Text style={{
                       fontFamily: 'Inter_600SemiBold', fontSize: 14,
-                      color: selectedAvailability === avail ? '#222022' : '#6b696b'
+                      color: selectedAvailability === avail ? colors.ink : colors.inkMuted
                     }}>{avail}</Text>
                   </Pressable>
                 ))}
@@ -131,9 +133,9 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
           {/* Footer */}
           <View style={{
             paddingHorizontal: 24, paddingVertical: 20,
-            borderTopWidth: 1, borderTopColor: '#eceae6',
-            backgroundColor: '#ffffff',
-            paddingBottom: 32, // Safe area
+            borderTopWidth: 1, borderTopColor: colors.surfaceMuted,
+            backgroundColor: colors.surface,
+            paddingBottom: 32,
           }}>
             <Button title="Apply Filters (12)" onPress={onClose} />
           </View>

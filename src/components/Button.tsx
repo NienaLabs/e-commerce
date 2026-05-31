@@ -21,7 +21,7 @@ export const Button = ({
   icon,
 }: ButtonProps) => {
   const getContainerClasses = (pressed: boolean) => {
-    let base = "flex-row items-center justify-center h-[52px] md:h-[48px] px-6 rounded-[12px] ";
+    let base = "flex-row items-center justify-center h-[52px] md:h-[48px] px-6 rounded-full ";
     
     if (disabled) {
       return base + "bg-surface-muted";

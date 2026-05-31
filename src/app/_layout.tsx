@@ -5,12 +5,23 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } f
 import { OpenSans_400Regular, OpenSans_600SemiBold } from '@expo-google-fonts/open-sans';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { ThemeProvider } from '../theme/ThemeContext';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query'
+import { AuthProvider } from '../context/AuthContext';
+
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+
+  const queryClient = new QueryClient()
   const [loaded, error] = useFonts({
-    // Keys must match exactly what's used in fontFamily styles and in tailwind.config.js
     'Inter_400Regular': Inter_400Regular,
     'Inter_500Medium': Inter_500Medium,
     'Inter_600SemiBold': Inter_600SemiBold,
@@ -30,9 +41,16 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

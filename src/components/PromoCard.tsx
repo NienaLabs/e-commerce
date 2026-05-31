@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, ImageBackground, ViewStyle } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 
 interface PromoCardProps {
   imageUrl: string;
@@ -12,6 +13,7 @@ interface PromoCardProps {
 }
 
 export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress, containerStyle }: PromoCardProps) => {
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -20,9 +22,9 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
         height: 180,
         borderRadius: 20,
         overflow: 'hidden',
-        shadowColor: '#222022',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: pressed ? 0.06 : 0.12,
+        shadowOpacity: pressed ? 0.06 : (colors.isDark ? 0.3 : 0.12),
         shadowRadius: 16,
         elevation: pressed ? 2 : 5,
         transform: [{ scale: pressed ? 0.98 : 1 }],
@@ -33,7 +35,7 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
         style={{ width: '100%', height: '100%', justifyContent: 'space-between', padding: 22 }}
         resizeMode="cover"
       >
-        {/* Dark Overlay for Text Readability */}
+        {/* Dark Overlay for Text Readability - Always dark for image backgrounds */}
         <View style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(34, 32, 34, 0.45)'
@@ -45,13 +47,13 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
               <View style={{
                 width: 6, height: 6, borderRadius: 3,
-                backgroundColor: '#c3d809',
+                backgroundColor: colors.primary,
                 marginRight: 6,
               }} />
               <Text style={{
                 fontFamily: 'Inter_700Bold',
                 fontSize: 10,
-                color: '#c3d809',
+                color: colors.primary,
                 letterSpacing: 1.2,
                 textTransform: 'uppercase',
               }}>{badge}</Text>
@@ -61,7 +63,7 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
             <Text style={{
               fontFamily: 'Inter_700Bold',
               fontSize: 26,
-              color: '#ffffff',
+              color: '#ffffff', // Keep white since overlay is always dark
               lineHeight: 30,
               letterSpacing: -0.4,
             }}>{heading}</Text>
@@ -80,7 +82,7 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
         {ctaLabel && (
           <View style={{
             alignSelf: 'flex-start',
-            backgroundColor: '#c3d809',
+            backgroundColor: colors.primary,
             paddingHorizontal: 18,
             paddingVertical: 9,
             borderRadius: 20,
@@ -89,7 +91,7 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
             <Text style={{
               fontFamily: 'Inter_700Bold',
               fontSize: 12,
-              color: '#222022',
+              color: colors.isDark ? colors.ink : '#222022',
             }}>{ctaLabel}</Text>
           </View>
         )}

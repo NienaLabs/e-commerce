@@ -1,11 +1,16 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, useWindowDimensions, Platform } from 'react-native';
+import { View, Image, useWindowDimensions, Platform } from 'react-native';
 import { WebHeader } from '../../components/WebHeader';
+import { useRef, useEffect } from 'react';
+import { useTheme } from '../../theme/ThemeContext';
+import { useCartStore } from '../../store/cartStore';
 
 export default function TabLayout() {
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const totalItems = useCartStore((state) => state.getTotalItems());
 
   return (
     <View className="flex-1">
@@ -14,18 +19,19 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: isDesktop ? { display: 'none' } : {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
             height: 64,
-            backgroundColor: '#ffffff',
+            backgroundColor: colors.isDark ? 'rgba(34,32,34,0.8)' : 'rgba(255,255,255,0.85)',
             borderTopWidth: 1,
-            borderTopColor: '#eceae6',
-            shadowColor: '#222022',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.06,
-            shadowRadius: 12,
-            elevation: 5,
+            borderTopColor: colors.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            elevation: 0,
+            ...(Platform.OS === 'web' ? { backdropFilter: 'blur(16px)' } as any : {}),
           },
-          tabBarActiveTintColor: '#222022',
-          tabBarInactiveTintColor: '#9e9c9e',
+          tabBarActiveTintColor: colors.ink,
+          tabBarInactiveTintColor: colors.inkMuted,
           tabBarLabelStyle: {
             fontFamily: 'Inter-Bold',
             fontSize: 10,
@@ -42,10 +48,16 @@ export default function TabLayout() {
           options={{
             title: 'Home',
             tabBarIcon: ({ color, focused }) => (
-              <View className="items-center justify-center">
-                <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
-                {focused && <View className="w-1 h-1 rounded-full bg-primary absolute -bottom-5" />}
-              </View>
+              <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="discover"
+          options={{
+            title: 'Discover',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "location" : "location-outline"} size={24} color={color} />
             ),
           }}
         />
@@ -54,10 +66,7 @@ export default function TabLayout() {
           options={{
             title: 'Search',
             tabBarIcon: ({ color, focused }) => (
-              <View className="items-center justify-center">
-                <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />
-                {focused && <View className="w-1 h-1 rounded-full bg-primary absolute -bottom-5" />}
-              </View>
+              <Ionicons name={focused ? "search" : "search-outline"} size={24} color={color} />
             ),
           }}
         />
@@ -65,11 +74,10 @@ export default function TabLayout() {
           name="cart"
           options={{
             title: 'Cart',
+            tabBarBadge: totalItems > 0 ? totalItems : undefined,
+            tabBarBadgeStyle: { backgroundColor: colors.primary, color: colors.ink },
             tabBarIcon: ({ color, focused }) => (
-              <View className="items-center justify-center">
-                <Ionicons name={focused ? 'cart' : 'cart-outline'} size={24} color={color} />
-                {focused && <View className="w-1 h-1 rounded-full bg-primary absolute -bottom-5" />}
-              </View>
+              <Ionicons name={focused ? "cart" : "cart-outline"} size={24} color={color} />
             ),
           }}
         />
@@ -78,10 +86,7 @@ export default function TabLayout() {
           options={{
             title: 'Profile',
             tabBarIcon: ({ color, focused }) => (
-              <View className="items-center justify-center">
-                <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
-                {focused && <View className="w-1 h-1 rounded-full bg-primary absolute -bottom-5" />}
-              </View>
+              <Ionicons name={focused ? "person" : "person-outline"} size={24} color={color} />
             ),
           }}
         />
