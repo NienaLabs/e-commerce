@@ -4,6 +4,7 @@ import { Slot, router, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 const NAV_ITEMS = [
   { icon: 'grid-outline' as const, activeIcon: 'grid' as const, label: 'Dashboard', path: '/vendor-dashboard' },
@@ -24,6 +25,7 @@ const SIDE_NAV_ITEMS = [
 
 export default function VendorDashboardLayout() {
   const { colors } = useTheme();
+  const { vendor } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const pathname = usePathname();
@@ -54,11 +56,8 @@ export default function VendorDashboardLayout() {
               <Ionicons name="storefront" size={22} color={colors.primaryDim} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }} numberOfLines={1}>SoundWave Audio</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success }} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.success }}>Store Active</Text>
-              </View>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }} numberOfLines={1}>{vendor?.store_name ?? 'My Store'}</Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>Vendor Dashboard</Text>
             </View>
           </Pressable>
 

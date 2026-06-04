@@ -7,17 +7,20 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Button } from '../../components/Button';
 import { useWishlistStore } from '../../store/wishlistStore';
 import { useCartStore } from '../../store/cartStore';
+import { useToast } from '../../context/ToastContext';
 
 export default function WishlistScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { showToast } = useToast();
   
   const items = useWishlistStore((state) => state.items);
   const removeItem = useWishlistStore((state) => state.removeItem);
   const addCartItem = useCartStore((state) => state.addItem);
 
   const handleAddAllToCart = () => {
+    let addedCount = 0;
     items.forEach((item) => {
       if (item.inStock) {
         addCartItem({
@@ -31,8 +34,12 @@ export default function WishlistScreen() {
           vendorAvatar: item.vendorAvatar,
           quantity: 1,
         });
+        addedCount++;
       }
     });
+    if (addedCount > 0) {
+      showToast(`Added ${addedCount} items to cart`, 'success');
+    }
     router.push('/(tabs)/cart');
   };
 
@@ -112,6 +119,7 @@ export default function WishlistScreen() {
                             vendorAvatar: item.vendorAvatar,
                             quantity: 1,
                           });
+                          showToast(`${item.name} added to cart`, 'success');
                         }}
                         style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' }}
                       >
@@ -122,6 +130,7 @@ export default function WishlistScreen() {
                       onPress={(e) => {
                         e.stopPropagation?.();
                         removeItem(item.id);
+                        showToast(`Removed from wishlist`, 'info');
                       }}
                       style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center' }}
                     >

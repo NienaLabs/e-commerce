@@ -8,6 +8,7 @@ import {
   Modal,
   Animated,
   Platform,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +21,8 @@ import { LocationSearchModal, LocationResult } from '@/components/LocationSearch
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { useTheme } from '../../theme/ThemeContext';
+import { useQuery } from '@tanstack/react-query';
+import { listProducts, mapProductToCard } from '../../api/products';
 
 async function reverseGeocodeCity(lat: number, lng: number): Promise<string> {
   try {
@@ -60,14 +63,6 @@ const OFFER_OPTIONS = ['All Offers', 'Clearance Sale', 'Flash Sale', 'Buy 1 Get 
 const RATING_OPTIONS = ['Any Rating', '4.5 Stars & Up', '4 Stars & Up', '3 Stars & Up', '2 Stars & Up'];
 const BRAND_OPTIONS = ['All Brands', 'Sony', 'Apple', 'Samsung', 'Nike', 'Adidas', 'IKEA', 'Zara'];
 
-const SAMPLE_PRODUCTS = [
-  { id: '1', name: 'Wireless Noise-Cancelling Headphones', price: 199.99, salePrice: 149.99, category: 'electronics', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600', vendorId: 'v1', vendorName: 'SoundWave Audio', vendorAvatar: 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200' },
-  { id: '2', name: 'Minimalist Smart Watch Series 9', price: 299.00, category: 'electronics', image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&q=80&w=600', vendorId: 'v1', vendorName: 'SoundWave Audio', vendorAvatar: 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200' },
-  { id: '3', name: 'Premium Organic Cotton T-Shirt', price: 29.99, salePrice: 19.99, category: 'fashion', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=600', vendorId: 'v2', vendorName: 'Urban Threads', vendorAvatar: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=80&w=200' },
-  { id: '4', name: 'Artisan Ceramic Coffee Mug Set', price: 38.00, category: 'home', image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&q=80&w=600', vendorId: 'v3', vendorName: 'Casa & Co.', vendorAvatar: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=200' },
-  { id: '5', name: 'Running Pro Sneakers Ultra', price: 120.00, salePrice: 89.99, category: 'sports', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=600', vendorId: 'v2', vendorName: 'Urban Threads', vendorAvatar: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=80&w=200' },
-  { id: '6', name: 'Vitamin C Brightening Serum', price: 45.00, category: 'beauty', image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=600', vendorId: 'v3', vendorName: 'Casa & Co.', vendorAvatar: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=200' },
-];
 
 type DropdownKey = 'Sort' | 'Offers' | 'Ratings' | 'Brand' | null;
 
@@ -80,6 +75,17 @@ export default function Home() {
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+
+  // Fetch real products from API
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['products', selectedCategory],
+    queryFn: () => listProducts({ limit: 20 }),
+  });
+
+  const mappedProducts = products.map(mapProductToCard);
+  const filteredProducts = selectedCategory
+    ? mappedProducts.filter((p) => (p as any).category === selectedCategory)
+    : mappedProducts;
 
   useEffect(() => {
     (async () => {
@@ -101,9 +107,6 @@ export default function Home() {
     })();
   }, []);
 
-  const filteredProducts = selectedCategory
-    ? SAMPLE_PRODUCTS.filter(p => p.category === selectedCategory)
-    : SAMPLE_PRODUCTS;
 
   const renderDropdownChip = (
     label: DropdownKey & string,
@@ -430,29 +433,34 @@ export default function Home() {
             flexWrap: 'wrap',
             gap: 16,
           }}>
-            {filteredProducts.map(product => (
-              <View
-                key={product.id}
-                style={{ width: isDesktop ? '48%' : '100%' }}
-              >
-                <ProductCard
-                  id={product.id}
-                  name={product.name}
-                  price={product.price}
-                  salePrice={product.salePrice}
-                  imageUrl={product.image}
-                  vendorId={product.vendorId}
-                  vendorName={product.vendorName}
-                  vendorAvatar={product.vendorAvatar}
-                  onPress={() => router.push(`/product/${product.id}` as any)}
-                  onWishlist={() => { }}
-                  onAddToCart={() => { }}
-                />
+            {productsLoading ? (
+              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 48 }}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
+                  Loading products...
+                </Text>
               </View>
-            ))}
+            ) : (
+              filteredProducts.map(product => (
+                <View
+                  key={product.id}
+                  style={{ width: isDesktop ? '48%' : '100%' }}
+                >
+                  <ProductCard
+                    id={product.id}
+                    name={product.name}
+                    price={product.price}
+                    salePrice={product.salePrice}
+                    imageUrl={product.imageUrl}
+                    vendorId={product.vendorId}
+                    onPress={() => router.push(`/product/${product.id}` as any)}
+                  />
+                </View>
+              ))
+            )}
           </View>
 
-          {filteredProducts.length === 0 && (
+          {!productsLoading && filteredProducts.length === 0 && (
             <View style={{ alignItems: 'center', paddingVertical: 64 }}>
               <Ionicons name="search-outline" size={80} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 20, color: colors.ink, marginBottom: 8 }}>

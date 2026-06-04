@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, Pressable, Modal, TextInput, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface SettingsRowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -38,6 +39,31 @@ const SettingsRow = ({ icon, title, onPress, color, defaultColor }: SettingsRowP
 
 export default function Profile() {
   const { colors } = useTheme();
+  const { user, signOut, hasVendorAccount, updateUserName } = useAuth();
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+
+  const handleOpenEdit = () => {
+    setEditName(user?.name || '');
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (editName.trim()) {
+      await updateUserName(editName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const initials = user
+    ? user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'U';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -59,13 +85,16 @@ export default function Profile() {
               borderWidth: 1, borderColor: colors.primaryBorder,
               marginRight: 20,
             }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink }}>JD</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink }}>{initials}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginBottom: 4 }}>John Doe</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>john.doe@example.com</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginBottom: 4 }}>{user?.name ?? 'Guest User'}</Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>{user?.email ?? 'Sign in to sync your data'}</Text>
             </View>
-            <Pressable style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable 
+              onPress={handleOpenEdit}
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+            >
               <Ionicons name="pencil" size={18} color={colors.inkSoft} />
             </Pressable>
           </View>
@@ -89,7 +118,11 @@ export default function Profile() {
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, paddingLeft: 8, overflow: 'hidden', marginBottom: 32 }}>
             <SettingsRow icon="notifications-outline" title="Notifications" onPress={() => router.push('/profile/notifications' as any)} />
             <SettingsRow icon="color-palette-outline" title="Appearance" onPress={() => router.push('/profile/appearance' as any)} />
-            <SettingsRow icon="storefront-outline" title="Become a Vendor" onPress={() => router.push('/become-vendor' as any)} />
+            {hasVendorAccount ? (
+              <SettingsRow icon="storefront-outline" title="Vendor Dashboard" onPress={() => router.push('/vendor-dashboard' as any)} />
+            ) : (
+              <SettingsRow icon="storefront-outline" title="Become a Vendor" onPress={() => router.push('/become-vendor' as any)} />
+            )}
             <SettingsRow icon="help-circle-outline" title="Help & Support" onPress={() => router.push('/profile/support' as any)} />
           </View>
 
@@ -101,7 +134,10 @@ export default function Profile() {
               paddingVertical: 16, borderRadius: 16,
               borderWidth: 1, borderColor: '#d9365140',
             }]}
-            onPress={() => router.replace('/')}
+            onPress={async () => {
+              await signOut();
+              router.replace('/(auth)/login');
+            }}
           >
             <Ionicons name="log-out-outline" size={20} color="#d93651" style={{ marginRight: 8 }} />
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#d93651' }}>Log Out</Text>
@@ -109,6 +145,50 @@ export default function Profile() {
 
         </View>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal visible={isEditing} transparent animationType="fade" onRequestClose={() => setIsEditing(false)}>
+        <Pressable 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}
+          onPress={() => setIsEditing(false)}
+        >
+          <Pressable 
+            onPress={e => e.stopPropagation()}
+            style={{ backgroundColor: colors.surface, borderRadius: 24, padding: 24 }}
+          >
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginBottom: 16 }}>Edit Profile</Text>
+            
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 8 }}>Full Name</Text>
+            <TextInput
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your Name"
+              placeholderTextColor={colors.inkGhost}
+              style={{
+                backgroundColor: colors.surfaceSoft, borderRadius: 12, paddingHorizontal: 16, height: 50,
+                fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink,
+                borderWidth: 1, borderColor: colors.surfaceMuted, marginBottom: 24,
+                ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+              }}
+            />
+            
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable 
+                onPress={() => setIsEditing(false)}
+                style={{ flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 12, backgroundColor: colors.surfaceSoft }}
+              >
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>Cancel</Text>
+              </Pressable>
+              <Pressable 
+                onPress={handleSaveEdit}
+                style={{ flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 12, backgroundColor: colors.ink }}
+              >
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.surface }}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Platform, useWindowDimensions, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import * as Location from 'expo-location';
+import { useQuery } from '@tanstack/react-query';
+import { listVendors } from '../../api/vendors';
 import haversine from 'haversine';
 // Only import MapView on native devices to avoid web bundler issues if web maps aren't fully configured
 let MapView: any;
@@ -19,49 +21,14 @@ if (Platform.OS !== 'web') {
   }
 }
 
-// ─── Mock vendor data with GPS coordinates ────────────────────────────────────
-const MOCK_VENDORS = [
-  {
-    id: 'v1', name: 'SoundWave Audio', type: 'Electronics',
-    lat: 5.6037, lng: -0.1870, rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200',
-    isOpen: true,
-  },
-  {
-    id: 'v2', name: 'Urban Threads', type: 'Fashion',
-    lat: 5.6148, lng: -0.2050, rating: 4.6,
-    image: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=80&w=200',
-    isOpen: true,
-  },
-  {
-    id: 'v3', name: 'Casa & Co.', type: 'Home & Living',
-    lat: 5.5900, lng: -0.1700, rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=200',
-    isOpen: false,
-  },
-  {
-    id: 'v4', name: 'FreshMart Groceries', type: 'Food & Groceries',
-    lat: 5.6200, lng: -0.1600, rating: 4.5,
-    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200',
-    isOpen: true,
-  },
-  {
-    id: 'v5', name: 'SportZone', type: 'Sports',
-    lat: 5.5800, lng: -0.2100, rating: 4.3,
-    image: 'https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&q=80&w=200',
-    isOpen: true,
-  },
-];
-
-const CATEGORIES = ['All', 'Electronics', 'Fashion', 'Home & Living', 'Food & Groceries', 'Sports'];
-
-type VendorWithDistance = typeof MOCK_VENDORS[0] & { distanceKm: number; etaMins: number };
-
+// Helper to get distance badge colors
 function getDistanceBadgeColor(km: number, colors: any) {
   if (km < 2) return { bg: colors.primaryGhost, text: colors.primaryDim };
   if (km < 5) return { bg: colors.warningGhost, text: colors.warning };
   return { bg: colors.surfaceSoft, text: colors.inkMuted };
 }
+
+const CATEGORIES = ['All', 'Electronics', 'Fashion', 'Home & Living', 'Beauty', 'Sports', 'Food & Groceries'];
 
 export default function DiscoverScreen() {
   const { colors } = useTheme();
@@ -99,21 +66,31 @@ export default function DiscoverScreen() {
     })();
   }, []);
 
+  // Real Vendors from API
+  const { data: vendors = [], isLoading: vendorsLoading } = useQuery({
+    queryKey: ['vendors'],
+    queryFn: () => listVendors({ limit: 100 }),
+  });
+
   // Calculate distances & filter
-  const processedVendors: VendorWithDistance[] = (userLocation ? MOCK_VENDORS.map(v => {
-    const distanceKm = haversine(
-      { latitude: userLocation.latitude, longitude: userLocation.longitude },
-      { latitude: v.lat, longitude: v.lng },
-      { unit: 'km' }
-    );
-    // Assume average delivery speed of 20km/h (3 mins per km) + 10 mins prep time
+  const processedVendors = vendors.map(v => {
+    // We don't have real GPS coordinates in the API yet, so we mock distance for now
+    const distanceKm = Math.random() * 8 + 1; // 1 to 9 km
     const etaMins = Math.round((distanceKm * 3) + 10);
-    return { ...v, distanceKm, etaMins };
-  }) : MOCK_VENDORS.map(v => ({ ...v, distanceKm: 0, etaMins: 0 })))
+    return {
+      ...v,
+      distanceKm,
+      etaMins,
+      isOpen: true,
+      lat: 5.6037 + (Math.random() - 0.5) * 0.05,
+      lng: -0.1870 + (Math.random() - 0.5) * 0.05,
+      image: v.logo_url ?? 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200',
+    };
+  })
   .filter(v => {
-    const matchesCat = activeCategory === 'All' || v.type === activeCategory;
-    const matchesSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
+    // API doesn't have categories for vendors, so we just match search for now
+    const matchesSearch = v.store_name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
   })
   .sort((a, b) => a.distanceKm - b.distanceKm);
 
@@ -247,7 +224,7 @@ export default function DiscoverScreen() {
                   <Marker
                     key={vendor.id}
                     coordinate={{ latitude: vendor.lat, longitude: vendor.lng }}
-                    title={vendor.name}
+                    title={vendor.store_name}
                     description={`${vendor.distanceKm.toFixed(1)} km away • ~${vendor.etaMins} mins`}
                     onPress={() => setSelectedVendor(vendor.id)}
                   >
@@ -282,7 +259,7 @@ export default function DiscoverScreen() {
                     >
                       <Image source={{ uri: v.image }} style={{ width: 60, height: 60, borderRadius: 14, marginRight: 14 }} />
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>{v.name}</Text>
+                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>{v.store_name}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Ionicons name="time" size={12} color={colors.inkMuted} />
                           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkMuted }}>~{v.etaMins} mins</Text>
@@ -336,13 +313,13 @@ export default function DiscoverScreen() {
                     <Image source={{ uri: vendor.image }} style={{ width: 56, height: 56, borderRadius: 14, marginRight: 14, backgroundColor: colors.surfaceMuted }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>
-                        {vendor.name}
+                        {vendor.store_name}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkSoft }}>{vendor.type}</Text>
+                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkSoft }}>Store</Text>
                         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>•</Text>
                         <Ionicons name="star" size={11} color={colors.warning} />
-                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.inkSoft }}>{vendor.rating}</Text>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.inkSoft }}>{vendor.avg_rating.toFixed(1)}</Text>
                       </View>
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6 }}>

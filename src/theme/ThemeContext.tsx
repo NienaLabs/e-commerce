@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ──────────────────────────────────────────────
 // Color Palettes (from design.md)
@@ -81,12 +82,41 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const systemScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('light');
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('@app_theme_mode');
+        if (saved && (saved === 'light' || saved === 'dark' || saved === 'system')) {
+          setThemeModeState(saved as ThemeMode);
+        }
+      } catch (e) {
+        console.error('Failed to load theme mode', e);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+    loadTheme();
+  }, []);
+
+  const setThemeMode = async (mode: ThemeMode) => {
+    setThemeModeState(mode);
+    try {
+      await AsyncStorage.setItem('@app_theme_mode', mode);
+    } catch (e) {
+      console.error('Failed to save theme mode', e);
+    }
+  };
 
   const isDark =
     themeMode === 'dark' || (themeMode === 'system' && systemScheme === 'dark');
 
   const colors = isDark ? darkColors : lightColors;
+
+  // Render nothing or a splash screen while loading to prevent theme flashing
+  if (!isLoaded) return null;
 
   return (
     <ThemeContext.Provider value={{ colors, themeMode, setThemeMode, isDark }}>

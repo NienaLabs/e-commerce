@@ -5,9 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import { useTheme } from '../../theme/ThemeContext';
+import { useToast } from '../../context/ToastContext';
 
 export default function SupportScreen() {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       <WebHeader />
@@ -22,7 +24,10 @@ export default function SupportScreen() {
         <View style={{ backgroundColor: colors.ink, borderRadius: 20, padding: 24, marginBottom: 24 }}>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.surface, marginBottom: 8 }}>Need Help?</Text>
           <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.surfaceMuted, marginBottom: 20 }}>Our support team is available 24/7 to assist you.</Text>
-          <Pressable style={{ backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}>
+          <Pressable 
+            onPress={() => showToast('Opening support chat...', 'success')}
+            style={{ backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}
+          >
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.isDark ? colors.ink : '#222022' }}>Contact Support</Text>
           </Pressable>
         </View>

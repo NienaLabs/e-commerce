@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
+import { useToast } from '../context/ToastContext';
 
 interface ProductCardProps {
   id: string;
@@ -38,6 +39,7 @@ export const ProductCard = ({
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { showToast } = useToast();
   
   const isItemInWishlist = useWishlistStore((state) => state.items.some(i => i.id === id));
   const toggleItem = useWishlistStore((state) => state.toggleItem);
@@ -64,6 +66,7 @@ export const ProductCard = ({
       vendorAvatar,
       quantity: 1,
     });
+    showToast(`${name} added to cart`, 'success');
     // Also call the optional prop callback (e.g. for local UI feedback)
     onAddToCart?.();
   };
@@ -108,6 +111,10 @@ export const ProductCard = ({
           onPress={(e) => {
             e.stopPropagation?.();
             toggleItem({ id, name, price, salePrice, imageUrl, vendorId, vendorName, vendorAvatar, inStock: true });
+            showToast(
+              isHeartFilled ? 'Removed from wishlist' : `${name} added to wishlist`,
+              isHeartFilled ? 'info' : 'success'
+            );
             onWishlist?.();
           }}
           style={{

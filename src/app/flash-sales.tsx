@@ -5,15 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { ProductCard } from '../components/ProductCard';
+import { useQuery } from '@tanstack/react-query';
+import { listProducts, mapProductToCard } from '../api/products';
 
-const FLASH_PRODUCTS = [
-  { id: '1', name: 'Wireless Noise-Cancelling Headphones', price: 199.99, salePrice: 79.99, stock: 3, imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600', vendorId: 'v1', vendorName: 'SoundWave Audio', vendorAvatar: 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200' },
-  { id: '3', name: 'Premium Organic Cotton T-Shirt', price: 29.99, salePrice: 9.99, stock: 10, imageUrl: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=600', vendorId: 'v2', vendorName: 'Urban Threads', vendorAvatar: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=80&w=200' },
-  { id: '5', name: 'Running Pro Sneakers Ultra', price: 120.00, salePrice: 59.99, stock: 5, imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=600', vendorId: 'v2', vendorName: 'Urban Threads', vendorAvatar: 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&q=80&w=200' },
-  { id: '7', name: 'Portable Bluetooth Speaker', price: 79.99, salePrice: 29.99, stock: 8, imageUrl: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?auto=format&fit=crop&q=80&w=600', vendorId: 'v1', vendorName: 'SoundWave Audio', vendorAvatar: 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200' },
-  { id: '6', name: 'Vitamin C Brightening Serum', price: 45.00, salePrice: 18.00, stock: 12, imageUrl: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=600', vendorId: 'v3', vendorName: 'Casa & Co.', vendorAvatar: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=200' },
-  { id: '4', name: 'Artisan Ceramic Coffee Mug Set', price: 38.00, salePrice: 19.00, stock: 7, imageUrl: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&q=80&w=600', vendorId: 'v3', vendorName: 'Casa & Co.', vendorAvatar: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=200' },
-];
+// Removed static FLASH_PRODUCTS
 
 // End time: 6 hours from now
 const END_TIME = Date.now() + 6 * 60 * 60 * 1000;
@@ -47,6 +42,17 @@ export default function FlashSalesScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { h, m, s } = useCountdown(END_TIME);
+
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ['flash-products'],
+    queryFn: () => listProducts({ limit: 100 }),
+  });
+
+  // Filter products that have a discount
+  const flashProducts = products
+    .filter(p => p.discount_price != null && p.discount_price < p.actual_price)
+    .map(mapProductToCard)
+    .slice(0, 10); // Limit to top 10 flash sales
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -89,13 +95,17 @@ export default function FlashSalesScreen() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-          {FLASH_PRODUCTS.map(product => (
+          {isLoading ? (
+            <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.inkMuted, textAlign: 'center', width: '100%', marginTop: 24 }}>Loading flash sales...</Text>
+          ) : flashProducts.length === 0 ? (
+            <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.inkMuted, textAlign: 'center', width: '100%', marginTop: 24 }}>No active flash sales right now.</Text>
+          ) : flashProducts.map(product => (
             <View key={product.id} style={{ width: isDesktop ? '31%' : '100%' }}>
               {/* Stock badge */}
-              {product.stock <= 5 && (
+              {!product.inStock && (
                 <View style={{ backgroundColor: '#fef2f2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}>
                   <Ionicons name="alert-circle" size={13} color="#dc2626" style={{ marginRight: 4 }} />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#dc2626' }}>Only {product.stock} left!</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#dc2626' }}>Out of stock!</Text>
                 </View>
               )}
               <ProductCard
@@ -105,11 +115,7 @@ export default function FlashSalesScreen() {
                 salePrice={product.salePrice}
                 imageUrl={product.imageUrl}
                 vendorId={product.vendorId}
-                vendorName={product.vendorName}
-                vendorAvatar={product.vendorAvatar}
                 onPress={() => router.push(`/product/${product.id}` as any)}
-                onWishlist={() => {}}
-                onAddToCart={() => {}}
               />
             </View>
           ))}

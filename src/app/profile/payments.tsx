@@ -1,18 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import { useTheme } from '../../theme/ThemeContext';
+import { useToast } from '../../context/ToastContext';
 
-const MOCK_CARDS = [
+interface PaymentMethod {
+  id: string;
+  type: string;
+  last4: string;
+  expiry: string;
+  isDefault?: boolean;
+}
+
+const MOCK_CARDS: PaymentMethod[] = [
   { id: '1', type: 'Visa', last4: '4242', expiry: '12/28', isDefault: true },
   { id: '2', type: 'Mastercard', last4: '8888', expiry: '04/27', isDefault: false },
 ];
 
 export default function PaymentsScreen() {
   const { colors } = useTheme();
+  const { showToast } = useToast();
+  const [cards, setCards] = useState<PaymentMethod[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load cards from local storage
+  useEffect(() => {
+    const loadCards = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@user_payments');
+        if (stored) {
+          setCards(JSON.parse(stored));
+        } else {
+          setCards(MOCK_CARDS);
+        }
+      } catch (e) {
+        console.error('Failed to load payment methods:', e);
+      } finally {
+        setLoaded(true);
+      }
+    };
+    loadCards();
+  }, []);
+
+  // Save cards to local storage whenever they change (only after initial load)
+  useEffect(() => {
+    if (!loaded) return;
+    const saveCards = async () => {
+      try {
+        await AsyncStorage.setItem('@user_payments', JSON.stringify(cards));
+      } catch (e) {
+        console.error('Failed to save payment methods:', e);
+      }
+    };
+    saveCards();
+  }, [cards, loaded]);
+
+  const handleSetDefault = (id: string) => {
+    setCards(prev => prev.map(card => ({
+      ...card,
+      isDefault: card.id === id,
+    })));
+    showToast('Default payment method updated.', 'success');
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       <WebHeader />
@@ -25,8 +79,8 @@ export default function PaymentsScreen() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
         <View style={{ gap: 16 }}>
-          {MOCK_CARDS.map(card => (
-            <View key={card.id} style={{
+          {cards.map(card => (
+            <Pressable key={card.id} onPress={() => handleSetDefault(card.id)} style={{
               backgroundColor: colors.surface, borderRadius: 20, padding: 20,
               borderWidth: card.isDefault ? 1.5 : 1,
               borderColor: card.isDefault ? colors.primary : colors.surfaceMuted,
@@ -44,16 +98,19 @@ export default function PaymentsScreen() {
                 )}
               </View>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>Expires {card.expiry}</Text>
-            </View>
+            </Pressable>
           ))}
 
-          <Pressable style={({ pressed }) => [{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: pressed ? colors.surfaceSoft : colors.surface,
-            padding: 20, borderRadius: 20,
-            borderWidth: 1, borderColor: colors.surfaceMuted,
-            marginTop: 8
-          }]}>
+          <Pressable 
+            onPress={() => showToast('Adding payment methods will be available soon.', 'info')}
+            style={({ pressed }) => [{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: pressed ? colors.surfaceSoft : colors.surface,
+              padding: 20, borderRadius: 20,
+              borderWidth: 1, borderColor: colors.surfaceMuted,
+              marginTop: 8
+            }]}
+          >
             <Ionicons name="add" size={20} color={colors.ink} style={{ marginRight: 8 }} />
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>Add New Payment Method</Text>
           </Pressable>

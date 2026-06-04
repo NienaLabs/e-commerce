@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
+import React, { useContext } from 'react';
+import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
+import { useQuery } from '@tanstack/react-query';
+import { getLocalOrders, LocalOrder, saveLocalOrder } from '../../api/localOrders';
+import { listMyOrders, Order } from '../../api/orders';
+import { AuthContext } from '../../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 
 const STEPS = [
   { key: 'confirmed', label: 'Order Confirmed', icon: 'checkmark-circle', desc: 'Your order has been placed and confirmed.' },
@@ -13,36 +19,93 @@ const STEPS = [
   { key: 'delivered', label: 'Delivered', icon: 'home', desc: 'Package delivered successfully. Enjoy!' },
 ];
 
-const MOCK_ORDER = {
-  id: 'EL-88942',
-  currentStep: 3, // 0-indexed; 3 = out_for_delivery
-  estimatedDelivery: 'Today, 4:30 PM',
-  agent: { name: 'Kofi Mensah', phone: '+233 55 000 1234', rating: 4.9 },
-  items: [
-    { name: 'Wireless Noise-Cancelling Headphones', qty: 1, price: 149.99 },
-    { name: 'Premium Organic Cotton T-Shirt', qty: 2, price: 39.98 },
-  ],
-  address: '123 Tech Avenue, Apt 4B, San Francisco, CA',
-  total: 194.97,
-};
+const MOCK_AGENT = { name: 'Kofi Mensah', phone: '+233 55 000 1234', rating: 4.9 };
 
 export default function OrderTracking() {
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const orderId = Array.isArray(id) ? id[0] : id;
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-  const [currentStep, setCurrentStep] = useState(MOCK_ORDER.currentStep);
+  const { token } = useContext(AuthContext);
+  const queryClient = useQueryClient();
 
-  // Simulate live progress update
-  useEffect(() => {
-    if (currentStep < STEPS.length - 1) {
-      const timer = setTimeout(() => setCurrentStep(s => Math.min(s + 1, STEPS.length - 1)), 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [currentStep]);
+  // Fetch orders
+  const { data: backendOrders = [], isLoading: backendLoading } = useQuery({
+    queryKey: ['my-orders'],
+    queryFn: () => listMyOrders(token!),
+    enabled: !!token,
+    retry: false,
+  });
 
-  const isDelivered = currentStep === STEPS.length - 1;
+  const { data: localOrders = [], isLoading: localLoading } = useQuery({
+    queryKey: ['local-orders'],
+    queryFn: () => getLocalOrders(),
+  });
+
+  const isLoading = backendLoading || localLoading;
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  // Find the specific order
+  const localOrder = localOrders.find((o) => o.id === orderId);
+  const backendOrder = backendOrders.find((o) => o.id === orderId);
+  
+  const order = localOrder || backendOrder;
+
+  if (!order) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+        <Ionicons name="alert-circle-outline" size={64} color={colors.inkGhost} />
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginTop: 16 }}>Order Not Found</Text>
+        <Pressable onPress={() => router.replace('/profile/orders' as any)} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: colors.ink, borderRadius: 24 }}>
+          <Text style={{ fontFamily: 'Inter_700Bold', color: colors.surface }}>Back to Orders</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  // Normalize order properties between local and backend
+  const isLocal = !!localOrder;
+  const ref = (order as LocalOrder).ref || order.id.slice(-8).toUpperCase();
+  const address = (order as LocalOrder).shipping_address ? 
+    `${(order as LocalOrder).shipping_address.name}, ${(order as LocalOrder).shipping_address.street}` : 
+    '123 Tech Avenue, Apt 4B, San Francisco, CA'; // Fallback for backend orders without address
+
+  // Determine the current step index based on status
+  let currentStepIndex = 0;
+  switch (order.status) {
+    case 'pending':
+    case 'processing': currentStepIndex = 1; break;
+    case 'shipped': currentStepIndex = 2; break;
+    case 'out_for_delivery': currentStepIndex = 3; break;
+    case 'delivered': currentStepIndex = 4; break;
+    case 'confirmed':
+    default: currentStepIndex = 0; break;
+  }
+
+  const isDelivered = order.status === 'delivered';
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=-122.45%2C37.76%2C-122.41%2C37.79&layer=mapnik`;
+  const estimatedDelivery = isDelivered ? 'Delivered' : '2-3 Business Days';
+
+  const simulateDelivery = async () => {
+    if (isLocal) {
+      try {
+        const existing = await getLocalOrders();
+        const updated = existing.map(o => o.id === orderId ? { ...o, status: 'delivered' } : o);
+        await AsyncStorage.setItem('@local_orders', JSON.stringify(updated));
+        queryClient.invalidateQueries({ queryKey: ['local-orders'] });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -53,7 +116,7 @@ export default function OrderTracking() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>Track Order</Text>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>#{MOCK_ORDER.id}</Text>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>#{ref}</Text>
         </View>
         {isDelivered && (
           <View style={{ backgroundColor: '#d1fae5', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 }}>
@@ -65,7 +128,7 @@ export default function OrderTracking() {
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
 
         {/* Map */}
-        {!isDelivered && Platform.OS === 'web' && (
+        {!isDelivered && Platform.OS === 'web' && currentStepIndex >= 2 && (
           <View style={{ height: isDesktop ? 300 : 200, backgroundColor: colors.surfaceMuted }}>
             {/* @ts-ignore */}
             <iframe src={osmUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Delivery Map" />
@@ -79,7 +142,7 @@ export default function OrderTracking() {
         <View style={{ padding: 20, gap: 16, flexDirection: isDesktop ? 'row' : 'column', alignItems: 'flex-start' }}>
 
           {/* Left column */}
-          <View style={{ flex: 1, gap: 16 }}>
+          <View style={{ flex: 1, width: '100%', gap: 16 }}>
 
             {/* ETA Card */}
             <View style={{ backgroundColor: colors.isDark ? '#1a2a0a' : '#f0f8e0', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.isDark ? '#2d4010' : '#c3d80940' }}>
@@ -87,15 +150,15 @@ export default function OrderTracking() {
                 <Ionicons name="time" size={18} color={colors.primaryDim} style={{ marginRight: 8 }} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.primaryDim }}>Estimated Arrival</Text>
               </View>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>{MOCK_ORDER.estimatedDelivery}</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>{estimatedDelivery}</Text>
             </View>
 
             {/* Timeline */}
             <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 20 }}>Order Progress</Text>
               {STEPS.map((step, idx) => {
-                const isDone = idx <= currentStep;
-                const isActive = idx === currentStep;
+                const isDone = idx <= currentStepIndex;
+                const isActive = idx === currentStepIndex;
                 return (
                   <View key={step.key} style={{ flexDirection: 'row', marginBottom: idx < STEPS.length - 1 ? 0 : 0 }}>
                     {/* Line + dot */}
@@ -114,7 +177,7 @@ export default function OrderTracking() {
                         />
                       </View>
                       {idx < STEPS.length - 1 && (
-                        <View style={{ width: 2, flex: 1, minHeight: 32, backgroundColor: idx < currentStep ? colors.primary : colors.surfaceMuted, marginVertical: 4 }} />
+                        <View style={{ width: 2, flex: 1, minHeight: 32, backgroundColor: idx < currentStepIndex ? colors.primary : colors.surfaceMuted, marginVertical: 4 }} />
                       )}
                     </View>
                     {/* Text */}
@@ -138,7 +201,7 @@ export default function OrderTracking() {
           <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '100%', gap: 16 }}>
 
             {/* Delivery Agent */}
-            {!isDelivered && (
+            {!isDelivered && currentStepIndex >= 2 && (
               <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Delivery Agent</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -146,12 +209,19 @@ export default function OrderTracking() {
                     <Ionicons name="person" size={24} color={colors.primaryDim} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{MOCK_ORDER.agent.name}</Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{MOCK_AGENT.name}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                       <Ionicons name="star" size={13} color={colors.primary} />
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkSoft, marginLeft: 4 }}>{MOCK_ORDER.agent.rating}</Text>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkSoft, marginLeft: 4 }}>{MOCK_AGENT.rating}</Text>
                     </View>
                   </View>
+                  
+                  {isLocal && !isDelivered && (
+                    <Pressable onPress={simulateDelivery} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.ink, marginRight: 8 }}>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.surface }}>Test Delivery</Text>
+                    </Pressable>
+                  )}
+
                   <Pressable style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
                     <Ionicons name="call" size={20} color={colors.primaryDim} />
                   </Pressable>
@@ -162,16 +232,16 @@ export default function OrderTracking() {
             {/* Order Summary */}
             <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Order Summary</Text>
-              {MOCK_ORDER.items.map((item, i) => (
+              {order.items.map((item: any, i: number) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1, marginRight: 8 }} numberOfLines={2}>{item.name} ×{item.qty}</Text>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>${item.price.toFixed(2)}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1, marginRight: 8 }} numberOfLines={2}>{item.name ?? `Product ${item.product_id}`} ×{item.quantity}</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>${(item.unit_price ?? item.price ?? 0).toFixed(2)}</Text>
                 </View>
               ))}
               <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 12 }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Total</Text>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primary }}>${MOCK_ORDER.total.toFixed(2)}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primary }}>${order.total_amount.toFixed(2)}</Text>
               </View>
             </View>
 
@@ -181,13 +251,24 @@ export default function OrderTracking() {
                 <Ionicons name="location" size={18} color={colors.primary} style={{ marginRight: 8 }} />
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Delivery Address</Text>
               </View>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, lineHeight: 22 }}>{MOCK_ORDER.address}</Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, lineHeight: 22 }}>{address}</Text>
             </View>
 
+            {/* Review Button Fix */}
             {isDelivered && (
               <Pressable
-                onPress={() => router.push('/product/1' as any)}
-                style={{ backgroundColor: colors.primaryGhost, borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.primaryBorder }}>
+                onPress={() => {
+                  const firstItem = order.items[0] as any;
+                  if (firstItem) {
+                    router.push(`/write-review?productId=${firstItem.product_id}&productName=${encodeURIComponent(firstItem.name ?? 'Product')}` as any);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  backgroundColor: colors.primaryGhost,
+                  borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                  borderWidth: 1, borderColor: colors.primaryBorder,
+                  opacity: pressed ? 0.8 : 1,
+                })}>
                 <Ionicons name="star" size={18} color={colors.primaryDim} style={{ marginRight: 8 }} />
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primaryDim }}>Leave a Review</Text>
               </Pressable>

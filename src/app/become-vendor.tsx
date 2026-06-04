@@ -5,6 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { createVendor } from '../api/vendors';
+import { useQueryClient } from '@tanstack/react-query';
 
 const STEPS = [
   { key: 'info', label: 'Business Info', icon: 'business' },
@@ -81,8 +85,13 @@ export default function BecomeVendorScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { token, refreshVendor } = useAuth();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     businessName: '', ownerName: '', phone: '', email: '', category: '', description: '',
     regNumber: '', taxId: '', storeName: '', storeSlug: '',
@@ -235,7 +244,38 @@ export default function BecomeVendorScreen() {
 
           <Button
             title={step < 2 ? 'Continue' : 'Submit Application'}
-            onPress={() => step < 2 ? setStep(s => s + 1) : setSubmitted(true)}
+            disabled={isSubmitting}
+            onPress={async () => {
+              if (step < 2) {
+                setStep(s => s + 1);
+              } else {
+                if (!form.storeName || !form.storeSlug || !form.description) {
+                  showToast('Please fill out all required fields.', 'warning');
+                  return;
+                }
+                setIsSubmitting(true);
+                try {
+                  if (token) {
+                    await createVendor(token, {
+                      store_name: form.storeName,
+                      store_slug: form.storeSlug,
+                      bio: form.description,
+                    });
+                    // Refresh auth context vendor state AND invalidate dashboard query
+                    await refreshVendor();
+                    await queryClient.invalidateQueries({ queryKey: ['vendor-me'] });
+                    showToast('Vendor account created successfully!', 'success');
+                    setSubmitted(true);
+                  } else {
+                    showToast('You must be logged in to register as a vendor.', 'error');
+                  }
+                } catch (e: any) {
+                  showToast(e.message || 'Failed to create vendor account', 'error');
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }
+            }}
           />
         </View>
       </ScrollView>

@@ -1,0 +1,184 @@
+// ─────────────────────────────────────────────
+// Products API Client
+// ─────────────────────────────────────────────
+
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+
+// ── Types ────────────────────────────────────
+
+export interface ProductImage {
+  id: string;
+  url: string;
+  alt?: string;
+}
+
+export interface ProductColor {
+  id: string;
+  name: string;
+  hex?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  actual_price: number;
+  discount_price?: number | null;
+  stock_quantity: number;
+  warranty_info?: string | null;
+  is_active: boolean;
+  vendor_id: string;
+  category_id: string;
+  avg_rating: number;
+  review_count: number;
+  like_count: number;
+  view_count: number;
+  created_at: string;
+  updated_at: string;
+  images: ProductImage[];
+  colors: ProductColor[];
+}
+
+export interface ListProductsParams {
+  skip?: number;
+  limit?: number;
+  category_id?: string;
+}
+
+// ── Helpers ──────────────────────────────────
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let detail: any;
+    try {
+      detail = await res.json();
+    } catch {
+      detail = { message: res.statusText };
+    }
+    throw new Error(
+      detail?.message ?? detail?.detail ?? `Request failed (${res.status})`
+    );
+  }
+  return res.json() as Promise<T>;
+}
+
+// ── Utility: Map API product to ProductCard-friendly shape ───
+
+export function mapProductToCard(product: Product) {
+  const firstImage = product.images?.[0]?.url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
+  return {
+    id: product.id,
+    name: product.name,
+    price: product.actual_price,
+    salePrice: product.discount_price ?? undefined,
+    imageUrl: firstImage,
+    vendorId: product.vendor_id,
+    inStock: product.stock_quantity > 0,
+  };
+}
+
+// ── Product Endpoints ─────────────────────────
+
+/** GET /products/ — paginated list, optional category_id filter */
+export async function listProducts(params: ListProductsParams = {}): Promise<Product[]> {
+  const query = new URLSearchParams();
+  if (params.skip !== undefined) query.set('skip', String(params.skip));
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  if (params.category_id) query.set('category_id', params.category_id);
+
+  const res = await fetch(`${BASE_URL}/products/?${query.toString()}`);
+  return handleResponse<Product[]>(res);
+}
+
+export interface ProductCreatePayload {
+  name: string;
+  slug: string;
+  description: string;
+  actual_price: number;
+  discount_price?: number;
+  stock_quantity: number;
+  warranty_info?: string;
+  is_active: boolean;
+  category_id: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  icon?: string;
+  description?: string;
+}
+
+/** GET /categories/ — get list of product categories */
+export async function listCategories(): Promise<Category[]> {
+  const res = await fetch(`${BASE_URL}/categories/`);
+  return handleResponse<Category[]>(res);
+}
+
+/** GET /products/{product_id} — single product by UUID */
+export async function getProduct(productId: string): Promise<Product> {
+  const res = await fetch(`${BASE_URL}/products/${productId}`);
+  return handleResponse<Product>(res);
+}
+
+/** POST /products/ — create a new product (requires auth token) */
+export async function createProduct(
+  token: string,
+  payload: ProductCreatePayload
+): Promise<Product> {
+  const res = await fetch(`${BASE_URL}/products/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<Product>(res);
+}
+
+export type ProductUpdatePayload = Partial<ProductCreatePayload>;
+
+/** PATCH /products/{product_id} — update a product (requires auth token) */
+export async function updateProduct(
+  token: string,
+  productId: string,
+  payload: ProductUpdatePayload
+): Promise<Product> {
+  const res = await fetch(`${BASE_URL}/products/${productId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<Product>(res);
+}
+
+/** DELETE /products/{product_id} — delete a product (requires auth token) */
+export async function deleteProduct(
+  token: string,
+  productId: string
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/products/${productId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok && res.status !== 204) {
+    let detail: any;
+    try {
+      detail = await res.json();
+    } catch {
+      detail = { message: res.statusText };
+    }
+    throw new Error(
+      detail?.message ?? detail?.detail ?? `Request failed (${res.status})`
+    );
+  }
+}

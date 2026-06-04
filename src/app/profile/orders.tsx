@@ -1,35 +1,55 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, Platform } from 'react-native';
+import React, { useState, useContext } from 'react';
+import { View, Text, ScrollView, Pressable, Modal, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import { useTheme } from '../../theme/ThemeContext';
+import { useQuery } from '@tanstack/react-query';
+import { listMyOrders, Order } from '../../api/orders';
+import { getLocalOrders, LocalOrder } from '../../api/localOrders';
+import { AuthContext } from '../../context/AuthContext';
 
-// Each order gets a 4-digit delivery code generated at payment time
-const MOCK_ORDERS = [
-  {
-    id: 'ORD-3001', date: 'May 31, 2026', total: 149.99, status: 'out_for_delivery',
-    items: 1, deliveryCode: '4921', vendor: 'SoundWave Audio',
-    estimatedDelivery: 'Today, 2–5 PM',
-  },
-  {
-    id: 'ORD-2918', date: 'May 24, 2026', total: 320.50, status: 'shipped',
-    items: 2, deliveryCode: '7304', vendor: 'Urban Threads',
-    estimatedDelivery: 'Jun 2, 2026',
-  },
-  {
-    id: 'ORD-2844', date: 'May 10, 2026', total: 89.99, status: 'delivered',
-    items: 1, deliveryCode: '1847', vendor: 'Casa & Co.',
-    estimatedDelivery: 'Delivered May 12',
-  },
-  {
-    id: 'ORD-2720', date: 'Apr 28, 2026', total: 59.00, status: 'processing',
-    items: 1, deliveryCode: '5523', vendor: 'SoundWave Audio',
-    estimatedDelivery: 'Estimated Jun 5',
-  },
-];
+// Unified display type that covers both backend and local orders
+interface DisplayOrder {
+  id: string;
+  ref: string;
+  status: string;
+  subtotal: number;
+  shipping_fee: number;
+  total_amount: number;
+  items: { product_id: string; name?: string; quantity: number }[];
+  created_at: string;
+  isLocal: boolean;
+}
 
+function toDisplayOrder(order: Order): DisplayOrder {
+  return {
+    id: order.id,
+    ref: order.id.slice(-8).toUpperCase(),
+    status: order.status,
+    subtotal: order.subtotal,
+    shipping_fee: order.shipping_fee,
+    total_amount: order.total_amount,
+    items: order.items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+    created_at: order.created_at,
+    isLocal: false,
+  };
+}
+
+function localToDisplayOrder(order: LocalOrder): DisplayOrder {
+  return {
+    id: order.id,
+    ref: order.ref,
+    status: order.status,
+    subtotal: order.subtotal,
+    shipping_fee: order.shipping_fee,
+    total_amount: order.total_amount,
+    items: order.items.map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity })),
+    created_at: order.created_at,
+    isLocal: true,
+  };
+}
 
 function PinModal({
   visible, code, orderId, onClose, colors,
@@ -51,10 +71,8 @@ function PinModal({
             padding: 28, paddingBottom: 44,
           }}
         >
-          {/* Handle bar */}
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.surfaceMuted, alignSelf: 'center', marginBottom: 24 }} />
 
-          {/* Title */}
           <View style={{ alignItems: 'center', marginBottom: 28 }}>
             <View style={{
               width: 64, height: 64, borderRadius: 32,
@@ -71,7 +89,6 @@ function PinModal({
             </Text>
           </View>
 
-          {/* PIN Digits */}
           <View style={{
             flexDirection: 'row', gap: 12, justifyContent: 'center',
             backgroundColor: colors.surfaceSoft,
@@ -91,7 +108,6 @@ function PinModal({
             ))}
           </View>
 
-          {/* Info note */}
           <View style={{
             flexDirection: 'row', gap: 10, alignItems: 'flex-start',
             backgroundColor: colors.warningGhost, borderRadius: 14, padding: 14, marginBottom: 24,
@@ -117,27 +133,61 @@ function PinModal({
   );
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function getPinFromOrderId(orderId: string) {
+  let hash = 0;
+  for (let i = 0; i < orderId.length; i++) {
+    hash = (hash * 31 + orderId.charCodeAt(i)) % 10000;
+  }
+  return String(hash).padStart(4, '0');
+}
+
 export default function OrdersScreen() {
   const { colors } = useTheme();
-  const [activePinOrder, setActivePinOrder] = useState<typeof MOCK_ORDERS[0] | null>(null);
+  const { token } = useContext(AuthContext);
+  const [activePinOrderId, setActivePinOrderId] = useState<string | null>(null);
 
-  const showPin = (order: typeof MOCK_ORDERS[0]) => setActivePinOrder(order);
-  const closePin = () => setActivePinOrder(null);
+  // Fetch backend orders (may be empty / fail silently)
+  const { data: backendOrders = [], isLoading: backendLoading } = useQuery({
+    queryKey: ['my-orders'],
+    queryFn: () => listMyOrders(token!),
+    enabled: !!token,
+    retry: false,
+  });
+
+  // Fetch local orders (always available)
+  const { data: localOrders = [], isLoading: localLoading } = useQuery({
+    queryKey: ['local-orders'],
+    queryFn: () => getLocalOrders(),
+  });
+
+  const isLoading = backendLoading || localLoading;
+
+  // Merge: local orders first (newest), then backend orders that aren't already local
+  const allOrders: DisplayOrder[] = [
+    ...localOrders.map(localToDisplayOrder),
+    ...backendOrders.map(toDisplayOrder),
+  ];
 
   const STATUS_CFG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
-    processing:       { label: 'Processing',       bg: colors.infoGhost, text: colors.info, icon: 'time-outline' },
-    packed:           { label: 'Packed',           bg: colors.warningGhost, text: colors.warning, icon: 'cube-outline' },
-    shipped:          { label: 'Shipped',          bg: colors.primaryGhost, text: colors.primaryDim, icon: 'car-outline' },
-    out_for_delivery: { label: 'Out for Delivery', bg: colors.primaryGhost, text: colors.primaryDim, icon: 'bicycle-outline' },
-    delivered:        { label: 'Delivered',        bg: colors.successGhost, text: colors.success, icon: 'checkmark-circle' },
-    cancelled:        { label: 'Cancelled',        bg: colors.errorGhost, text: colors.error, icon: 'close-circle' },
+    pending:    { label: 'Pending',    bg: colors.surfaceSoft,  text: colors.inkMuted,   icon: 'time-outline' },
+    confirmed:  { label: 'Confirmed',  bg: colors.infoGhost,    text: colors.info,       icon: 'checkmark-outline' },
+    processing: { label: 'Processing', bg: colors.infoGhost,    text: colors.info,       icon: 'time-outline' },
+    shipped:    { label: 'Shipped',    bg: colors.primaryGhost, text: colors.primaryDim, icon: 'car-outline' },
+    delivered:  { label: 'Delivered',  bg: colors.successGhost, text: colors.success,    icon: 'checkmark-circle' },
+    cancelled:  { label: 'Cancelled',  bg: colors.errorGhost,   text: colors.error,      icon: 'close-circle' },
+    refunded:   { label: 'Refunded',   bg: colors.warningGhost, text: colors.warning,    icon: 'return-up-back-outline' },
   };
+
+  const activePinOrder = allOrders.find(o => o.id === activePinOrderId) ?? null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       <WebHeader />
 
-      {/* Header */}
       <View style={{
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 24, paddingVertical: 16,
@@ -151,126 +201,163 @@ export default function OrdersScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </Pressable>
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>My Orders</Text>
+        {allOrders.length > 0 && (
+          <View style={{ marginLeft: 8, backgroundColor: colors.primaryGhost, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.primaryDim }}>{allOrders.length}</Text>
+          </View>
+        )}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
-        {MOCK_ORDERS.map(order => {
-          const cfg = STATUS_CFG[order.status] ?? STATUS_CFG.processing;
-          const needsPin = order.status === 'out_for_delivery' || order.status === 'shipped';
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : allOrders.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+          <Ionicons name="bag-outline" size={72} color={colors.surfaceMuted} />
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginTop: 20 }}>No orders yet</Text>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 8, textAlign: 'center' }}>
+            When you place orders, they'll appear here.
+          </Text>
+          <Pressable
+            onPress={() => router.replace('/(tabs)' as any)}
+            style={{ marginTop: 24, paddingHorizontal: 28, paddingVertical: 14, backgroundColor: colors.ink, borderRadius: 24 }}
+          >
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.surface }}>Start Shopping</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+          {allOrders.map(order => {
+            const cfg = STATUS_CFG[order.status] ?? STATUS_CFG.confirmed;
+            const needsPin = order.status === 'shipped';
+            const pin = getPinFromOrderId(order.id);
 
-          return (
-            <View
-              key={order.id}
-              style={{
-                backgroundColor: colors.surface, borderRadius: 24,
-                borderWidth: 1, borderColor: needsPin ? colors.primaryBorder : colors.surfaceMuted,
-                shadowColor: needsPin ? colors.primary : '#000',
-                shadowOffset: { width: 0, height: needsPin ? 6 : 3 },
-                shadowOpacity: needsPin ? 0.1 : 0.04,
-                shadowRadius: needsPin ? 16 : 10, elevation: 3,
-                overflow: 'hidden',
-              }}
-            >
-              {/* Top accent for active deliveries */}
-              {needsPin && (
-                <View style={{ height: 3, backgroundColor: colors.primary }} />
-              )}
+            return (
+              <View
+                key={order.id}
+                style={{
+                  backgroundColor: colors.surface, borderRadius: 24,
+                  borderWidth: 1, borderColor: needsPin ? colors.primaryBorder : colors.surfaceMuted,
+                  shadowColor: needsPin ? colors.primary : '#000',
+                  shadowOffset: { width: 0, height: needsPin ? 6 : 3 },
+                  shadowOpacity: needsPin ? 0.1 : 0.04,
+                  shadowRadius: needsPin ? 16 : 10, elevation: 3,
+                  overflow: 'hidden',
+                }}
+              >
+                {needsPin && <View style={{ height: 3, backgroundColor: colors.primary }} />}
 
-              <View style={{ padding: 20 }}>
-                {/* Row 1: Order ID + Status */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>{order.id}</Text>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 2 }}>{order.date} · {order.vendor}</Text>
-                  </View>
-                  <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <Ionicons name={cfg.icon} size={13} color={cfg.text} />
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
-                  </View>
-                </View>
-
-                {/* Row 2: Items + Total */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>
-                    {order.items} item{order.items > 1 ? 's' : ''} · {order.estimatedDelivery}
-                  </Text>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>${order.total.toFixed(2)}</Text>
-                </View>
-
-                {/* Delivery PIN Banner */}
-                {needsPin && (
-                  <Pressable
-                    onPress={() => showPin(order)}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row', alignItems: 'center',
-                      backgroundColor: pressed ? colors.primaryGhost : colors.primaryGhost,
-                      borderRadius: 14, padding: 14, marginBottom: 12,
-                      borderWidth: 1, borderColor: colors.primaryBorder,
-                      gap: 12,
-                    })}
-                  >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryDim, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Ionicons name="keypad" size={20} color="#ffffff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.primaryDim }}>Tap to see your Delivery PIN</Text>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.primaryDim, marginTop: 2 }}>
-                        Show this code to the driver to complete delivery
+                <View style={{ padding: 20 }}>
+                  {/* Order header */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <View>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>#{order.ref}</Text>
+                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 2 }}>
+                        {formatDate(order.created_at)} · {order.items.length} item{order.items.length !== 1 ? 's' : ''}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.primaryDim} />
-                  </Pressable>
-                )}
-
-                {/* Delivered confirmation */}
-                {order.status === 'delivered' && (
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 10,
-                    backgroundColor: colors.successGhost, borderRadius: 12, padding: 12, marginBottom: 12,
-                  }}>
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.success }}>Delivered & confirmed via PIN</Text>
+                    <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Ionicons name={cfg.icon} size={13} color={cfg.text} />
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
+                    </View>
                   </View>
-                )}
 
-                {/* Actions row */}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <Pressable
-                    onPress={() => router.push(`/order-tracking/${order.id}` as any)}
-                    style={({ pressed }) => ({
-                      flex: 1, backgroundColor: pressed ? colors.surfaceMuted : colors.surfaceSoft,
-                      paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-                      borderWidth: 1, borderColor: colors.surfaceMuted,
-                    })}
-                  >
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>Track Order</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {}}
-                    style={({ pressed }) => ({
-                      flex: 1, backgroundColor: pressed ? colors.surfaceMuted : colors.surfaceSoft,
-                      paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-                      borderWidth: 1, borderColor: colors.surfaceMuted,
-                    })}
-                  >
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>
-                      {order.status === 'delivered' ? 'Reorder' : 'Help'}
+                  {/* Items list */}
+                  {order.items.map((item, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <Ionicons name="cube-outline" size={14} color={colors.inkGhost} style={{ marginRight: 6 }} />
+                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1 }} numberOfLines={1}>
+                        {item.name ?? `Product ${item.product_id.slice(0, 8)}`} × {item.quantity}
+                      </Text>
+                    </View>
+                  ))}
+
+                  {/* Totals */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.surfaceMuted, marginBottom: 14 }}>
+                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>
+                      Subtotal ${order.subtotal.toFixed(2)} · Shipping ${order.shipping_fee.toFixed(2)}
                     </Text>
-                  </Pressable>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
+                  </View>
+
+                  {/* PIN banner for shipped orders */}
+                  {needsPin && (
+                    <Pressable
+                      onPress={() => setActivePinOrderId(order.id)}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row', alignItems: 'center',
+                        backgroundColor: colors.primaryGhost,
+                        borderRadius: 14, padding: 14, marginBottom: 12,
+                        borderWidth: 1, borderColor: colors.primaryBorder,
+                        gap: 12, opacity: pressed ? 0.8 : 1,
+                      })}
+                    >
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryDim, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Ionicons name="keypad" size={20} color="#ffffff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.primaryDim }}>Tap to see your Delivery PIN</Text>
+                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.primaryDim, marginTop: 2 }}>
+                          Show this code to the driver to complete delivery
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.primaryDim} />
+                    </Pressable>
+                  )}
+
+                  {/* Delivered badge */}
+                  {order.status === 'delivered' && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.successGhost, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                      <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.success }}>Delivered & confirmed</Text>
+                    </View>
+                  )}
+
+                  {/* Actions */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <Pressable
+                      onPress={() => router.push(`/order-tracking/${order.id}` as any)}
+                      style={({ pressed }) => ({
+                        flex: 1, backgroundColor: pressed ? colors.surfaceMuted : colors.surfaceSoft,
+                        paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                        borderWidth: 1, borderColor: colors.surfaceMuted,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>Track Order</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (order.status === 'delivered') {
+                          router.push(`/write-review?productId=${order.items[0]?.product_id}` as any);
+                        } else {
+                          router.push('/profile/support' as any);
+                        }
+                      }}
+                      style={({ pressed }) => ({
+                        flex: 1, backgroundColor: pressed ? colors.surfaceMuted : colors.surfaceSoft,
+                        paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                        borderWidth: 1, borderColor: colors.surfaceMuted,
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>
+                        {order.status === 'delivered' ? 'Leave Review' : 'Help'}
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               </View>
-            </View>
-          );
-        })}
-      </ScrollView>
+            );
+          })}
+        </ScrollView>
+      )}
 
-      {/* Delivery PIN Modal */}
       {activePinOrder && (
         <PinModal
           visible={!!activePinOrder}
-          code={activePinOrder.deliveryCode}
-          orderId={activePinOrder.id}
-          onClose={closePin}
+          code={getPinFromOrderId(activePinOrder.id)}
+          orderId={`#${activePinOrder.ref}`}
+          onClose={() => setActivePinOrderId(null)}
           colors={colors}
         />
       )}
