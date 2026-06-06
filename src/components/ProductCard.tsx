@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
+import { useEventStore } from '../store/eventStore';
 
 interface ProductCardProps {
   id: string;
@@ -40,6 +41,7 @@ export const ProductCard = ({
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { showToast } = useToast();
+  const addEvent = useEventStore((state) => state.addEvent);
   
   const isItemInWishlist = useWishlistStore((state) => state.items.some(i => i.id === id));
   const toggleItem = useWishlistStore((state) => state.toggleItem);
@@ -66,6 +68,11 @@ export const ProductCard = ({
       vendorAvatar,
       quantity: 1,
     });
+    addEvent({
+      event_type: 'add_to_cart',
+      product_id: id,
+      vendor_id: vendorId,
+    });
     showToast(`${name} added to cart`, 'success');
     // Also call the optional prop callback (e.g. for local UI feedback)
     onAddToCart?.();
@@ -73,7 +80,14 @@ export const ProductCard = ({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={(e) => {
+        addEvent({
+          event_type: 'product_view',
+          product_id: id,
+          vendor_id: vendorId,
+        });
+        onPress();
+      }}
       style={({ pressed }) => ({
         width: '100%',
         backgroundColor: colors.surface,
@@ -111,6 +125,13 @@ export const ProductCard = ({
           onPress={(e) => {
             e.stopPropagation?.();
             toggleItem({ id, name, price, salePrice, imageUrl, vendorId, vendorName, vendorAvatar, inStock: true });
+            if (!isHeartFilled) {
+              addEvent({
+                event_type: 'add_to_wishlist',
+                product_id: id,
+                vendor_id: vendorId,
+              });
+            }
             showToast(
               isHeartFilled ? 'Removed from wishlist' : `${name} added to wishlist`,
               isHeartFilled ? 'info' : 'success'

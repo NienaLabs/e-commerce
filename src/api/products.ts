@@ -45,6 +45,7 @@ export interface ListProductsParams {
   skip?: number;
   limit?: number;
   category_id?: string;
+  has_discount?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────
@@ -87,10 +88,28 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Pro
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   if (params.category_id) query.set('category_id', params.category_id);
+  if (params.has_discount !== undefined) query.set('has_discount', String(params.has_discount));
 
   const res = await fetch(`${BASE_URL}/products/?${query.toString()}`);
   return handleResponse<Product[]>(res);
 }
+
+export interface CategoryGroupedProducts {
+  category_id: string;
+  category_name: string;
+  products: Product[];
+}
+
+/** GET /products/grouped-by-category — top categories with their top products */
+export async function getGroupedProducts(limit_per_category: number = 15, num_categories: number = 5): Promise<CategoryGroupedProducts[]> {
+  const query = new URLSearchParams();
+  query.set('limit_per_category', String(limit_per_category));
+  query.set('num_categories', String(num_categories));
+  
+  const res = await fetch(`${BASE_URL}/products/grouped-by-category?${query.toString()}`);
+  return handleResponse<CategoryGroupedProducts[]>(res);
+}
+
 
 export interface ProductCreatePayload {
   name: string;

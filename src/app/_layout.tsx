@@ -15,6 +15,7 @@ import {
 } from '@tanstack/react-query'
 import { AuthProvider } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
+import { EventTracker } from '../components/EventTracker';
 
 
 SplashScreen.preventAutoHideAsync();
@@ -55,6 +56,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
+            <EventTracker />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(auth)" />

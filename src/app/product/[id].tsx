@@ -11,7 +11,10 @@ import { useQuery } from '@tanstack/react-query';
 import { getProduct as fetchProduct } from '../../api/products';
 import { useToast } from '../../context/ToastContext';
 import { getLocalReviews, LocalReview } from '../../api/localReviews';
-
+import { getProductCrossSell } from '../../api/recommendations';
+import { useAuth } from '../../context/AuthContext';
+import { getProduct } from '../../api/products';
+import { RecommendationShelfRow } from '../../components/RecommendationShelf';
 
 export default function ProductDetail() {
   const { colors } = useTheme();
@@ -30,6 +33,49 @@ export default function ProductDetail() {
     queryFn: () => getLocalReviews(productId),
     enabled: !!productId,
   });
+
+  const { token } = useAuth();
+  
+  const { data: crossSellShelf, isLoading: crossSellLoading } = useQuery({
+    queryKey: ['cross-sell', productId],
+    queryFn: () => getProductCrossSell(token, productId, 15),
+    enabled: !!productId,
+  });
+
+  // Fetch only the specific product IDs that the cross-sell returned,
+  // so hydration never silently drops items that fall outside a generic
+  // "limit: 200" all-products cache.
+  const crossSellProductIds = React.useMemo(
+    () => crossSellShelf?.products.map(p => p.product_id) ?? [],
+    [crossSellShelf]
+  );
+
+  const { data: crossSellProductDetails = [] } = useQuery({
+    queryKey: ['cross-sell-product-details', crossSellProductIds.join(',')],
+    queryFn: () => Promise.all(crossSellProductIds.map(id => getProduct(id))),
+    enabled: crossSellProductIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const hydratedCrossSell = React.useMemo(() => {
+    if (!crossSellShelf?.products || crossSellProductDetails.length === 0) return [];
+    const productMap = Object.fromEntries(crossSellProductDetails.map(p => [p.id, p]));
+    return crossSellShelf.products.map(item => {
+      const p = productMap[item.product_id];
+      if (!p) return null;
+      const firstImage = p.images?.[0]?.url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
+      return {
+        product_id: item.product_id,
+        name: p.name,
+        price: p.actual_price,
+        salePrice: p.discount_price ?? undefined,
+        imageUrl: firstImage,
+        vendorId: p.vendor_id,
+        reason_label: item.reason_label,
+        has_discount: item.has_discount,
+      };
+    }).filter(Boolean) as any[];
+  }, [crossSellShelf, crossSellProductDetails]);
 
   const [selectedColor, setSelectedColor] = useState<string>('');
 
@@ -260,6 +306,18 @@ export default function ProductDetail() {
                 </View>
               )}
             </View>
+
+            {/* Complete Your Cart / Cross-Sell */}
+            {(hydratedCrossSell.length > 0 || crossSellLoading) && (
+              <View style={{ marginBottom: 40, marginHorizontal: -24 }}>
+                <RecommendationShelfRow
+                  slot={crossSellShelf?.slot || 'product_cross_sell'}
+                  label={crossSellShelf?.label || 'Frequently bought together'}
+                  products={hydratedCrossSell}
+                  isLoading={crossSellLoading}
+                />
+              </View>
+            )}
 
           </View>
         </View>

@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
-import LottieView from 'lottie-react-native';
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   Modal,
-  Animated,
   Platform,
   ActivityIndicator,
   useWindowDimensions,
@@ -18,11 +16,14 @@ import { ProductCard } from '@/components/ProductCard';
 import { PromoCard } from '@/components/PromoCard';
 import { FilterModal } from '@/components/FilterModal';
 import { LocationSearchModal, LocationResult } from '@/components/LocationSearchModal';
+import { RecommendationShelfRow } from '@/components/RecommendationShelf';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
-import { listProducts, mapProductToCard } from '../../api/products';
+import { listProducts, mapProductToCard, Product, getGroupedProducts } from '../../api/products';
+import { getRecommendations, RecommendationResponse } from '../../api/recommendations';
+import { useAuth } from '../../context/AuthContext';
 
 async function reverseGeocodeCity(lat: number, lng: number): Promise<string> {
   try {
@@ -68,6 +69,7 @@ type DropdownKey = 'Sort' | 'Offers' | 'Ratings' | 'Brand' | null;
 
 export default function Home() {
   const { colors } = useTheme();
+  const { token } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
@@ -81,6 +83,141 @@ export default function Home() {
     queryKey: ['products', selectedCategory],
     queryFn: () => listProducts({ limit: 20 }),
   });
+
+  // Fetch grouped products for category shelves
+  const { data: groupedCategories = [], isLoading: groupedLoading } = useQuery({
+    queryKey: ['groupedProducts'],
+    queryFn: () => getGroupedProducts(15, 5),
+  });
+
+  // Fetch recommendation shelves (only if authenticated)
+  const { data: recommendations, isLoading: recsLoading } = useQuery({
+    queryKey: ['recommendations', token],
+    queryFn: () => getRecommendations(token!, 20),
+    enabled: !!token,
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // Cache for 5 mins
+  });
+
+  // Fetch Flash Sales from API
+  const { data: flashSales = [], isLoading: flashSalesLoading } = useQuery({
+    queryKey: ['products', 'flash-sales'],
+    queryFn: () => listProducts({ limit: 10, has_discount: true }),
+  });
+
+  // Build a product lookup map for hydrating recommendations
+  const productMap = useMemo(() => {
+    const map: Record<string, Product> = {};
+    for (const p of products) {
+      map[p.id] = p;
+    }
+    return map;
+  }, [products]);
+
+  // Hydrate recommendation shelves with product details
+  const hydratedShelves = useMemo(() => {
+    if (!recommendations?.shelves) return [];
+
+    return recommendations.shelves
+      .map((shelf) => ({
+        slot: shelf.slot,
+        label: shelf.label,
+        products: shelf.products
+          .map((item) => {
+            const product = productMap[item.product_id];
+            if (!product) return null;
+            const firstImage =
+              product.images?.[0]?.url ??
+              'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
+            return {
+              product_id: item.product_id,
+              name: product.name,
+              price: product.actual_price,
+              salePrice: product.discount_price ?? undefined,
+              imageUrl: firstImage,
+              vendorId: product.vendor_id,
+              reason_label: item.reason_label,
+              has_discount: item.has_discount,
+            };
+          })
+          .filter(Boolean) as any[],
+      }))
+      .filter((shelf) => shelf.products.length > 0);
+  }, [recommendations, productMap]);
+
+  // Hydrate contextual cards
+  const hydratedContextualCards = useMemo(() => {
+    if (!recommendations?.contextual_cards) return [];
+
+    return recommendations.contextual_cards
+      .map((item) => {
+        const product = productMap[item.product_id];
+        if (!product) return null;
+        const firstImage =
+          product.images?.[0]?.url ??
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
+        return {
+          product_id: item.product_id,
+          name: product.name,
+          price: product.actual_price,
+          salePrice: product.discount_price ?? undefined,
+          imageUrl: firstImage,
+          vendorId: product.vendor_id,
+          reason_label: item.reason_label,
+          has_discount: item.has_discount,
+        };
+      })
+      .filter(Boolean) as any[];
+  }, [recommendations, productMap]);
+
+  // Flash Sale Carousel state and ref
+  const scrollRef = React.useRef<ScrollView>(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
+
+  const fallbackImages = [
+    "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1596462502278-27bf85033e5a?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800",
+  ];
+
+  const flashSaleItems = useMemo(() => {
+    if (flashSalesLoading) return [];
+    if (flashSales.length > 0) {
+      return flashSales.map((p, i) => ({
+        id: p.id,
+        heading: p.name,
+        subtext: p.discount_price ? `Now $${p.discount_price.toFixed(2)}` : 'On Sale',
+        imageUrl: p.images?.[0]?.url || fallbackImages[i % fallbackImages.length],
+        badge: 'FLASH SALE',
+        ctaLabel: 'Shop Now',
+        product: p,
+      }));
+    }
+    // Fallback if no flash sales from backend yet
+    return fallbackImages.map((url, i) => ({
+      id: `fallback-${i}`,
+      heading: 'Flash Sale',
+      subtext: 'Up to 50% off',
+      imageUrl: url,
+      badge: 'HOT DEAL',
+      ctaLabel: 'Shop Now',
+    }));
+  }, [flashSales, flashSalesLoading]);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (!isAutoScrolling || flashSaleItems.length === 0) return;
+    const interval = setInterval(() => {
+      setCarouselIndex((prevIndex) => {
+        const nextIndex = (prevIndex + 1) % flashSaleItems.length;
+        scrollRef.current?.scrollTo({ x: nextIndex * 316, animated: true }); // 300 width + 16 gap
+        return nextIndex;
+      });
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [isAutoScrolling, flashSaleItems.length]);
 
   const mappedProducts = products.map(mapProductToCard);
   const filteredProducts = selectedCategory
@@ -205,6 +342,9 @@ export default function Home() {
     </View>
   );
 
+  const hasRecommendations = hydratedShelves.length > 0;
+  const showRecommendationShelves = !selectedCategory && hasRecommendations;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -292,8 +432,76 @@ export default function Home() {
           </Pressable>
         </View>
 
+        {/* ─── Flash Sales Carousel (image-only, auto-scrolling) ─── */}
+        {flashSalesLoading ? (
+          <View style={{ height: 200, justifyContent: 'center', alignItems: 'center', marginTop: 24 }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <View style={{ paddingTop: 24, paddingBottom: 8 }}>
+            {/* Carousel + Dots wrapper */}
+            <View>
+              <ScrollView
+                ref={scrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingLeft: 24, paddingRight: 24, gap: 16 }}
+                onScrollBeginDrag={() => setIsAutoScrolling(false)}
+                onScrollEndDrag={() => setIsAutoScrolling(true)}
+                scrollEventThrottle={16}
+                onScroll={(e) => {
+                  const offsetX = e.nativeEvent.contentOffset.x;
+                  const idx = Math.round(offsetX / 316);
+                  setCarouselIndex(Math.max(0, Math.min(idx, flashSaleItems.length - 1)));
+                }}
+              >
+                {flashSaleItems.map((item) => (
+                  <PromoCard
+                    key={item.id}
+                    imageUrl={item.imageUrl}
+                    onPress={() => item.product ? router.push(`/product/${item.product.id}` as any) : undefined}
+                  />
+                ))}
+              </ScrollView>
+
+              {/* Dot indicators — only shown when cards overflow the screen */}
+              {flashSaleItems.length > 1 && (flashSaleItems.length * 316 + 48) > width && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 14,
+                    left: 0,
+                    right: 0,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 6,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {flashSaleItems.map((_, i) => (
+                    <View
+                      key={i}
+                      style={{
+                        width: carouselIndex === i ? 20 : 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: carouselIndex === i ? '#ffffff' : 'rgba(255,255,255,0.45)',
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 2,
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* ─── Categories ─── */}
-        <View style={{ paddingTop: 28, paddingBottom: 4 }}>
+        <View style={{ paddingTop: 16, paddingBottom: 4 }}>
           <View style={{ paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, letterSpacing: -0.3 }}>
               Shop by Category
@@ -380,98 +588,136 @@ export default function Home() {
           </View>
         )}
 
-        {/* ─── Promotions / Deals Section ─── */}
-        <View style={{ paddingTop: 28, paddingBottom: 8 }}>
-          <View style={{ paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="flash" size={24} color="#f59e0b" style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, letterSpacing: -0.3 }}>
-                Flash Sales
-              </Text>
-            </View>
-            <Pressable onPress={() => router.push('/flash-sales' as any)}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primary }}>See all</Text>
-            </Pressable>
-          </View>
 
-          {isDesktop ? (
-            <View style={{ flexDirection: 'row', paddingHorizontal: 24, gap: 16, paddingBottom: 8 }}>
-              <PromoCard imageUrl="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800" />
-              <PromoCard imageUrl="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&q=80&w=800" />
-              <PromoCard imageUrl="https://images.unsplash.com/photo-1596462502278-27bf85033e5a?auto=format&fit=crop&q=80&w=800" />
-            </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 12, gap: 16, paddingBottom: 8 }}>
-              <PromoCard imageUrl="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800" />
-              <PromoCard imageUrl="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&q=80&w=800" />
-              <PromoCard imageUrl="https://images.unsplash.com/photo-1596462502278-27bf85033e5a?auto=format&fit=crop&q=80&w=800" />
-            </ScrollView>
-          )}
-        </View>
 
-        {/* ─── Product Feed ─── */}
-        <View style={{ paddingTop: 24, paddingHorizontal: 24 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, letterSpacing: -0.3 }}>
-              {selectedCategory
-                ? CATEGORIES.find(c => c.id === selectedCategory)?.label ?? 'Results'
-                : 'Suggested for you'}
-            </Text>
-            {selectedCategory ? (
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkMuted }}>
-                {filteredProducts.length} items
-              </Text>
-            ) : (
-              <Pressable onPress={() => router.push('/suggestions')}>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkMuted }}>See all</Text>
-              </Pressable>
+        {/* ─── Recommendation Shelves (when no category filter) ─── */}
+        {showRecommendationShelves && (
+          <>
+            {/* Contextual Cards (price drops, rising stores) */}
+            {hydratedContextualCards.length > 0 && (
+              <RecommendationShelfRow
+                slot="price_drop"
+                label="Price Drops for You"
+                products={hydratedContextualCards}
+              />
             )}
-          </View>
 
-          <View style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 16,
-          }}>
-            {productsLoading ? (
-              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 48 }}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
-                  Loading products...
-                </Text>
+            {/* All recommendation shelves */}
+            {hydratedShelves.map((shelf) => (
+              <RecommendationShelfRow
+                key={shelf.slot}
+                slot={shelf.slot}
+                label={shelf.label}
+                products={shelf.products}
+              />
+            ))}
+          </>
+        )}
+
+        {/* ─── Loading state for recommendations ─── */}
+        {!selectedCategory && !hasRecommendations && recsLoading && (
+          <View style={{ paddingTop: 32, paddingBottom: 16 }}>
+            <RecommendationShelfRow
+              slot="taste_profile"
+              label="Curated for You"
+              products={[]}
+              isLoading
+            />
+          </View>
+        )}
+
+        {/* ─── Grouped Category Shelves (when no category filter) ─── */}
+        {!selectedCategory && (
+          <View style={{ paddingBottom: 24 }}>
+            {groupedLoading ? (
+              <View style={{ paddingVertical: 48, alignItems: 'center' }}>
+                 <ActivityIndicator size="large" color={colors.primary} />
+                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
+                   Loading categories...
+                 </Text>
               </View>
             ) : (
-              filteredProducts.map(product => (
-                <View
-                  key={product.id}
-                  style={{ width: isDesktop ? '48%' : '100%' }}
-                >
-                  <ProductCard
-                    id={product.id}
-                    name={product.name}
-                    price={product.price}
-                    salePrice={product.salePrice}
-                    imageUrl={product.imageUrl}
-                    vendorId={product.vendorId}
-                    onPress={() => router.push(`/product/${product.id}` as any)}
-                  />
-                </View>
+              groupedCategories.map((group) => (
+                <RecommendationShelfRow
+                  key={group.category_id}
+                  slot="category"
+                  label={group.category_name}
+                  products={group.products.map(p => {
+                    const card = mapProductToCard(p);
+                    return {
+                      product_id: card.id,
+                      name: card.name,
+                      price: card.price,
+                      salePrice: card.salePrice,
+                      imageUrl: card.imageUrl,
+                      vendorId: card.vendorId,
+                      reason_label: 'Popular in this category',
+                      has_discount: !!card.salePrice,
+                    };
+                  })}
+                />
               ))
             )}
           </View>
+        )}
 
-          {!productsLoading && filteredProducts.length === 0 && (
-            <View style={{ alignItems: 'center', paddingVertical: 64 }}>
-              <Ionicons name="search-outline" size={80} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 20, color: colors.ink, marginBottom: 8 }}>
-                No items found
+        {/* ─── Product Feed (grid — only shown when category is selected) ─── */}
+        {selectedCategory && (
+          <View style={{ paddingTop: 24, paddingHorizontal: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, letterSpacing: -0.3 }}>
+                {CATEGORIES.find(c => c.id === selectedCategory)?.label ?? 'Results'}
               </Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', maxWidth: 240 }}>
-                Try a different category or check back later
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkMuted }}>
+                {filteredProducts.length} items
               </Text>
             </View>
-          )}
-        </View>
+
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 16,
+            }}>
+              {productsLoading ? (
+                <View style={{ flex: 1, alignItems: 'center', paddingVertical: 48 }}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
+                    Loading products...
+                  </Text>
+                </View>
+              ) : (
+                filteredProducts.map(product => (
+                  <View
+                    key={product.id}
+                    style={{ width: isDesktop ? '48%' : '100%' }}
+                  >
+                    <ProductCard
+                      id={product.id}
+                      name={product.name}
+                      price={product.price}
+                      salePrice={product.salePrice}
+                      imageUrl={product.imageUrl}
+                      vendorId={product.vendorId}
+                      onPress={() => router.push(`/product/${product.id}` as any)}
+                    />
+                  </View>
+                ))
+              )}
+            </View>
+
+            {!productsLoading && filteredProducts.length === 0 && (
+              <View style={{ alignItems: 'center', paddingVertical: 64 }}>
+                <Ionicons name="search-outline" size={80} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 20, color: colors.ink, marginBottom: 8 }}>
+                  No items found
+                </Text>
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', maxWidth: 240 }}>
+                  Try a different category or check back later
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* ─── Main Filter Mega-Modal ─── */}

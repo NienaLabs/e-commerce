@@ -41,7 +41,7 @@ example
 # generated native folders
 /ios
 /android
-package-lock.json*
+package-lock.json
 bun.lock*
 yarn.lock*
 .npmrc
