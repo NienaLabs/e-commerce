@@ -1,13 +1,13 @@
-import React, { useState, useContext } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import React, { useState, useContext, useEffect } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { Button } from '../../components/Button';
 import { AuthContext } from '../../context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createProduct, listCategories } from '../../api/products';
+import { createProduct, updateProduct, getProduct, listCategories, deleteProduct } from '../../api/products';
 
 function Field({ label, placeholder, value, onChangeText, colors, multiline = false, keyboardType = 'default' }: any) {
   const [focused, setFocused] = useState(false);
@@ -49,6 +49,9 @@ export default function AddProductScreen() {
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { token } = useContext(AuthContext);
   const queryClient = useQueryClient();
+  const { id: queryId } = useLocalSearchParams<{ id?: string }>();
+  const id = Array.isArray(queryId) ? queryId[0] : queryId;
+  const isEditMode = !!id;
 
   const [form, setForm] = useState({ name: '', price: '', salePrice: '', stock: '', sku: '', description: '', category: '' });
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -59,25 +62,85 @@ export default function AddProductScreen() {
     queryFn: listCategories,
   });
 
+  const { data: existingProduct, isLoading: isLoadingProduct } = useQuery({
+    queryKey: ['product', id],
+    queryFn: () => getProduct(id!),
+    enabled: isEditMode && !!id,
+  });
+
+  useEffect(() => {
+    if (existingProduct) {
+      setForm({
+        name: existingProduct.name || '',
+        price: existingProduct.actual_price?.toString() || '',
+        salePrice: existingProduct.discount_price?.toString() || '',
+        stock: existingProduct.stock_quantity?.toString() || '',
+        sku: '',
+        description: existingProduct.description || '',
+        category: existingProduct.category_id || '',
+      });
+      setSelectedCategory(existingProduct.category_id || '');
+    }
+  }, [existingProduct]);
+
   const mutation = useMutation({
-    mutationFn: () => createProduct(token!, {
-      name: form.name,
-      slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now(),
-      description: form.description,
-      actual_price: parseFloat(form.price) || 0,
-      discount_price: form.salePrice ? parseFloat(form.salePrice) : undefined,
-      stock_quantity: parseInt(form.stock) || 0,
-      is_active: true,
-      category_id: selectedCategory,
-    }),
+    mutationFn: () => {
+      const payload = {
+        name: form.name,
+        slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now(),
+        description: form.description,
+        actual_price: parseFloat(form.price) || 0,
+        discount_price: form.salePrice ? parseFloat(form.salePrice) : undefined,
+        stock_quantity: parseInt(form.stock) || 0,
+        is_active: true,
+        category_id: selectedCategory,
+      };
+      if (isEditMode) {
+        return updateProduct(token!, id!, payload);
+      }
+      return createProduct(token!, payload);
+    },
     onSuccess: () => {
       setSaved(true);
       queryClient.invalidateQueries({ queryKey: ['vendor-products'] });
+      if (isEditMode) queryClient.invalidateQueries({ queryKey: ['product', id] });
     },
     onError: (error: any) => {
       alert(`Failed to save product: ${error.message}`);
     }
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProduct(token!, id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-products'] });
+      router.replace('/vendor-dashboard/products' as any);
+    },
+    onError: (error: any) => {
+      alert(`Failed to delete product: ${error.message}`);
+    }
+  });
+
+  const handleDelete = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this product?')) {
+        deleteMutation.mutate();
+      }
+    } else {
+      Alert.alert('Delete Product', 'Are you sure you want to delete this product?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate() }
+      ]);
+    }
+  };
+
+  if (isEditMode && isLoadingProduct) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
 
   if (saved) {
     return (
@@ -88,10 +151,10 @@ export default function AddProductScreen() {
           </View>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink, marginBottom: 10 }}>Product Saved!</Text>
           <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', marginBottom: 36 }}>
-            Your product has been saved and is now live.
+            Your product has been {isEditMode ? 'updated' : 'saved and is now live'}.
           </Text>
           <View style={{ width: '100%', gap: 12 }}>
-            <Button title="Add Another Product" onPress={() => { setForm({ name: '', price: '', salePrice: '', stock: '', sku: '', description: '', category: '' }); setSaved(false); }} />
+            {!isEditMode && <Button title="Add Another Product" onPress={() => { setForm({ name: '', price: '', salePrice: '', stock: '', sku: '', description: '', category: '' }); setSaved(false); }} />}
             <Pressable onPress={() => router.replace('/vendor-dashboard/products' as any)} style={{ padding: 16, alignItems: 'center' }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>Back to Products</Text>
             </Pressable>
@@ -107,7 +170,7 @@ export default function AddProductScreen() {
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.push('/vendor-dashboard/products' as any)} style={{ marginRight: 12, padding: 4 }}>
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </Pressable>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Add New Product</Text>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>{isEditMode ? 'Edit Product' : 'Add New Product'}</Text>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, maxWidth: isDesktop ? 720 : undefined, alignSelf: 'center', width: '100%' }}>
@@ -163,7 +226,7 @@ export default function AddProductScreen() {
         </View>
 
         <Button 
-          title={mutation.isPending ? "Saving..." : "Save Product"} 
+          title={mutation.isPending ? "Saving..." : (isEditMode ? "Update Product" : "Save Product")} 
           onPress={() => {
             if (!form.name || !form.price || !form.stock) {
               alert('Please fill out all required fields.');
@@ -175,8 +238,25 @@ export default function AddProductScreen() {
             }
             mutation.mutate();
           }} 
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || deleteMutation.isPending}
         />
+
+        {isEditMode && (
+          <Pressable 
+            onPress={handleDelete}
+            disabled={deleteMutation.isPending || mutation.isPending}
+            style={{
+              marginTop: 16, padding: 16, borderRadius: 14,
+              borderWidth: 1.5, borderColor: colors.error, backgroundColor: colors.errorGhost,
+              alignItems: 'center', flexDirection: 'row', justifyContent: 'center'
+            }}
+          >
+            <Ionicons name="trash" size={20} color={colors.error} style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.error }}>
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Product'}
+            </Text>
+          </Pressable>
+        )}
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>

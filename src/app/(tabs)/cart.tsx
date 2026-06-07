@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, Image, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/Button';
 import { router } from 'expo-router';
@@ -15,6 +15,7 @@ import { RecommendationShelfRow } from '../../components/RecommendationShelf';
 export default function Cart() {
   const { colors } = useTheme();
   const { token } = useAuth();
+  const insets = useSafeAreaInsets();
   const cartItems = useCartStore((state) => state.items);
   const removeItem = useCartStore((state) => state.removeItem);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
@@ -96,7 +97,7 @@ export default function Cart() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(120, insets.bottom + 120) }}>
         {cartItems.length > 0 ? (
           <>
             <View style={{ paddingHorizontal: 24, paddingTop: 24, gap: 20 }}>
@@ -179,7 +180,7 @@ export default function Cart() {
       </ScrollView>
 
       {cartItems.length > 0 && (
-        <View style={{ padding: 24, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.surfaceMuted }}>
+        <View style={{ padding: 24, paddingBottom: Math.max(24, insets.bottom + 80), backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.surfaceMuted }}>
           <Button title="Proceed to Checkout" onPress={() => router.push('/checkout')} />
         </View>
       )}

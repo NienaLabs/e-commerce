@@ -18,6 +18,22 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
   const conditions = ['New', 'Refurbished', 'Used'];
   const availabilities = ['In Stock', 'Pre-order', 'Out of Stock'];
 
+  // Count how many non-default filters are active
+  const activeFilterCount = [
+    selectedCondition !== 'New' ? 1 : 0,
+    selectedAvailability !== 'In Stock' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+
+  const handleReset = () => {
+    setSelectedCondition('New');
+    setSelectedAvailability('In Stock');
+    setPriceRange([0, 500]);
+  };
+
+  const handleApply = () => {
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -48,16 +64,23 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
             borderBottomColor: colors.surfaceMuted,
           }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Refine Results</Text>
-            <Pressable
-              onPress={onClose}
-              style={{
-                width: 40, height: 40, borderRadius: 20,
-                backgroundColor: colors.surfaceSoft,
-                alignItems: 'center', justifyContent: 'center'
-              }}
-            >
-              <Ionicons name="close" size={24} color={colors.ink} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              {activeFilterCount > 0 && (
+                <Pressable onPress={handleReset} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: colors.surfaceSoft }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>Reset</Text>
+                </Pressable>
+              )}
+              <Pressable
+                onPress={onClose}
+                style={{
+                  width: 40, height: 40, borderRadius: 20,
+                  backgroundColor: colors.surfaceSoft,
+                  alignItems: 'center', justifyContent: 'center'
+                }}
+              >
+                <Ionicons name="close" size={24} color={colors.ink} />
+              </Pressable>
+            </View>
           </View>
 
           <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 24 }} showsVerticalScrollIndicator={false}>
@@ -137,7 +160,10 @@ export const FilterModal = ({ visible, onClose }: FilterModalProps) => {
             backgroundColor: colors.surface,
             paddingBottom: 32,
           }}>
-            <Button title="Apply Filters (12)" onPress={onClose} />
+            <Button
+              title={activeFilterCount > 0 ? `Apply Filters (${activeFilterCount})` : 'Apply Filters'}
+              onPress={handleApply}
+            />
           </View>
         </View>
       </View>

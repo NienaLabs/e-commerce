@@ -24,26 +24,27 @@
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro"
     },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
-        }
-      ],
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+      "plugins": [
+        "expo-router",
+        [
+          "expo-location",
+          {
+            "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
           }
-        }
+        ],
+        [
+          "expo-splash-screen",
+          {
+            "backgroundColor": "#208AEF",
+            "android": {
+              "image": "./assets/images/splash-icon.png",
+              "imageWidth": 76
+            }
+          }
+        ],
+        "expo-secure-store",
+        "@maplibre/maplibre-react-native"
       ],
-      "expo-secure-store"
-    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

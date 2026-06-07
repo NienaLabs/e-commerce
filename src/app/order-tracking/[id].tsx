@@ -36,6 +36,7 @@ export default function OrderTracking() {
     queryFn: () => listMyOrders(token!),
     enabled: !!token,
     retry: false,
+    refetchInterval: 3000,
   });
 
   const { data: localOrders = [], isLoading: localLoading } = useQuery({
@@ -57,7 +58,8 @@ export default function OrderTracking() {
   const localOrder = localOrders.find((o) => o.id === orderId);
   const backendOrder = backendOrders.find((o) => o.id === orderId);
   
-  const order = localOrder || backendOrder;
+  // Prioritize the backend order (live status) over the local offline copy
+  const order = backendOrder || localOrder;
 
   if (!order) {
     return (
@@ -74,9 +76,16 @@ export default function OrderTracking() {
   // Normalize order properties between local and backend
   const isLocal = !!localOrder;
   const ref = (order as LocalOrder).ref || order.id.slice(-8).toUpperCase();
-  const address = (order as LocalOrder).shipping_address ? 
-    `${(order as LocalOrder).shipping_address.name}, ${(order as LocalOrder).shipping_address.street}` : 
-    '123 Tech Avenue, Apt 4B, San Francisco, CA'; // Fallback for backend orders without address
+  
+  // Build a readable address from whichever shape the order has
+  const shippingAddr = (order as LocalOrder).shipping_address ?? (order as Order).shipping_address ?? null;
+  const address = shippingAddr
+    ? [shippingAddr.name, shippingAddr.street, shippingAddr.city, (shippingAddr as any).country]
+        .filter(Boolean).join(', ')
+    : 'Address not available';
+
+  // Resolve the delivery PIN — from local order stub or real backend field
+  const deliveryPin = (order as Order).delivery_pin ?? null;
 
   // Determine the current step index based on status
   let currentStepIndex = 0;
@@ -152,6 +161,24 @@ export default function OrderTracking() {
               </View>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>{estimatedDelivery}</Text>
             </View>
+
+            {/* Delivery PIN Card */}
+            {!isDelivered && deliveryPin && (
+              <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.primaryDim }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="key" size={20} color={colors.primaryDim} style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Delivery PIN</Text>
+                </View>
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginBottom: 16 }}>
+                  Provide this code to your delivery agent to receive your order. Do not share it until the package is handed to you.
+                </Text>
+                <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 32, letterSpacing: 12, color: colors.ink }}>
+                    {deliveryPin}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {/* Timeline */}
             <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>

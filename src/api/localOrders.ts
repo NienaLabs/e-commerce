@@ -23,6 +23,7 @@ export interface LocalOrder {
     street: string;
     city: string;
   };
+  delivery_pin?: string | null;
   payment: {
     type: string;
     last4: string;

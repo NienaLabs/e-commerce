@@ -51,7 +51,6 @@ export default function StoreSettingsScreen() {
           </Text>
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, paddingLeft: 8, overflow: 'hidden' }}>
             <SettingsRow icon="storefront" title="General Information" onPress={() => router.push('/vendor-dashboard/settings/general' as any)} />
-            <SettingsRow icon="briefcase" title="Business Details" onPress={() => router.push('/vendor-dashboard/settings/business' as any)} />
             <View style={{ borderBottomWidth: 0 }}>
               <SettingsRow icon="wallet" title="Payout Settings" onPress={() => router.push('/vendor-dashboard/payouts' as any)} />
             </View>

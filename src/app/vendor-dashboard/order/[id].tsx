@@ -1,71 +1,130 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Platform, useWindowDimensions,
-  Modal, TextInput, Alert,
+  Modal, TextInput, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../../theme/ThemeContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../../context/AuthContext';
+import { getVendorOrderDetail } from '../../../api/vendors';
 
-const STATUSES = ['new', 'packed', 'shipped', 'out_for_delivery', 'delivered'];
+const STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
 const STATUS_LABELS: Record<string, string> = {
-  new: 'New Order',
-  packed: 'Packed',
+  pending: 'New Order',
+  confirmed: 'Confirmed',
+  processing: 'Processing',
   shipped: 'Shipped',
-  out_for_delivery: 'Out for Delivery',
   delivered: 'Delivered',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
 };
 
-
-
-// Simulated delivery codes — in prod these would come from the backend
-const DELIVERY_CODES: Record<string, string> = {
-  'EL-90120': '4921',
-  'EL-90119': '7304',
-  'EL-90118': '1847',
-  'EL-90117': '5523',
-};
+// Real PIN verification happens at the backend
 
 export default function VendorOrderDetailScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
 
-  const orderId = (Array.isArray(id) ? id[0] : id) ?? 'EL-90120';
-  const correctCode = DELIVERY_CODES[orderId] ?? '0000';
+  const orderId = Array.isArray(id) ? id[0] : id;
 
-  const STATUS_CFG: Record<string, { bg: string; text: string }> = {
-    new: { bg: colors.infoGhost, text: colors.info },
-    packed: { bg: colors.warningGhost, text: colors.warning },
-    shipped: { bg: colors.primaryGhost, text: colors.primaryDim },
-    out_for_delivery: { bg: colors.primaryGhost, text: colors.primaryDim },
-    delivered: { bg: colors.successGhost, text: colors.success },
-  };
+  const { data: order, isLoading } = useQuery({
+    queryKey: ['vendor-order', orderId],
+    queryFn: () => getVendorOrderDetail(token!, orderId!),
+    enabled: !!token && !!orderId,
+    refetchInterval: 3000,
+  });
 
-  // Start shipped orders in out_for_delivery state for demo, others start as packed
-  const [currentStatus, setCurrentStatus] = useState('out_for_delivery');
+  const [currentStatus, setCurrentStatus] = useState<string>('pending');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [verifySuccess, setVerifySuccess] = useState(false);
 
-  const cfg = STATUS_CFG[currentStatus];
-  const canVerifyDelivery = currentStatus === 'out_for_delivery' || currentStatus === 'shipped';
+  useEffect(() => {
+    if (order?.status) setCurrentStatus(order.status);
+  }, [order?.status]);
 
-  const handleVerifyPin = () => {
-    if (pinInput === correctCode) {
+  if (isLoading || !order) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  // No local pin code comparison needed, verify with backend.
+  const STATUS_CFG: Record<string, { bg: string; text: string }> = {
+    pending: { bg: colors.infoGhost, text: colors.info },
+    confirmed: { bg: colors.primaryGhost, text: colors.primaryDim },
+    processing: { bg: colors.warningGhost, text: colors.warning },
+    shipped: { bg: colors.primaryGhost, text: colors.primaryDim },
+    delivered: { bg: colors.successGhost, text: colors.success },
+    cancelled: { bg: colors.errorGhost, text: colors.error },
+    refunded: { bg: colors.errorGhost, text: colors.error },
+  };
+
+  const cfg = STATUS_CFG[currentStatus] || STATUS_CFG.pending;
+  const canVerifyDelivery = currentStatus === 'shipped';
+
+  const updateStatus = async (newStatus: string) => {
+    if (newStatus === 'delivered') return; // Must go through PIN verification
+    setCurrentStatus(newStatus);
+    
+    // Call API to update order status
+    try {
+      const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+      await fetch(`${BASE_URL}/orders/${order.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleVerifyPin = async () => {
+    try {
+      const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+      const res = await fetch(`${BASE_URL}/orders/${order.id}/verify-delivery`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ pin: pinInput })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.detail || 'Incorrect delivery PIN');
+      }
+
       setVerifySuccess(true);
       setPinError('');
       setCurrentStatus('delivered');
+      queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
+
       setTimeout(() => {
         setShowVerifyModal(false);
         setVerifySuccess(false);
         setPinInput('');
       }, 2000);
-    } else {
-      setPinError('Incorrect delivery code. Please check with the customer.');
+    } catch (e: any) {
+      setPinError(e.message || 'Incorrect delivery PIN');
       setPinInput('');
     }
   };
@@ -76,6 +135,9 @@ export default function VendorOrderDetailScreen() {
     setPinError('');
     setVerifySuccess(false);
   };
+
+  // Calculate order subtotal for ONLY the vendor's items in this order
+  const vendorTotal = order.items.reduce((acc: number, item: any) => acc + ((item.discount_price ?? item.unit_price) * item.quantity), 0);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -93,11 +155,11 @@ export default function VendorOrderDetailScreen() {
           <Ionicons name="arrow-back" size={22} color={colors.ink} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>Order #{orderId}</Text>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>May 31, 2026 · 09:14 AM</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>Order #{order.id.slice(-8).toUpperCase()}</Text>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>{new Date(order.created_at).toLocaleString()}</Text>
         </View>
         <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{STATUS_LABELS[currentStatus]}</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{STATUS_LABELS[currentStatus] || currentStatus}</Text>
         </View>
       </View>
 
@@ -164,11 +226,11 @@ export default function VendorOrderDetailScreen() {
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 14 }}>Customer</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                <Ionicons name="person" size={22} color="#7a8a05" />
+                <Ionicons name="person" size={22} color={colors.primaryDim} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Ama Owusu</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost }}>ama@example.com</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{order.shipping_address?.name || 'Customer'}</Text>
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost }}>Contact via App</Text>
               </View>
               <Pressable style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="mail-outline" size={18} color={colors.ink} />
@@ -179,21 +241,19 @@ export default function VendorOrderDetailScreen() {
           {/* Order Items */}
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 14 }}>Order Items</Text>
-            {[
-              { name: 'Wireless Noise-Cancelling Headphones', qty: 1, price: 149.99, variant: 'Black' },
-            ].map((item, i) => (
-              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+            {order.items.map((item: any) => (
+              <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>{item.name}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>×{item.qty} · {item.variant}</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>Product #{item.product_id.slice(0, 8).toUpperCase()}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>×{item.quantity} {item.color_chosen ? `· ${item.color_chosen}` : ''}</Text>
                 </View>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>${item.price.toFixed(2)}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}</Text>
               </View>
             ))}
             <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 12 }} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Total</Text>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#7a8a05' }}>$149.99</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primaryDim }}>${vendorTotal.toFixed(2)}</Text>
             </View>
           </View>
 
@@ -204,7 +264,7 @@ export default function VendorOrderDetailScreen() {
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Delivery Address</Text>
             </View>
             <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, lineHeight: 22 }}>
-              123 Tech Avenue, Apt 4B{'\n'}San Francisco, CA 94105
+              {order.shipping_address?.street}{'\n'}{order.shipping_address?.city}
             </Text>
           </View>
         </View>
@@ -220,7 +280,7 @@ export default function VendorOrderDetailScreen() {
                 return (
                   <Pressable
                     key={status}
-                    onPress={() => setCurrentStatus(status)}
+                    onPress={() => updateStatus(status)}
                     disabled={currentStatus === 'delivered'}
                     style={{
                       flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14,

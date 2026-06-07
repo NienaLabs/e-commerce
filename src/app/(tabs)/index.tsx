@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoryCard } from '@/components/CategoryCard';
 import { ProductCard } from '@/components/ProductCard';
@@ -77,6 +77,7 @@ export default function Home() {
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const insets = useSafeAreaInsets();
 
   // Fetch real products from API
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -203,6 +204,7 @@ export default function Home() {
       imageUrl: url,
       badge: 'HOT DEAL',
       ctaLabel: 'Shop Now',
+      product: undefined,
     }));
   }, [flashSales, flashSalesLoading]);
 
@@ -347,7 +349,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(120, insets.bottom + 120) }}>
 
         {/* ─── Header: Location + Search ─── */}
         <View style={{

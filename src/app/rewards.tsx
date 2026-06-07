@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -109,27 +109,43 @@ export default function RewardsScreen() {
         <View>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 14 }}>Redeem Vouchers</Text>
           <View style={{ gap: 12 }}>
-            {VOUCHERS.map(v => (
-              <View key={v.id} style={{ backgroundColor: colors.surface, borderRadius: 18, flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                  <Ionicons name={v.icon as any} size={22} color={colors.primaryDim} />
+            {VOUCHERS.map(v => {
+              const canRedeem = CURRENT_POINTS >= v.points;
+              return (
+                <View key={v.id} style={{ backgroundColor: colors.surface, borderRadius: 18, flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                    <Ionicons name={v.icon as any} size={22} color={colors.primaryDim} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>{v.title}</Text>
+                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 3 }}>Expires {v.expires}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: canRedeem ? colors.primaryDim : colors.inkGhost }}>{v.points} pts</Text>
+                    <Pressable
+                      disabled={!canRedeem}
+                      onPress={() => {
+                        if (canRedeem) {
+                          Alert.alert(
+                            'Redeem Voucher',
+                            `Redeem "${v.title}" for ${v.points} points? This will be applied to your next order.`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Redeem', onPress: () => Alert.alert('Success!', `Your "${v.title}" voucher has been applied. Use it at checkout before ${v.expires}.`) },
+                            ]
+                          );
+                        }
+                      }}
+                      style={{ marginTop: 6, backgroundColor: canRedeem ? colors.ink : colors.surfaceSoft, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14 }}>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: canRedeem ? colors.surface : colors.inkGhost }}>Redeem</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>{v.title}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 3 }}>Expires {v.expires}</Text>
-                </View>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: CURRENT_POINTS >= v.points ? colors.primaryDim : colors.inkGhost }}>{v.points} pts</Text>
-                  <Pressable
-                    disabled={CURRENT_POINTS < v.points}
-                    style={{ marginTop: 6, backgroundColor: CURRENT_POINTS >= v.points ? colors.ink : colors.surfaceSoft, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14 }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: CURRENT_POINTS >= v.points ? colors.surface : colors.inkGhost }}>Redeem</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
+
 
         {/* History */}
         <View>

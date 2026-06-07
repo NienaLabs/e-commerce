@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, Modal, TextInput, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
@@ -40,6 +40,7 @@ const SettingsRow = ({ icon, title, onPress, color, defaultColor }: SettingsRowP
 export default function Profile() {
   const { colors } = useTheme();
   const { user, signOut, hasVendorAccount, updateUserName } = useAuth();
+  const insets = useSafeAreaInsets();
   
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -67,7 +68,7 @@ export default function Profile() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}>
         <View style={{ paddingHorizontal: 24, paddingVertical: 24 }}>
 
           {/* Profile Header */}

@@ -9,6 +9,7 @@
     "@expo/ui": "~56.0.15",
     "@expo/vector-icons": "^15.1.1",
     "@lottiefiles/dotlottie-react": "^0.13.5",
+    "@maplibre/maplibre-react-native": "^11.3.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@tanstack/react-query": "^5.100.14",
     "babel-preset-expo": "^56.0.13",
@@ -19,6 +20,7 @@
     "expo-font": "~56.0.5",
     "expo-glass-effect": "~56.0.4",
     "expo-image": "~56.0.9",
+    "expo-image-picker": "~56.0.16",
     "expo-linking": "~56.0.13",
     "expo-location": "~56.0.15",
     "expo-router": "~56.2.8",
@@ -30,6 +32,7 @@
     "expo-web-browser": "~56.0.5",
     "haversine": "^1.1.1",
     "lottie-react-native": "^7.3.8",
+    "maplibre-gl": "^5.24.0",
     "nativewind": "^4.2.4",
     "prettier-plugin-tailwindcss": "^0.5.14",
     "react": "19.2.3",
@@ -48,6 +51,7 @@
   "devDependencies": {
     "@types/haversine": "^1.1.8",
     "@types/react": "~19.2.2",
+    "@types/react-dom": "^19.2.3",
     "typescript": "~6.0.3"
   },
   "scripts": {

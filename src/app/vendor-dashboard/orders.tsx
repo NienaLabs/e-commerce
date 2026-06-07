@@ -1,38 +1,41 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
+import { useQuery } from '@tanstack/react-query';
+import { getVendorOrders } from '../../api/vendors';
+import { useAuth } from '../../context/AuthContext';
 
-const ORDERS = [
-  { id: 'EL-90120', customer: 'Ama Owusu', items: 2, amount: 149.99, status: 'new', date: 'May 31, 2026, 09:14 AM' },
-  { id: 'EL-90119', customer: 'Kweku Asante', items: 1, amount: 59.99, status: 'packed', date: 'May 31, 2026, 08:52 AM' },
-  { id: 'EL-90118', customer: 'Abena Darkwah', items: 3, amount: 299.00, status: 'shipped', date: 'May 30, 2026, 05:30 PM' },
-  { id: 'EL-90117', customer: 'Kofi Boateng', items: 1, amount: 159.00, status: 'delivered', date: 'May 30, 2026, 12:00 PM' },
-  { id: 'EL-90116', customer: 'Serwa Mensah', items: 2, amount: 89.98, status: 'delivered', date: 'May 29, 2026, 03:15 PM' },
-  { id: 'EL-90115', customer: 'Yaw Darko', items: 1, amount: 199.99, status: 'cancelled', date: 'May 29, 2026, 11:00 AM' },
-];
-
-
-
-const FILTERS = ['All', 'New', 'Packed', 'Shipped', 'Delivered'];
+const FILTERS = ['All', 'Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
 export default function VendorOrdersScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const [filter, setFilter] = useState('All');
+  const { token, vendor } = useAuth();
+
+  const { data: orders = [], isLoading, error } = useQuery({
+    queryKey: ['vendor-orders', vendor?.id],
+    queryFn: () => getVendorOrders(token!, vendor!.id),
+    enabled: !!token && !!vendor?.id,
+    refetchInterval: 3000,
+  });
 
   const STATUS_CFG: Record<string, { label: string; bg: string; text: string }> = {
-    new: { label: 'New', bg: colors.infoGhost, text: colors.info },
-    packed: { label: 'Packed', bg: colors.warningGhost, text: colors.warning },
+    pending: { label: 'Pending', bg: colors.infoGhost, text: colors.info },
+    confirmed: { label: 'Confirmed', bg: colors.primaryGhost, text: colors.primaryDim },
+    processing: { label: 'Processing', bg: colors.warningGhost, text: colors.warning },
     shipped: { label: 'Shipped', bg: colors.primaryGhost, text: colors.primaryDim },
     delivered: { label: 'Delivered', bg: colors.successGhost, text: colors.success },
     cancelled: { label: 'Cancelled', bg: colors.errorGhost, text: colors.error },
   };
 
-  const filtered = filter === 'All' ? ORDERS : ORDERS.filter(o => o.status === filter.toLowerCase());
+  const filtered = filter === 'All' 
+    ? orders 
+    : orders.filter(o => o.status === filter.toLowerCase());
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfaceSoft }}>
@@ -88,37 +91,49 @@ export default function VendorOrdersScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 60, gap: 16 }}>
-        {filtered.map(order => {
-          const cfg = STATUS_CFG[order.status];
-          return (
-            <Pressable
-              key={order.id}
-              onPress={() => router.push(`/vendor-dashboard/order/${order.id}` as any)}
-              style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.surfaceMuted, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: colors.isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 2 }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                <View>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>#{order.id}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 2 }}>{order.date}</Text>
+        {isLoading ? (
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+        ) : error ? (
+          <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.error, textAlign: 'center', marginTop: 40 }}>Failed to load orders</Text>
+        ) : filtered.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Ionicons name="cube-outline" size={48} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.inkMuted }}>No orders found</Text>
+          </View>
+        ) : (
+          filtered.map(order => {
+            const cfg = STATUS_CFG[order.status] || { label: order.status, bg: colors.surfaceMuted, text: colors.ink };
+            const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return (
+              <Pressable
+                key={order.id}
+                onPress={() => router.push(`/vendor-dashboard/order/${order.id}` as any)}
+                style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.surfaceMuted, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: colors.isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 2 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <View>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>#{order.id.slice(0, 8).toUpperCase()}</Text>
+                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 2 }}>{date}</Text>
+                  </View>
+                  <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
+                  </View>
                 </View>
-                <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
+                <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginBottom: 10 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>{order.customer_name}</Text>
+                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{order.items_count} item{order.items_count > 1 ? 's' : ''}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
+                    <Ionicons name="chevron-forward" size={18} color={colors.inkGhost} />
+                  </View>
                 </View>
-              </View>
-              <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginBottom: 10 }} />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>{order.customer}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{order.items} item{order.items > 1 ? 's' : ''}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>${order.amount.toFixed(2)}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.inkGhost} />
-                </View>
-              </View>
-            </Pressable>
-          );
-        })}
+              </Pressable>
+            );
+          })
+        )}
       </ScrollView>
     </View>
   );

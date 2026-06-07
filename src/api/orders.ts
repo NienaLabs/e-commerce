@@ -27,6 +27,7 @@ export interface Order {
   total_amount: number;
   shipping_address: Record<string, any>;
   notes?: string | null;
+  delivery_pin?: string | null;
   created_at: string;
   updated_at: string;
   items: OrderItem[];

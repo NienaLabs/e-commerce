@@ -20,6 +20,8 @@ export interface Vendor {
   is_verified: boolean;
   avg_rating: number;
   total_sales: number;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +38,8 @@ export interface CreateVendorPayload {
   bio?: string;
   logo_url?: string;
   banner_url?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export type UpdateVendorPayload = Partial<CreateVendorPayload>;
@@ -143,4 +147,43 @@ export async function deleteVendor(token: string, vendorId: string): Promise<voi
   if (!res.ok && res.status !== 204) {
     throw new Error(`Failed to delete vendor (${res.status})`);
   }
+}
+
+export interface VendorOrder {
+  id: string;
+  customer_name: string;
+  items_count: number;
+  total_amount: number;
+  status: string;
+  created_at: string;
+}
+
+export interface VendorAnalytics {
+  total_revenue: number;
+  total_orders: number;
+  active_orders: number;
+  recent_transactions: VendorOrder[];
+}
+
+export async function getVendorOrders(token: string, vendorId: string): Promise<VendorOrder[]> {
+  const res = await fetch(`${BASE_URL}/vendors/me/orders`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<VendorOrder[]>(res);
+}
+
+/** GET /vendors/me/orders/{order_id} */
+export async function getVendorOrderDetail(token: string, orderId: string): Promise<any> {
+  const res = await fetch(`${BASE_URL}/vendors/me/orders/${orderId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any>(res);
+}
+
+/** GET /vendors/{vendor_id}/analytics */
+export async function getVendorAnalytics(token: string, vendorId: string): Promise<VendorAnalytics> {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/analytics`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<VendorAnalytics>(res);
 }

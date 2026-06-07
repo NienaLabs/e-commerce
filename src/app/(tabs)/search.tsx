@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -9,6 +9,7 @@ import { useTheme } from '../../theme/ThemeContext';
 export default function Search() {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
+  const insets = useSafeAreaInsets();
 
   const recentSearches = ['Wireless Headphones', 'Mens Sneakers', 'Coffee Maker'];
   const trendingSearches = ['Summer Dress', 'Smart Watch', 'Sunglasses', 'Yoga Mat'];
@@ -51,7 +52,7 @@ export default function Search() {
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}>
         {query.length === 0 ? (
           <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
             {/* Recent Searches */}

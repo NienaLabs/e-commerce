@@ -81,7 +81,7 @@ export default function VendorProductsScreen() {
             return (
               <Pressable
                 key={product.id}
-                onPress={() => router.push('/vendor-dashboard/add-product' as any)} // TODO: Change to edit product when ready
+                onPress={() => router.push({ pathname: '/vendor-dashboard/add-product', params: { id: product.id } } as any)}
                 style={{ backgroundColor: colors.surface, borderRadius: 18, flexDirection: 'row', overflow: 'hidden', borderWidth: 1, borderColor: colors.surfaceMuted }}
               >
                 <Image source={{ uri: firstImage }} style={{ width: 88, height: 88 }} resizeMode="cover" />
@@ -98,7 +98,10 @@ export default function VendorProductsScreen() {
                       <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
                         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: cfg.text }}>{cfg.label}</Text>
                       </View>
-                      <Pressable style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}>
+                      <Pressable 
+                        onPress={() => router.push({ pathname: '/vendor-dashboard/add-product', params: { id: product.id } } as any)}
+                        style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+                      >
                         <Ionicons name="create-outline" size={17} color={colors.ink} />
                       </Pressable>
                     </View>

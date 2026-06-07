@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, useWindowDimensions, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -9,14 +9,13 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createVendor } from '../api/vendors';
 import { useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 const STEPS = [
-  { key: 'info', label: 'Business Info', icon: 'business' },
-  { key: 'docs', label: 'Documents', icon: 'document-text' },
-  { key: 'store', label: 'Store Setup', icon: 'storefront' },
+  { key: 'store', label: 'Store Info', icon: 'storefront' },
+  { key: 'media', label: 'Media & Location', icon: 'image' },
 ];
-
-const CATEGORY_OPTIONS = ['Electronics', 'Fashion', 'Home & Living', 'Food & Groceries', 'Beauty', 'Sports', 'Gaming', 'Health', 'Books', 'Automotive', 'Art', 'Toys'];
 
 function StepIndicator({ current, colors }: { current: number; colors: any }) {
   return (
@@ -37,7 +36,7 @@ function StepIndicator({ current, colors }: { current: number; colors: any }) {
                 <Ionicons name={step.icon as any} size={18} color={idx === current ? colors.surface : colors.inkGhost} />
               )}
             </View>
-            <Text style={{ fontFamily: idx === current ? 'Inter_700Bold' : 'OpenSans_400Regular', fontSize: 11, color: idx <= current ? colors.ink : colors.inkGhost, marginTop: 6, textAlign: 'center', width: 64 }}>{step.label}</Text>
+            <Text style={{ fontFamily: idx === current ? 'Inter_700Bold' : 'OpenSans_400Regular', fontSize: 11, color: idx <= current ? colors.ink : colors.inkGhost, marginTop: 6, textAlign: 'center', width: 80 }}>{step.label}</Text>
           </View>
           {idx < STEPS.length - 1 && (
             <View style={{ flex: 1, height: 2, backgroundColor: idx < current ? colors.ink : colors.surfaceMuted, marginHorizontal: 4, marginBottom: 24 }} />
@@ -92,16 +91,51 @@ export default function BecomeVendorScreen() {
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [form, setForm] = useState({
-    businessName: '', ownerName: '', phone: '', email: '', category: '', description: '',
-    regNumber: '', taxId: '', storeName: '', storeSlug: '',
+    storeName: '', storeSlug: '', description: '',
+    logoUrl: '', bannerUrl: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  const toggleCategory = (cat: string) => {
-    setSelectedCategories(prev =>
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-    );
+  const [isLocating, setIsLocating] = useState(false);
+
+  const pickImage = async (field: 'logoUrl' | 'bannerUrl') => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: field === 'logoUrl' ? [1, 1] : [3, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setForm(prev => ({ ...prev, [field]: result.assets[0].uri }));
+    }
+  };
+
+  const fetchLocation = async () => {
+    setIsLocating(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showToast('Permission to access location was denied', 'error');
+        setIsLocating(false);
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setForm(prev => ({ 
+        ...prev, 
+        latitude: location.coords.latitude, 
+        longitude: location.coords.longitude 
+      }));
+      showToast('Location accurately captured!', 'success');
+    } catch (error) {
+      showToast('Failed to fetch location. Please try again.', 'error');
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   if (submitted) {
@@ -162,97 +196,83 @@ export default function BecomeVendorScreen() {
 
         <View style={{ paddingHorizontal: 20, paddingBottom: 40 }}>
 
-          {/* Step 1 — Business Info */}
+          {/* Step 1 — Store Info */}
           {step === 0 && (
-            <View>
-              <Field label="Business Name *" placeholder="e.g. SoundWave Audio" value={form.businessName} onChangeText={(v: string) => setForm(f => ({ ...f, businessName: v }))} colors={colors} />
-              <Field label="Owner / Contact Name *" placeholder="e.g. Kofi Mensah" value={form.ownerName} onChangeText={(v: string) => setForm(f => ({ ...f, ownerName: v }))} colors={colors} />
-              <Field label="Phone Number *" placeholder="+233 55 000 1234" value={form.phone} onChangeText={(v: string) => setForm(f => ({ ...f, phone: v }))} colors={colors} />
-              <Field label="Business Email *" placeholder="hello@yourbusiness.com" value={form.email} onChangeText={(v: string) => setForm(f => ({ ...f, email: v }))} colors={colors} />
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 4 }}>Categories You Sell *</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 12 }}>Select all that apply</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-                {CATEGORY_OPTIONS.map(cat => {
-                  const active = selectedCategories.includes(cat);
-                  return (
-                    <Pressable
-                      key={cat}
-                      onPress={() => toggleCategory(cat)}
-                      style={{
-                        paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20,
-                        backgroundColor: active ? colors.ink : colors.surfaceSoft,
-                        borderWidth: 1.5,
-                        borderColor: active ? colors.ink : colors.surfaceMuted,
-                        flexDirection: 'row', alignItems: 'center', gap: 6,
-                      }}
-                    >
-                      {active && <Ionicons name="checkmark" size={13} color={colors.primary} />}
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: active ? colors.surface : colors.inkSoft }}>{cat}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-
-          {/* Step 2 — Documents */}
-          {step === 1 && (
-            <View>
-              <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted, marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <Ionicons name="information-circle" size={20} color={colors.info} style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>Why do we need this?</Text>
-                </View>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, lineHeight: 20 }}>
-                  Providing your business registration and tax details helps us keep the platform safe and ensures proper payouts.
-                </Text>
-              </View>
-              <Field label="Business Registration Number" placeholder="e.g. BN-2024-12345" value={form.regNumber} onChangeText={(v: string) => setForm(f => ({ ...f, regNumber: v }))} colors={colors} />
-              <Field label="Tax Identification Number (TIN)" placeholder="e.g. TIN-987654" value={form.taxId} onChangeText={(v: string) => setForm(f => ({ ...f, taxId: v }))} colors={colors} />
-              {/* Upload placeholders */}
-              {['Business Certificate', 'Valid ID / Passport', 'Proof of Bank Account'].map(doc => (
-                <Pressable key={doc} style={{ borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.surfaceMuted, padding: 20, alignItems: 'center', marginBottom: 12, backgroundColor: colors.surfaceSoft }}>
-                  <Ionicons name="cloud-upload-outline" size={28} color={colors.inkGhost} style={{ marginBottom: 8 }} />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>{doc}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 4 }}>Tap to upload PDF or image</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
-          {/* Step 3 — Store Setup */}
-          {step === 2 && (
             <View>
               <Field label="Store Name *" placeholder="e.g. SoundWave Audio" value={form.storeName} onChangeText={(v: string) => setForm(f => ({ ...f, storeName: v }))} colors={colors} />
               <Field label="Store URL Slug *" placeholder="e.g. soundwave-audio" value={form.storeSlug} onChangeText={(v: string) => setForm(f => ({ ...f, storeSlug: v }))} colors={colors} />
               <Field label="Store Bio / Description *" placeholder="Tell customers what makes your store special..." value={form.description} onChangeText={(v: string) => setForm(f => ({ ...f, description: v }))} colors={colors} multiline />
+            </View>
+          )}
+
+          {/* Step 2 — Media & Location */}
+          {step === 1 && (
+            <View>
               {/* Logo / Banner upload */}
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 12 }}>Store Logo</Text>
-              <Pressable style={{ borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.surfaceMuted, padding: 24, alignItems: 'center', marginBottom: 16, backgroundColor: colors.surfaceSoft }}>
-                <Ionicons name="image-outline" size={32} color={colors.inkGhost} style={{ marginBottom: 8 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>Upload Logo</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 4 }}>PNG or JPG, at least 400×400px</Text>
+              <Pressable onPress={() => pickImage('logoUrl')} style={{ borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.surfaceMuted, padding: form.logoUrl ? 0 : 24, alignItems: 'center', marginBottom: 16, backgroundColor: colors.surfaceSoft, overflow: 'hidden', height: 120 }}>
+                {form.logoUrl ? (
+                  <Image source={{ uri: form.logoUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                ) : (
+                  <>
+                    <Ionicons name="image-outline" size={32} color={colors.inkGhost} style={{ marginBottom: 8 }} />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>Upload Logo</Text>
+                  </>
+                )}
               </Pressable>
+
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 12 }}>Store Banner</Text>
-              <Pressable style={{ borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.surfaceMuted, padding: 24, alignItems: 'center', marginBottom: 24, backgroundColor: colors.surfaceSoft }}>
-                <Ionicons name="image-outline" size={32} color={colors.inkGhost} style={{ marginBottom: 8 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>Upload Banner</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 4 }}>PNG or JPG, 1200×400px recommended</Text>
+              <Pressable onPress={() => pickImage('bannerUrl')} style={{ borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.surfaceMuted, padding: form.bannerUrl ? 0 : 24, alignItems: 'center', marginBottom: 24, backgroundColor: colors.surfaceSoft, overflow: 'hidden', height: 120 }}>
+                {form.bannerUrl ? (
+                  <Image source={{ uri: form.bannerUrl }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                ) : (
+                  <>
+                    <Ionicons name="image-outline" size={32} color={colors.inkGhost} style={{ marginBottom: 8 }} />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>Upload Banner</Text>
+                  </>
+                )}
               </Pressable>
+
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 12 }}>Store Location (GPS)</Text>
+              <View style={{ backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.surfaceMuted, padding: 16, marginBottom: 24 }}>
+                {form.latitude && form.longitude ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Ionicons name="location" size={24} color={colors.success} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>Location Captured</Text>
+                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>Lat: {form.latitude.toFixed(4)}, Lng: {form.longitude.toFixed(4)}</Text>
+                    </View>
+                    <Pressable onPress={fetchLocation} style={{ padding: 8 }}>
+                      <Ionicons name="refresh" size={20} color={colors.primaryDim} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable onPress={fetchLocation} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8 }}>
+                    {isLocating ? (
+                      <ActivityIndicator size="small" color={colors.primaryDim} />
+                    ) : (
+                      <>
+                        <Ionicons name="navigate-circle-outline" size={24} color={colors.primaryDim} />
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.primaryDim }}>Fetch Current Location</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
+              </View>
             </View>
           )}
 
           <Button
-            title={step < 2 ? 'Continue' : 'Submit Application'}
+            title={step < 1 ? 'Continue' : 'Submit Application'}
             disabled={isSubmitting}
             onPress={async () => {
-              if (step < 2) {
-                setStep(s => s + 1);
-              } else {
+              if (step < 1) {
                 if (!form.storeName || !form.storeSlug || !form.description) {
                   showToast('Please fill out all required fields.', 'warning');
                   return;
                 }
+                setStep(s => s + 1);
+              } else {
                 setIsSubmitting(true);
                 try {
                   if (token) {
@@ -260,8 +280,12 @@ export default function BecomeVendorScreen() {
                       store_name: form.storeName,
                       store_slug: form.storeSlug,
                       bio: form.description,
+                      ...(form.logoUrl && { logo_url: form.logoUrl }),
+                      ...(form.bannerUrl && { banner_url: form.bannerUrl }),
+                      ...(form.latitude !== null && { latitude: form.latitude }),
+                      ...(form.longitude !== null && { longitude: form.longitude }),
                     });
-                    // Refresh auth context vendor state AND invalidate dashboard query
+                    
                     await refreshVendor();
                     await queryClient.invalidateQueries({ queryKey: ['vendor-me'] });
                     showToast('Vendor account created successfully!', 'success');

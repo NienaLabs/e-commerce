@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, Platform, useWindowDimensions, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
@@ -8,18 +8,8 @@ import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
 import { listVendors } from '../../api/vendors';
 import haversine from 'haversine';
-// Only import MapView on native devices to avoid web bundler issues if web maps aren't fully configured
-let MapView: any;
-let Marker: any;
-if (Platform.OS !== 'web') {
-  try {
-    const maps = require('react-native-maps');
-    MapView = maps.default;
-    Marker = maps.Marker;
-  } catch (e) {
-    console.log('react-native-maps not found', e);
-  }
-}
+import { MapView } from '../../components/Map/MapView';
+import { MapMarker } from '../../components/Map/MapMarker';
 
 // Helper to get distance badge colors
 function getDistanceBadgeColor(km: number, colors: any) {
@@ -34,6 +24,7 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const insets = useSafeAreaInsets();
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -54,7 +45,7 @@ export default function DiscoverScreen() {
           setLocationError('Location permission denied. Showing approximate distances.');
           setUserLocation({ latitude: 5.6037, longitude: -0.187 });
         } else {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
           setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         }
       } catch (e) {
@@ -73,33 +64,44 @@ export default function DiscoverScreen() {
   });
 
   // Calculate distances & filter
-  const processedVendors = vendors.map(v => {
-    // We don't have real GPS coordinates in the API yet, so we mock distance for now
-    const distanceKm = Math.random() * 8 + 1; // 1 to 9 km
-    const etaMins = Math.round((distanceKm * 3) + 10);
-    return {
-      ...v,
-      distanceKm,
-      etaMins,
-      isOpen: true,
-      lat: 5.6037 + (Math.random() - 0.5) * 0.05,
-      lng: -0.1870 + (Math.random() - 0.5) * 0.05,
-      image: v.logo_url ?? 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200',
-    };
-  })
-  .filter(v => {
+  const processedVendors = useMemo(() => {
+    return vendors.map(v => {
+      // Use real coordinates from API if present, or default to Accra's center coordinates
+      const lat = v.latitude !== null && v.latitude !== undefined ? v.latitude : 5.6037;
+      const lng = v.longitude !== null && v.longitude !== undefined ? v.longitude : -0.1870;
+
+      // Calculate accurate distance using haversine
+      let distanceKm = 5.0; // Default fallback distance in km
+      if (userLocation) {
+        distanceKm = haversine(
+          { latitude: userLocation.latitude, longitude: userLocation.longitude },
+          { latitude: lat, longitude: lng },
+          { unit: 'km' }
+        );
+      }
+
+      const etaMins = Math.round((distanceKm * 3) + 10);
+      return {
+        ...v,
+        distanceKm,
+        etaMins,
+        isOpen: true,
+        lat,
+        lng,
+        image: v.logo_url ?? 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200',
+      };
+    });
+  }, [vendors, userLocation]);
+
+  const filteredVendors = processedVendors.filter(v => {
     // API doesn't have categories for vendors, so we just match search for now
     const matchesSearch = v.store_name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   })
   .sort((a, b) => a.distanceKm - b.distanceKm);
 
-  // OSM URL
   const centerLat = userLocation?.latitude ?? 5.6037;
   const centerLng = userLocation?.longitude ?? -0.187;
-  const delta = 0.06;
-  const bbox = `${centerLng - delta}%2C${centerLat - delta}%2C${centerLng + delta}%2C${centerLat + delta}`;
-  const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${centerLat}%2C${centerLng}`;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -191,66 +193,44 @@ export default function DiscoverScreen() {
         {/* ── Map View ── */}
         {(isDesktop || viewMode === 'map') && (
           <View style={{ flex: isDesktop ? 3 : 1, backgroundColor: colors.surfaceMuted, position: 'relative' }}>
-            {loading ? (
+            {(loading || vendorsLoading) ? (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
                 <ActivityIndicator size="large" color={colors.primaryDim} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>Locating vendors…</Text>
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>
+                  {loading ? 'Locating you…' : 'Loading vendors…'}
+                </Text>
               </View>
-            ) : Platform.OS === 'web' ? (
-              // @ts-ignore
-              <iframe
-                src={osmUrl}
-                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                title="Vendor Map"
-              />
-            ) : MapView ? (
+            ) : (
               <MapView
                 style={{ flex: 1 }}
+                mapStyle="https://tiles.openfreemap.org/styles/liberty"
                 initialRegion={{
                   latitude: centerLat,
                   longitude: centerLng,
-                  latitudeDelta: 0.0922,
-                  longitudeDelta: 0.0421,
+                  zoom: 12,
                 }}
+                showUserLocation={true}
               >
-                {/* User Pin */}
-                {userLocation && (
-                  <Marker coordinate={{ latitude: userLocation.latitude, longitude: userLocation.longitude }} title="You are here">
-                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: colors.info, borderWidth: 3, borderColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4 }} />
-                  </Marker>
-                )}
-                {/* Vendor Pins */}
-                {processedVendors.map(vendor => (
-                  <Marker
+                {filteredVendors.map(vendor => (
+                  <MapMarker
                     key={vendor.id}
-                    coordinate={{ latitude: vendor.lat, longitude: vendor.lng }}
-                    title={vendor.store_name}
-                    description={`${vendor.distanceKm.toFixed(1)} km away • ~${vendor.etaMins} mins`}
+                    id={vendor.id}
+                    coordinate={[vendor.lng, vendor.lat]}
                     onPress={() => setSelectedVendor(vendor.id)}
                   >
                     <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: selectedVendor === vendor.id ? colors.ink : colors.surface, borderWidth: 2, borderColor: selectedVendor === vendor.id ? '#ffffff' : colors.primaryDim, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 }}>
                       <Ionicons name="storefront" size={16} color={selectedVendor === vendor.id ? '#ffffff' : colors.primaryDim} />
                     </View>
-                  </Marker>
+                  </MapMarker>
                 ))}
               </MapView>
-            ) : (
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <Ionicons name="map" size={40} color={colors.primaryDim} />
-                </View>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 8 }}>Map View</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', lineHeight: 22 }}>
-                  Map rendering requires linking react-native-maps natively.
-                </Text>
-              </View>
             )}
 
             {/* Selected Vendor Preview Card (Mobile Map View) */}
             {!isDesktop && viewMode === 'map' && selectedVendor && (
-              <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20 }}>
+              <View style={{ position: 'absolute', bottom: insets.bottom + 100, left: 20, right: 20 }}>
                 {(() => {
-                  const v = processedVendors.find(x => x.id === selectedVendor);
+                  const v = filteredVendors.find(x => x.id === selectedVendor);
                   if (!v) return null;
                   return (
                     <Pressable
@@ -289,11 +269,11 @@ export default function DiscoverScreen() {
               borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>{processedVendors.length} vendors nearby</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>{filteredVendors.length} vendors nearby</Text>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-              {processedVendors.map(vendor => {
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: Math.max(120, insets.bottom + 120) }} showsVerticalScrollIndicator={false}>
+              {filteredVendors.map(vendor => {
                 const badge = getDistanceBadgeColor(vendor.distanceKm, colors);
                 const isSelected = selectedVendor === vendor.id;
                 return (

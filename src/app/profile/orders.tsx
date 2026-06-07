@@ -18,6 +18,7 @@ interface DisplayOrder {
   subtotal: number;
   shipping_fee: number;
   total_amount: number;
+  delivery_pin?: string | null;
   items: { product_id: string; name?: string; quantity: number }[];
   created_at: string;
   isLocal: boolean;
@@ -31,6 +32,7 @@ function toDisplayOrder(order: Order): DisplayOrder {
     subtotal: order.subtotal,
     shipping_fee: order.shipping_fee,
     total_amount: order.total_amount,
+    delivery_pin: order.delivery_pin,
     items: order.items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
     created_at: order.created_at,
     isLocal: false,
@@ -137,14 +139,6 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function getPinFromOrderId(orderId: string) {
-  let hash = 0;
-  for (let i = 0; i < orderId.length; i++) {
-    hash = (hash * 31 + orderId.charCodeAt(i)) % 10000;
-  }
-  return String(hash).padStart(4, '0');
-}
-
 export default function OrdersScreen() {
   const { colors } = useTheme();
   const { token } = useContext(AuthContext);
@@ -156,6 +150,7 @@ export default function OrdersScreen() {
     queryFn: () => listMyOrders(token!),
     enabled: !!token,
     retry: false,
+    refetchInterval: 3000,
   });
 
   // Fetch local orders (always available)
@@ -166,11 +161,14 @@ export default function OrdersScreen() {
 
   const isLoading = backendLoading || localLoading;
 
-  // Merge: local orders first (newest), then backend orders that aren't already local
+  // Merge: live backend orders first, then any offline local orders that aren't on the backend
+  const backendOrderIds = new Set(backendOrders.map((o: any) => o.id));
+  const uniqueLocalOrders = localOrders.filter((o: any) => !backendOrderIds.has(o.id));
+
   const allOrders: DisplayOrder[] = [
-    ...localOrders.map(localToDisplayOrder),
     ...backendOrders.map(toDisplayOrder),
-  ];
+    ...uniqueLocalOrders.map(localToDisplayOrder),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const STATUS_CFG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
     pending:    { label: 'Pending',    bg: colors.surfaceSoft,  text: colors.inkMuted,   icon: 'time-outline' },
@@ -230,8 +228,8 @@ export default function OrdersScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
           {allOrders.map(order => {
             const cfg = STATUS_CFG[order.status] ?? STATUS_CFG.confirmed;
-            const needsPin = order.status === 'shipped';
-            const pin = getPinFromOrderId(order.id);
+            const needsPin = order.status === 'shipped' && !!order.delivery_pin;
+            const pin = order.delivery_pin ?? '----';
 
             return (
               <View
@@ -355,7 +353,7 @@ export default function OrdersScreen() {
       {activePinOrder && (
         <PinModal
           visible={!!activePinOrder}
-          code={getPinFromOrderId(activePinOrder.id)}
+          code={activePinOrder.delivery_pin ?? '----'}
           orderId={`#${activePinOrder.ref}`}
           onClose={() => setActivePinOrderId(null)}
           colors={colors}

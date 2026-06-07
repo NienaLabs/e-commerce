@@ -4,44 +4,72 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getMessages, sendMessage, getRandomVendorReply, ChatMessage } from '../../api/localChat';
 import { AuthContext } from '../../context/AuthContext';
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+const WS_URL = BASE_URL.replace(/^http/, 'ws');
 
 const QUICK_REPLIES = ['Is this in stock?', 'Can I get a discount?', 'What are the dimensions?', 'Do you offer returns?'];
 
 export default function ChatScreen() {
   const { colors } = useTheme();
   const { vendorId, vendorName } = useLocalSearchParams<{ vendorId: string; vendorName?: string }>();
-  const { user } = useContext(AuthContext);
+  const { user, token } = useContext(AuthContext);
   const [input, setInput] = useState('');
   const flatListRef = useRef<FlatList>(null);
-  const queryClient = useQueryClient();
   const vId = Array.isArray(vendorId) ? vendorId[0] : (vendorId ?? 'unknown');
   const displayName = Array.isArray(vendorName) ? vendorName[0] : (vendorName ?? 'Vendor Store');
+  const [messages, setMessages] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const ws = useRef<WebSocket | null>(null);
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['chat', vId],
-    queryFn: () => getMessages(vId),
-  });
+  useEffect(() => {
+    if (!user?.id || !token) return;
 
-  const { mutate: doSend } = useMutation({
-    mutationFn: (text: string) => sendMessage(vId, 'me', text),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat', vId] });
-      // Simulate vendor reply after 1.5s
-      setTimeout(async () => {
-        await sendMessage(vId, 'vendor', getRandomVendorReply());
-        queryClient.invalidateQueries({ queryKey: ['chat', vId] });
-      }, 1500);
-    },
-  });
+    // Fetch history
+    fetch(`${BASE_URL}/chat/history/${vId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setMessages(data);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setIsLoading(false);
+      });
+
+    // Connect WebSocket
+    const socket = new WebSocket(`${WS_URL}/chat/ws/${user.id}`);
+    ws.current = socket;
+
+    socket.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        // Map from "me" / "them" correctly based on sender
+        const isFromMe = msg.sender_id === user.id;
+        msg.from = isFromMe ? 'me' : 'vendor';
+        setMessages(prev => [...prev, msg]);
+      } catch (err) {
+        console.error("WS Message Error:", err);
+      }
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [user?.id, token, vId]);
 
   const handleSend = (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    
+    ws.current.send(JSON.stringify({
+      receiver_id: vId,
+      text: trimmed
+    }));
     setInput('');
-    doSend(trimmed);
   };
 
   useEffect(() => {
@@ -94,7 +122,7 @@ export default function ChatScreen() {
             data={messages}
             keyExtractor={m => m.id}
             contentContainerStyle={{ padding: 16, gap: 10 }}
-            renderItem={({ item }: { item: ChatMessage }) => {
+            renderItem={({ item }: { item: any }) => {
               const isMe = item.from === 'me';
               return (
                 <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start' }}>

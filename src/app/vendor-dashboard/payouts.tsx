@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -37,10 +37,16 @@ export default function VendorPayoutsScreen() {
             Next auto-payout on Jun 10, 2026
           </Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Pressable style={{ flex: 1, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 16, alignItems: 'center' }}>
+            <Pressable
+              onPress={() => Alert.alert('Request Payout', 'Your payout request will be processed within 2–3 business days to your registered bank account.')}
+              style={{ flex: 1, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 16, alignItems: 'center' }}
+            >
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#222022' }}>Request Payout</Text>
             </Pressable>
-            <Pressable style={{ flex: 1, backgroundColor: '#ffffff18', paddingVertical: 14, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ffffff20' }}>
+            <Pressable
+              onPress={() => Alert.alert('Add Bank', 'Go to Store Settings → Payout Settings to add or update your bank account details.')}
+              style={{ flex: 1, backgroundColor: '#ffffff18', paddingVertical: 14, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ffffff20' }}
+            >
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' }}>Add Bank</Text>
             </Pressable>
           </View>
@@ -72,7 +78,10 @@ export default function VendorPayoutsScreen() {
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>GCB Bank Ghana</Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost }}>•••• •••• •••• 4201</Text>
             </View>
-            <Pressable style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+            <Pressable
+              onPress={() => Alert.alert('Change Bank Account', 'Go to Store Settings → Payout Settings to update your bank account details.')}
+              style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.surfaceMuted }}
+            >
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>Change</Text>
             </Pressable>
           </View>

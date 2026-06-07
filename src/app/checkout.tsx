@@ -11,6 +11,9 @@ import { useCartStore } from '../store/cartStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveLocalOrder } from '../api/localOrders';
 import { useQueryClient } from '@tanstack/react-query';
+import { AuthContext } from '../context/AuthContext';
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
 interface Address {
   id: string;
@@ -37,6 +40,7 @@ export default function CheckoutScreen() {
   const cartItems = useCartStore(state => state.items);
   const getSubtotal = useCartStore(state => state.getSubtotal);
   const queryClient = useQueryClient();
+  const { token } = React.useContext(AuthContext);
 
   const [step, setStep] = useState(1);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -44,7 +48,7 @@ export default function CheckoutScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [orderRef] = useState(`EL-${Math.floor(10000 + Math.random() * 90000)}`);
+  const [orderRef, setOrderRef] = useState<string | null>(null);
 
   const SHIPPING_FEE = 4.99;
   const subtotal = getSubtotal();
@@ -96,45 +100,98 @@ export default function CheckoutScreen() {
       showToast('Please select a payment method.', 'warning');
       return;
     }
+    if (cartItems.length === 0) {
+      showToast('Your cart is empty.', 'warning');
+      return;
+    }
 
-    // Build and save the local order record
-    const now = new Date().toISOString();
-    await saveLocalOrder({
-      id: `local-${Date.now()}`,
-      ref: orderRef,
-      status: 'confirmed',
-      subtotal,
-      shipping_fee: SHIPPING_FEE,
-      total_amount: total,
-      discount_amount: 0,
-      shipping_address: {
-        name: selectedAddress?.name ?? '',
-        street: selectedAddress?.street ?? '',
-        city: selectedAddress?.city ?? '',
-      },
-      payment: {
-        type: selectedPayment?.type ?? '',
-        last4: selectedPayment?.last4 ?? '',
-      },
-      items: cartItems.map(item => ({
-        id: `item-${item.id}`,
-        product_id: item.id,
-        name: item.name,
-        imageUrl: item.imageUrl,
-        quantity: item.quantity,
-        unit_price: item.price,
-        discount_price: item.salePrice ?? null,
-      })),
-      created_at: now,
-      updated_at: now,
-    });
+    setIsLoading(true);
+    try {
+      // Build the backend order payload
+      const orderPayload = {
+        shipping_address: {
+          name: selectedAddress?.name ?? '',
+          street: selectedAddress?.street ?? '',
+          city: selectedAddress?.city ?? '',
+        },
+        notes: null,
+        items: cartItems.map(item => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          color_chosen: null,
+        })),
+      };
 
-    // Clear the cart
-    clearCart();
-    // Invalidate orders cache so the orders page refreshes immediately
-    queryClient.invalidateQueries({ queryKey: ['local-orders'] });
-    showToast('Order placed successfully!', 'success');
-    setStep(3);
+      // POST to the real backend
+      const res = await fetch(`${BASE_URL}/orders/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!res.ok) {
+        let detail: any;
+        try { detail = await res.json(); } catch { detail = { detail: res.statusText }; }
+        let errorMsg = detail?.detail;
+        if (Array.isArray(errorMsg)) {
+          errorMsg = errorMsg.map((e: any) => e.msg).join(', ');
+        }
+        throw new Error(errorMsg ?? `Order failed (${res.status})`);
+      }
+
+      const backendOrder = await res.json();
+
+      const realRef = backendOrder.id.slice(-8).toUpperCase();
+      setOrderRef(realRef);
+
+      // Also save a local copy for offline order-tracking page
+      const now = new Date().toISOString();
+      await saveLocalOrder({
+        id: backendOrder.id,
+        ref: realRef,
+        status: backendOrder.status,
+        subtotal,
+        shipping_fee: SHIPPING_FEE,
+        total_amount: total,
+        delivery_pin: backendOrder.delivery_pin,
+        discount_amount: backendOrder.discount_amount ?? 0,
+        shipping_address: {
+          name: selectedAddress?.name ?? '',
+          street: selectedAddress?.street ?? '',
+          city: selectedAddress?.city ?? '',
+        },
+        payment: {
+          type: selectedPayment?.type ?? '',
+          last4: selectedPayment?.last4 ?? '',
+        },
+        items: cartItems.map(item => ({
+          id: `item-${item.id}`,
+          product_id: item.id,
+          name: item.name,
+          imageUrl: item.imageUrl,
+          quantity: item.quantity,
+          unit_price: item.price,
+          discount_price: item.salePrice ?? null,
+        })),
+        created_at: backendOrder.created_at ?? now,
+        updated_at: backendOrder.updated_at ?? now,
+      });
+
+      // Clear the cart and refresh queries
+      clearCart();
+      queryClient.invalidateQueries({ queryKey: ['local-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-analytics'] });
+      showToast('Order placed successfully!', 'success');
+      setStep(3);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Failed to place order. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isLoading) {

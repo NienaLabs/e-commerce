@@ -1,5 +1,5 @@
  import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, Platform, useWindowDimensions, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, Platform, useWindowDimensions, KeyboardAvoidingView, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -153,7 +153,7 @@ export default function LoginScreen() {
             <View style={{ marginBottom: 24 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>Password</Text>
-                <Pressable onPress={() => {}}>
+                <Pressable onPress={() => Alert.alert('Reset Password', 'Please contact support at support@electric.app to reset your password.')}>
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primaryDim }}>Forgot?</Text>
                 </Pressable>
               </View>
@@ -231,7 +231,9 @@ export default function LoginScreen() {
                 <Ionicons name="logo-google" size={18} color={colors.ink} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>Google</Text>
               </Pressable>
-              <Pressable style={({ pressed }) => ({
+              <Pressable
+                onPress={() => Alert.alert('Apple Sign In', 'Apple Sign In is available on the native iOS app. Please use email or Google to sign in on web.')}
+                style={({ pressed }) => ({
                 flex: 1, height: 48, borderRadius: 14,
                 backgroundColor: colors.surface,
                 borderWidth: 1, borderColor: colors.surfaceMuted,

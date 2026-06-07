@@ -36,9 +36,7 @@ interface Address {
   isDefault?: boolean;
 }
 
-const INITIAL_ADDRESSES: Address[] = [
-  { id: '1', name: 'Home', street: '123 Tech Avenue, Apt 4B', city: 'San Francisco, CA 94105', isDefault: true },
-];
+
 
 export default function AddressesScreen() {
   const { colors } = useTheme();
@@ -55,9 +53,8 @@ export default function AddressesScreen() {
         const stored = await AsyncStorage.getItem('@user_addresses');
         if (stored) {
           setAddresses(JSON.parse(stored));
-        } else {
-          setAddresses(INITIAL_ADDRESSES);
         }
+        // No seed — user starts with empty list
       } catch (e) {
         console.error('Failed to load addresses:', e);
       } finally {
@@ -131,7 +128,12 @@ export default function AddressesScreen() {
         street,
         city,
       };
-      setAddresses(prev => [newAddress, ...prev]);
+      setAddresses(prev => {
+        if (prev.some(a => a.street === street && a.city === city)) {
+          return prev;
+        }
+        return [newAddress, ...prev];
+      });
     } catch (error) {
       console.error(error);
       showToast('Failed to fetch location. Please try again.', 'error');
@@ -191,6 +193,12 @@ export default function AddressesScreen() {
                     <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.primaryDim, textTransform: 'uppercase' }}>Default</Text>
                   </View>
                 )}
+                <Pressable onPress={(e) => {
+                  e.stopPropagation();
+                  setAddresses(prev => prev.filter(a => a.id !== addr.id));
+                }} style={{ padding: 4 }}>
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
+                </Pressable>
               </View>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginBottom: 2 }}>{addr.street}</Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>{addr.city}</Text>
@@ -209,7 +217,12 @@ export default function AddressesScreen() {
             street: loc.street,
             city: loc.city,
           };
-          setAddresses(prev => [newAddress, ...prev]);
+          setAddresses(prev => {
+            if (prev.some(a => a.street === loc.street && a.city === loc.city)) {
+              return prev;
+            }
+            return [newAddress, ...prev];
+          });
           setShowLocationSearch(false);
         }}
       />
