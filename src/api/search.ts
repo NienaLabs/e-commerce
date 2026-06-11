@@ -11,6 +11,7 @@ export interface SearchHit {
     description: string;
     price: number;
     discount_price?: number;
+    image_url?: string;
     category_id: string;
     vendor_id: string;
     is_active: boolean;
