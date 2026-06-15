@@ -76,7 +76,8 @@ export default function VendorProductsScreen() {
           filtered.map(product => {
             const statusKey = product.stock_quantity === 0 ? 'out_of_stock' : (product.is_active ? 'active' : 'pending');
             const cfg = STATUS_CFG[statusKey];
-            const firstImage = product.images?.[0]?.url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=200';
+            const primaryImage = product.images?.find(img => img.is_primary);
+            const firstImage = (primaryImage ?? product.images?.[0])?.image_url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=200';
             
             return (
               <Pressable

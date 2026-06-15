@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Modal, TextInput, Platform, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -57,13 +57,8 @@ export default function Profile() {
     setIsEditing(false);
   };
 
-  const initials = user
-    ? user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase()
+  const initials = user?.name
+    ? `${user.name.charAt(0)}${user.name.charAt(user.name.length - 1)}`.toUpperCase()
     : 'U';
 
   return (
@@ -85,8 +80,13 @@ export default function Profile() {
               alignItems: 'center', justifyContent: 'center',
               borderWidth: 1, borderColor: colors.primaryBorder,
               marginRight: 20,
+              overflow: 'hidden',
             }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink }}>{initials}</Text>
+              {user?.image ? (
+                <Image source={{ uri: user.image }} style={{ width: '100%', height: '100%' }} />
+              ) : (
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink }}>{initials}</Text>
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginBottom: 4 }}>{user?.name ?? 'Guest User'}</Text>

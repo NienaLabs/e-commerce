@@ -71,8 +71,9 @@ export default function Cart() {
     return activeShelf.products.map(item => {
       const p = productMap[item.product_id];
       if (!p) return null;
+      const primaryImage = p.images?.find(img => img.is_primary);
       const firstImage =
-        p.images?.[0]?.url ??
+        (primaryImage ?? p.images?.[0])?.image_url ??
         'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
       return {
         product_id: item.product_id,
@@ -81,6 +82,8 @@ export default function Cart() {
         salePrice: p.discount_price ?? undefined,
         imageUrl: firstImage,
         vendorId: p.vendor_id,
+        vendorName: p.vendor_name ?? undefined,
+        vendorAvatar: p.vendor_logo_url ?? undefined,
         reason_label: item.reason_label,
         has_discount: item.has_discount,
       };

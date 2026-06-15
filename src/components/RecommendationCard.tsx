@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   Platform,
   StyleSheet,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -24,6 +25,7 @@ interface RecommendationCardProps {
   imageUrl: string;
   vendorId?: string;
   vendorName?: string;
+  vendorAvatar?: string;
   reasonLabel?: string;
   hasDiscount?: boolean;
   onPress?: () => void;
@@ -37,6 +39,7 @@ export const RecommendationCard = ({
   imageUrl,
   vendorId,
   vendorName,
+  vendorAvatar,
   reasonLabel,
   hasDiscount,
   onPress,
@@ -54,8 +57,34 @@ export const RecommendationCard = ({
   const toggleItem = useWishlistStore((state) => state.toggleItem);
   const addItem = useCartStore((state) => state.addItem);
 
-  const CARD_WIDTH = isDesktop ? 200 : 160;
-  const IMAGE_HEIGHT = isDesktop ? 180 : 150;
+  const CARD_WIDTH = isDesktop ? 240 : 160;
+  const IMAGE_HEIGHT = isDesktop ? 210 : 150;
+
+  // ── Hover animation (desktop web only) ──
+  const hoverAnim = useRef(new Animated.Value(0)).current;
+
+  const handleMouseEnter = () => {
+    if (!isDesktop) return;
+    Animated.spring(hoverAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 280,
+      friction: 18,
+    }).start();
+  };
+
+  const handleMouseLeave = () => {
+    if (!isDesktop) return;
+    Animated.spring(hoverAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 280,
+      friction: 18,
+    }).start();
+  };
+
+  const hoverScale = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] });
+  const hoverTranslateY = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation?.();
@@ -114,6 +143,16 @@ export const RecommendationCard = ({
       : 0;
 
   return (
+    <Animated.View
+      style={[
+        isDesktop && {
+          transform: [{ scale: hoverScale }, { translateY: hoverTranslateY }],
+        },
+      ]}
+      // @ts-ignore — web-only pointer events
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
     <Pressable
       onPress={(e) => {
         addEvent({
@@ -243,11 +282,11 @@ export const RecommendationCard = ({
           numberOfLines={2}
           style={{
             fontFamily: 'Inter_600SemiBold',
-            fontSize: 12,
+            fontSize: isDesktop ? 14 : 12,
             color: colors.ink,
-            lineHeight: 16,
+            lineHeight: isDesktop ? 18 : 16,
             marginBottom: 6,
-            minHeight: 32,
+            minHeight: isDesktop ? 36 : 32,
           }}
         >
           {name}
@@ -258,7 +297,7 @@ export const RecommendationCard = ({
           <Text
             style={{
               fontFamily: 'Inter_700Bold',
-              fontSize: 14,
+              fontSize: isDesktop ? 16 : 14,
               color: salePrice ? '#d93651' : colors.ink,
             }}
           >
@@ -304,9 +343,13 @@ export const RecommendationCard = ({
               marginRight: 6,
               flexShrink: 0,
             }}>
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryGhost }}>
-                <Ionicons name="storefront-outline" size={10} color="#7a8a05" />
-              </View>
+              {vendorAvatar ? (
+                <Image source={{ uri: vendorAvatar }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryGhost }}>
+                  <Ionicons name="storefront-outline" size={10} color="#7a8a05" />
+                </View>
+              )}
             </View>
 
             <Text
@@ -326,5 +369,6 @@ export const RecommendationCard = ({
         )}
       </View>
     </Pressable>
+    </Animated.View>
   );
 };

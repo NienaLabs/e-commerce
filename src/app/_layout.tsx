@@ -51,12 +51,19 @@ export default function RootLayout() {
     return null;
   }
 
+function NotificationManager() {
+  const { useNotifications } = require('../hooks/useNotifications');
+  useNotifications();
+  return null;
+}
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
             <EventTracker />
+            <NotificationManager />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(auth)" />

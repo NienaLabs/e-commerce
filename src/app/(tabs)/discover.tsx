@@ -8,7 +8,7 @@ import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
 import { listVendors } from '../../api/vendors';
 import haversine from 'haversine';
-import { MapView } from '../../components/Map/MapView';
+import { MapView, GeoJSONSource, Layer } from '../../components/Map/MapView';
 import { MapMarker } from '../../components/Map/MapMarker';
 
 // Helper to get distance badge colors
@@ -35,6 +35,9 @@ export default function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
+  
+  const [deliveryLocation, setDeliveryLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -47,10 +50,12 @@ export default function DiscoverScreen() {
         } else {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
           setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          setDeliveryLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         }
       } catch (e) {
         setLocationError('Could not fetch location. Showing approximate distances.');
         setUserLocation({ latitude: 5.6037, longitude: -0.187 });
+        setDeliveryLocation({ latitude: 5.6037, longitude: -0.187 });
       } finally {
         setLoading(false);
       }
@@ -72,7 +77,13 @@ export default function DiscoverScreen() {
 
       // Calculate accurate distance using haversine
       let distanceKm = 5.0; // Default fallback distance in km
-      if (userLocation) {
+      if (deliveryLocation) {
+        distanceKm = haversine(
+          { latitude: deliveryLocation.latitude, longitude: deliveryLocation.longitude },
+          { latitude: lat, longitude: lng },
+          { unit: 'km' }
+        );
+      } else if (userLocation) {
         distanceKm = haversine(
           { latitude: userLocation.latitude, longitude: userLocation.longitude },
           { latitude: lat, longitude: lng },
@@ -91,7 +102,7 @@ export default function DiscoverScreen() {
         image: v.logo_url ?? 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200',
       };
     });
-  }, [vendors, userLocation]);
+  }, [vendors, userLocation, deliveryLocation]);
 
   const filteredVendors = processedVendors.filter(v => {
     // API doesn't have categories for vendors, so we just match search for now
@@ -100,8 +111,54 @@ export default function DiscoverScreen() {
   })
   .sort((a, b) => a.distanceKm - b.distanceKm);
 
-  const centerLat = userLocation?.latitude ?? 5.6037;
-  const centerLng = userLocation?.longitude ?? -0.187;
+  const centerLat = deliveryLocation?.latitude ?? userLocation?.latitude ?? 5.6037;
+  const centerLng = deliveryLocation?.longitude ?? userLocation?.longitude ?? -0.187;
+
+  // Fetch route when vendor or delivery location changes
+  useEffect(() => {
+    if (!selectedVendor || !deliveryLocation) {
+      setRouteGeoJSON(null);
+      return;
+    }
+    const vendor = vendors.find(v => v.id === selectedVendor);
+    if (!vendor) return;
+    
+    const vLat = vendor.latitude !== null && vendor.latitude !== undefined ? vendor.latitude : 5.6037;
+    const vLng = vendor.longitude !== null && vendor.longitude !== undefined ? vendor.longitude : -0.1870;
+
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${deliveryLocation.longitude},${deliveryLocation.latitude};${vLng},${vLat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes.length > 0) {
+          setRouteGeoJSON({
+            type: 'Feature',
+            geometry: data.routes[0].geometry,
+          });
+        }
+      } catch (e) {
+        console.error('Error fetching route:', e);
+      }
+    };
+    fetchRoute();
+  }, [selectedVendor, deliveryLocation, vendors]);
+
+  const handleSearchSubmit = async () => {
+    if (!searchQuery.trim()) return;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        setDeliveryLocation({ latitude: lat, longitude: lon });
+        setViewMode('map');
+      }
+    } catch (e) {
+      console.error('Error geocoding search:', e);
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -136,7 +193,9 @@ export default function DiscoverScreen() {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search vendors..."
+              onSubmitEditing={handleSearchSubmit}
+              returnKeyType="search"
+              placeholder="Search vendors or locations..."
               placeholderTextColor={colors.inkGhost}
               style={{ flex: 1, marginLeft: 10, fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}) }}
             />
@@ -210,7 +269,42 @@ export default function DiscoverScreen() {
                   zoom: 12,
                 }}
                 showUserLocation={true}
+                onPress={(feature) => {
+                  if (feature?.geometry?.coordinates) {
+                    setDeliveryLocation({
+                      longitude: feature.geometry.coordinates[0],
+                      latitude: feature.geometry.coordinates[1],
+                    });
+                  }
+                }}
               >
+                {/* Delivery Pin */}
+                {deliveryLocation && (
+                  <MapMarker
+                    id="delivery-pin"
+                    coordinate={[deliveryLocation.longitude, deliveryLocation.latitude]}
+                    title="Delivery Location"
+                  >
+                    <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'flex-end' }}>
+                      <Ionicons 
+                        name="location" 
+                        size={40} 
+                        color={colors.primary} 
+                        style={Platform.OS === 'web' 
+                          ? { filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' } as any 
+                          : { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }
+                        } 
+                      />
+                    </View>
+                  </MapMarker>
+                )}
+
+                {/* Route Line */}
+                {routeGeoJSON && (
+                  <GeoJSONSource id="routeSource" data={routeGeoJSON}>
+                    <Layer id="routeFill" type="line" style={{ lineColor: colors.primary, lineWidth: 4 }} />
+                  </GeoJSONSource>
+                )}
                 {filteredVendors.map(vendor => (
                   <MapMarker
                     key={vendor.id}
@@ -218,8 +312,8 @@ export default function DiscoverScreen() {
                     coordinate={[vendor.lng, vendor.lat]}
                     onPress={() => setSelectedVendor(vendor.id)}
                   >
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: selectedVendor === vendor.id ? colors.ink : colors.surface, borderWidth: 2, borderColor: selectedVendor === vendor.id ? '#ffffff' : colors.primaryDim, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 }}>
-                      <Ionicons name="storefront" size={16} color={selectedVendor === vendor.id ? '#ffffff' : colors.primaryDim} />
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: selectedVendor === vendor.id ? colors.ink : colors.surface, borderWidth: 2, borderColor: selectedVendor === vendor.id ? '#ffffff' : colors.primaryDim, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 4, overflow: 'hidden' }}>
+                      <Image source={{ uri: vendor.image }} style={{ width: '100%', height: '100%' }} />
                     </View>
                   </MapMarker>
                 ))}

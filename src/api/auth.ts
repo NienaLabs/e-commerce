@@ -122,3 +122,29 @@ export async function handleGoogleCallback(code: string): Promise<SessionRespons
   const res = await fetch(`${BASE_URL}/auth/google/callback?code=${encodeURIComponent(code)}`);
   return handleResponse<SessionResponse>(res);
 }
+
+// ── FCM Token Endpoints ──────────────────────
+
+/** POST /users/me/fcm-token */
+export async function registerFcmToken(token: string, sessionToken: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/users/me/fcm-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ token }),
+  });
+  await handleResponse<{ status: string }>(res);
+}
+
+/** DELETE /users/me/fcm-token */
+export async function unregisterFcmToken(token: string, sessionToken: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/users/me/fcm-token?token=${encodeURIComponent(token)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Failed to unregister FCM token (${res.status})`);
+  }
+}

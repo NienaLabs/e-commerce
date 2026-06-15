@@ -14,7 +14,67 @@ export interface MapViewProps {
   };
   children?: React.ReactNode;
   showUserLocation?: boolean;
+  onPress?: (feature: any) => void;
 }
+
+const SourceContext = React.createContext<{ id: string; ready: boolean } | null>(null);
+
+export const GeoJSONSource: React.FC<any> = ({ id, data, children }) => {
+  const map = React.useContext(MapContext);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!map) return;
+    if (!map.getSource(id)) {
+      map.addSource(id, { type: 'geojson', data });
+      setReady(true);
+    } else {
+      const source = map.getSource(id) as maplibregl.GeoJSONSource;
+      if (source && source.setData) {
+        source.setData(data);
+      }
+      setReady(true);
+    }
+  }, [map, id, data]);
+
+  return <SourceContext.Provider value={{ id, ready }}>{children}</SourceContext.Provider>;
+};
+
+export const Layer: React.FC<any> = ({ id, type, style }) => {
+  const map = React.useContext(MapContext);
+  const sourceContext = React.useContext(SourceContext);
+
+  useEffect(() => {
+    if (!map || !sourceContext || !sourceContext.ready) return;
+    const sourceId = sourceContext.id;
+    
+    const paintStyle: any = {};
+    if (type === 'line' && style) {
+      if (style.lineColor) paintStyle['line-color'] = style.lineColor;
+      if (style.lineWidth) paintStyle['line-width'] = style.lineWidth;
+    }
+
+    if (!map.getLayer(id)) {
+      map.addLayer({
+        id,
+        type: type,
+        source: sourceId,
+        paint: paintStyle
+      });
+    } else {
+      // update paint properties if layer exists
+      if (paintStyle['line-color']) map.setPaintProperty(id, 'line-color', paintStyle['line-color']);
+      if (paintStyle['line-width']) map.setPaintProperty(id, 'line-width', paintStyle['line-width']);
+    }
+
+    return () => {
+      // Don't auto-remove to prevent conflicts if GeoJSONSource is removed first
+      // But ideally we clean up. For simplicity, we skip aggressive cleanup.
+    };
+  }, [map, sourceContext?.id, sourceContext?.ready, id, type, style]);
+
+  return null;
+};
 
 export const MapView: React.FC<MapViewProps> = ({ 
   style, 
@@ -22,6 +82,7 @@ export const MapView: React.FC<MapViewProps> = ({
   initialRegion = { latitude: 0, longitude: 0, zoom: 1 },
   children,
   showUserLocation = false,
+  onPress,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -32,6 +93,12 @@ export const MapView: React.FC<MapViewProps> = ({
   const initialRegionRef = useRef(initialRegion);
   const mapStyleRef = useRef(mapStyle);
   const showUserLocationRef = useRef(showUserLocation);
+  
+  // Create a stable ref for onPress so we don't need to re-bind event listeners
+  const onPressRef = useRef(onPress);
+  useEffect(() => {
+    onPressRef.current = onPress;
+  }, [onPress]);
 
   useEffect(() => {
     if (map.current) return; // initialize map only once
@@ -44,6 +111,14 @@ export const MapView: React.FC<MapViewProps> = ({
         zoom: initialRegionRef.current.zoom,
       });
 
+      map.current.on('click', (e) => {
+        if (onPressRef.current) {
+          onPressRef.current({
+            geometry: { coordinates: [e.lngLat.lng, e.lngLat.lat] }
+          });
+        }
+      });
+
       if (showUserLocationRef.current) {
         // maplibregl.GeolocateControl is used for user location tracking on web
         map.current.addControl(
@@ -54,7 +129,9 @@ export const MapView: React.FC<MapViewProps> = ({
         );
       }
 
-      setMapInstance(map.current);
+      map.current.on('load', () => {
+        setMapInstance(map.current);
+      });
     }
 
     return () => {

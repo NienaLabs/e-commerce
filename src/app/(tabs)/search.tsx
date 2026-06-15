@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, useWindowDimensions, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useDebounce } from '../../hooks/useDebounce';
-import { fetchSuggestions, fetchSearchResults, fetchTrendingSearches, SearchHit } from '../../api/search';
+import { fetchSuggestions, fetchSearchResults, fetchVendorSearchResults, fetchTrendingSearches, SearchHit } from '../../api/search';
 import { ProductCard } from '../../components/ProductCard';
 import { useSearchStore } from '../../store/searchStore';
 import { useEventStore } from '../../store/eventStore';
@@ -16,7 +16,9 @@ export default function Search() {
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [vendorSuggestions, setVendorSuggestions] = useState<any[]>([]);
   const [results, setResults] = useState<SearchHit[]>([]);
+  const [vendorResults, setVendorResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [committedQuery, setCommittedQuery] = useState('');
   const committedQueryRef = useRef('');
@@ -69,8 +71,11 @@ export default function Search() {
       setHasSearched(false);
       setIsLoadingSuggestions(true);
 
-      fetchSuggestions(trimmedQuery).then(remoteSuggestions => {
+      fetchSuggestions(trimmedQuery).then(data => {
         if (!isMounted || hasSearchedRef.current || trimmedQuery === committedQueryRef.current) return;
+
+        const remoteSuggestions = data.suggestions || [];
+        const remoteVendors = data.vendors || [];
 
         const localSuggestions = getLocalSuggestions(trimmedQuery);
         const mergedSuggestions = [trimmedQuery, ...remoteSuggestions, ...localSuggestions]
@@ -80,15 +85,19 @@ export default function Search() {
           .slice(0, 8);
 
         setSuggestions(mergedSuggestions);
+        setVendorSuggestions(remoteVendors);
         setIsLoadingSuggestions(false);
       });
     } else if (trimmedQuery.length > 0) {
       setSuggestions([]);
+      setVendorSuggestions([]);
       setIsLoadingSuggestions(false);
     } else {
       setHasSearched(false);
       setResults([]);
+      setVendorResults([]);
       setSuggestions([]);
+      setVendorSuggestions([]);
       setCommittedQuery('');
       setIsLoadingSuggestions(false);
     }
@@ -101,6 +110,7 @@ export default function Search() {
     
     setQuery(trimmedQuery);
     setSuggestions([]);
+    setVendorSuggestions([]);
     setCommittedQuery(trimmedQuery);
     
     addRecentSearch(trimmedQuery);
@@ -114,12 +124,23 @@ export default function Search() {
     setHasSearched(true);
     setIsSearching(true);
     
-    const response = await fetchSearchResults(trimmedQuery);
+    const [response, vendorResponse] = await Promise.all([
+      fetchSearchResults(trimmedQuery),
+      fetchVendorSearchResults(trimmedQuery)
+    ]);
+
     if (response && response.hits) {
       setResults(response.hits);
     } else {
       setResults([]);
     }
+
+    if (vendorResponse && vendorResponse.hits) {
+      setVendorResults(vendorResponse.hits.map((h: any) => h.document));
+    } else {
+      setVendorResults([]);
+    }
+
     setIsSearching(false);
   };
 
@@ -127,7 +148,9 @@ export default function Search() {
     setQuery('');
     setHasSearched(false);
     setResults([]);
+    setVendorResults([]);
     setSuggestions([]);
+    setVendorSuggestions([]);
     setCommittedQuery('');
   };
 
@@ -290,7 +313,46 @@ export default function Search() {
                   </Pressable>
                 </Pressable>
               ))
-            ) : (
+            ) : null}
+
+            {vendorSuggestions.length > 0 && (
+              <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted, marginBottom: 12 }}>
+                  Stores
+                </Text>
+                {vendorSuggestions.map((vendor, index) => (
+                  <Pressable
+                    key={`vendor-${vendor.id}`}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    onPress={() => router.push(`/vendor/${vendor.id}` as any)}
+                  >
+                    {vendor.logo_url ? (
+                      <Image source={{ uri: vendor.logo_url }} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 16 }} />
+                    ) : (
+                      <Ionicons name="storefront-outline" size={24} color={colors.inkSoft} style={{ marginRight: 16 }} />
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 15, color: colors.ink }}>
+                        {vendor.store_name}
+                      </Text>
+                      {vendor.bio && (
+                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }} numberOfLines={1}>
+                          {vendor.bio}
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.surfaceMuted} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {suggestions.length === 0 && vendorSuggestions.length === 0 && (
               <View style={{ paddingHorizontal: 24, paddingTop: 28 }}>
                 <View style={{
                   minHeight: 72,
@@ -320,9 +382,60 @@ export default function Search() {
               <View style={{ padding: 40, alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={colors.primary} />
               </View>
-            ) : results.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-                {results.map((hit) => {
+            ) : (
+              <>
+                {vendorResults.length > 0 && (
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.ink, marginBottom: 12 }}>
+                      Stores
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
+                      {vendorResults.map(vendor => (
+                        <Pressable
+                          key={vendor.id}
+                          style={({ pressed }) => ({
+                            width: 200,
+                            backgroundColor: colors.surfaceSoft,
+                            borderRadius: 12,
+                            padding: 16,
+                            opacity: pressed ? 0.8 : 1,
+                            borderWidth: 1,
+                            borderColor: colors.surfaceMuted,
+                          })}
+                          onPress={() => router.push(`/vendor/${vendor.id}` as any)}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                            {vendor.logo_url ? (
+                              <Image source={{ uri: vendor.logo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                            ) : (
+                              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                                <Ionicons name="storefront" size={20} color={colors.primary} />
+                              </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }} numberOfLines={1}>
+                                {vendor.store_name}
+                              </Text>
+                            </View>
+                          </View>
+                          {vendor.bio && (
+                            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }} numberOfLines={2}>
+                              {vendor.bio}
+                            </Text>
+                          )}
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+                
+                {results.length > 0 ? (
+                  <View>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.ink, marginBottom: 12 }}>
+                      Products
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                      {results.map((hit) => {
                   const p = hit.document;
                   return (
                     <View key={p.id} style={{ width: isDesktop ? '31%' : '100%', marginBottom: 16 }}>
@@ -339,14 +452,17 @@ export default function Search() {
                     </View>
                   );
                 })}
-              </View>
-            ) : (
+                    </View>
+                  </View>
+            ) : vendorResults.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
                 <Ionicons name="search" size={48} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.inkMuted }}>
-                  No products found.
+                  No products or stores found.
                 </Text>
               </View>
+            ) : null}
+            </>
             )}
           </View>
         ) : (

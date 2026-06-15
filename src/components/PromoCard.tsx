@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Pressable, ImageBackground, ViewStyle } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, Pressable, ImageBackground, ViewStyle, Platform, useWindowDimensions, Animated } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 
 interface PromoCardProps {
@@ -14,7 +14,45 @@ interface PromoCardProps {
 
 export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress, containerStyle }: PromoCardProps) => {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768 && Platform.OS === 'web';
+
+  // ── Hover animation (desktop web only) ──
+  const hoverAnim = useRef(new Animated.Value(0)).current;
+
+  const handleMouseEnter = () => {
+    if (!isDesktop) return;
+    Animated.spring(hoverAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 260,
+      friction: 20,
+    }).start();
+  };
+
+  const handleMouseLeave = () => {
+    if (!isDesktop) return;
+    Animated.spring(hoverAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 260,
+      friction: 20,
+    }).start();
+  };
+
+  const hoverScale = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.02] });
+  const hoverTranslateY = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
   return (
+    <Animated.View
+      style={[
+        isDesktop && {
+          transform: [{ scale: hoverScale }, { translateY: hoverTranslateY }],
+        },
+      ]}
+      // @ts-ignore — web-only pointer events
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [{
@@ -97,5 +135,6 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
         )}
       </ImageBackground>
     </Pressable>
+    </Animated.View>
   );
 };

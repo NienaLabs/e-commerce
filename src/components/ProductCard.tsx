@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Image, Pressable, useWindowDimensions, Platform } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, Image, Pressable, useWindowDimensions, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
@@ -42,6 +42,32 @@ export const ProductCard = ({
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { showToast } = useToast();
   const addEvent = useEventStore((state) => state.addEvent);
+
+  // ── Hover animation (desktop web only) ──
+  const hoverAnim = useRef(new Animated.Value(0)).current;
+
+  const handleMouseEnter = () => {
+    if (!isDesktop) return;
+    Animated.spring(hoverAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 20,
+    }).start();
+  };
+
+  const handleMouseLeave = () => {
+    if (!isDesktop) return;
+    Animated.spring(hoverAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 20,
+    }).start();
+  };
+
+  const hoverScale = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] });
+  const hoverTranslateY = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -7] });
   
   const isItemInWishlist = useWishlistStore((state) => state.items.some(i => i.id === id));
   const toggleItem = useWishlistStore((state) => state.toggleItem);
@@ -79,6 +105,17 @@ export const ProductCard = ({
   };
 
   return (
+    <Animated.View
+      style={[
+        { width: '100%' },
+        isDesktop && {
+          transform: [{ scale: hoverScale }, { translateY: hoverTranslateY }],
+        },
+      ]}
+      // @ts-ignore — web-only pointer events
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
     <Pressable
       onPress={(e) => {
         addEvent({
@@ -107,7 +144,7 @@ export const ProductCard = ({
       {/* ── Product Image ── */}
       <View style={{
         width: '100%',
-        aspectRatio: isDesktop ? 4 / 3 : 1,
+        aspectRatio: 1,
         borderRadius: 14,
         backgroundColor: colors.surfaceSoft,
         marginBottom: 10,
@@ -196,11 +233,11 @@ export const ProductCard = ({
         numberOfLines={2}
         style={{
           fontFamily: 'Inter_600SemiBold',
-          fontSize: isDesktop ? 14 : 13,
+          fontSize: isDesktop ? 16 : 13,
           color: colors.ink,
-          lineHeight: 19,
+          lineHeight: isDesktop ? 22 : 19,
           marginBottom: 6,
-          minHeight: isDesktop ? 38 : 36,
+          minHeight: isDesktop ? 44 : 36,
         }}
       >
         {name}
@@ -216,15 +253,15 @@ export const ProductCard = ({
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flex: 1 }}>
           {salePrice ? (
             <>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 18 : 16, color: '#d93651' }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: '#d93651' }}>
                 ${salePrice.toFixed(2)}
               </Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, textDecorationLine: 'line-through' }}>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: isDesktop ? 14 : 12, color: colors.inkGhost, textDecorationLine: 'line-through' }}>
                 ${price.toFixed(2)}
               </Text>
             </>
           ) : (
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 18 : 16, color: colors.ink }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: colors.ink }}>
               ${price.toFixed(2)}
             </Text>
           )}
@@ -304,5 +341,6 @@ export const ProductCard = ({
         </Pressable>
       )}
     </Pressable>
+    </Animated.View>
   );
 };

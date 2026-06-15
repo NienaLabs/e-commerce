@@ -8,8 +8,16 @@ import {
   Platform,
   ActivityIndicator,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoryCard } from '@/components/CategoryCard';
 import { ProductCard } from '@/components/ProductCard';
@@ -17,6 +25,7 @@ import { PromoCard } from '@/components/PromoCard';
 import { FilterModal } from '@/components/FilterModal';
 import { LocationSearchModal, LocationResult } from '@/components/LocationSearchModal';
 import { RecommendationShelfRow } from '@/components/RecommendationShelf';
+import { VendorShelf } from '@/components/VendorShelf';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { useTheme } from '../../theme/ThemeContext';
@@ -24,6 +33,7 @@ import { useQuery } from '@tanstack/react-query';
 import { listProducts, mapProductToCard, Product, getGroupedProducts } from '../../api/products';
 import { getRecommendations, RecommendationResponse } from '../../api/recommendations';
 import { useAuth } from '../../context/AuthContext';
+import { useNotificationStore } from '../../store/notificationStore';
 
 async function reverseGeocodeCity(lat: number, lng: number): Promise<string> {
   try {
@@ -69,7 +79,7 @@ type DropdownKey = 'Sort' | 'Offers' | 'Ratings' | 'Brand' | null;
 
 export default function Home() {
   const { colors } = useTheme();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
@@ -78,6 +88,33 @@ export default function Home() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const insets = useSafeAreaInsets();
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const topRowHeight = isDesktop ? 52 : 74;
+
+  const headerTopRowStyle = useAnimatedStyle(() => {
+    const height = interpolate(scrollY.value, [0, 80], [topRowHeight, 0], Extrapolation.CLAMP);
+    const opacity = interpolate(scrollY.value, [0, 60], [1, 0], Extrapolation.CLAMP);
+    const transform = [{ translateY: interpolate(scrollY.value, [0, 80], [0, -10], Extrapolation.CLAMP) }];
+    return { height, opacity, transform, overflow: 'hidden' };
+  });
+
+  const headerStyle = useAnimatedStyle(() => {
+    const shadowOpacity = interpolate(
+      scrollY.value,
+      [0, 80],
+      [colors.isDark ? 0.3 : 0.05, colors.isDark ? 0.6 : 0.15],
+      Extrapolation.CLAMP
+    );
+    const elevation = interpolate(scrollY.value, [0, 80], [4, 8], Extrapolation.CLAMP);
+    return { shadowOpacity, elevation };
+  });
 
   // Fetch real products from API
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -127,8 +164,9 @@ export default function Home() {
           .map((item) => {
             const product = productMap[item.product_id];
             if (!product) return null;
+            const primaryImage = product.images?.find(img => img.is_primary);
             const firstImage =
-              product.images?.[0]?.url ??
+              (primaryImage ?? product.images?.[0])?.image_url ??
               'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
             return {
               product_id: item.product_id,
@@ -137,6 +175,8 @@ export default function Home() {
               salePrice: product.discount_price ?? undefined,
               imageUrl: firstImage,
               vendorId: product.vendor_id,
+              vendorName: product.vendor_name ?? undefined,
+              vendorAvatar: product.vendor_logo_url ?? undefined,
               reason_label: item.reason_label,
               has_discount: item.has_discount,
             };
@@ -154,8 +194,9 @@ export default function Home() {
       .map((item) => {
         const product = productMap[item.product_id];
         if (!product) return null;
+        const primaryImage = product.images?.find(img => img.is_primary);
         const firstImage =
-          product.images?.[0]?.url ??
+          (primaryImage ?? product.images?.[0])?.image_url ??
           'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
         return {
           product_id: item.product_id,
@@ -164,6 +205,8 @@ export default function Home() {
           salePrice: product.discount_price ?? undefined,
           imageUrl: firstImage,
           vendorId: product.vendor_id,
+          vendorName: product.vendor_name ?? undefined,
+          vendorAvatar: product.vendor_logo_url ?? undefined,
           reason_label: item.reason_label,
           has_discount: item.has_discount,
         };
@@ -190,7 +233,7 @@ export default function Home() {
         id: p.id,
         heading: p.name,
         subtext: p.discount_price ? `Now $${p.discount_price.toFixed(2)}` : 'On Sale',
-        imageUrl: p.images?.[0]?.url || fallbackImages[i % fallbackImages.length],
+        imageUrl: (p.images?.find(img => img.is_primary) ?? p.images?.[0])?.image_url || fallbackImages[i % fallbackImages.length],
         badge: 'FLASH SALE',
         ctaLabel: 'Shop Now',
         product: p,
@@ -349,26 +392,29 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(120, insets.bottom + 120) }}>
-
-        {/* ─── Header: Location + Search ─── */}
-        <View style={{
-          paddingHorizontal: 24,
-          paddingTop: 16,
-          paddingBottom: 24,
-          backgroundColor: colors.surface,
-          borderBottomLeftRadius: 32,
-          borderBottomRightRadius: 32,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: colors.isDark ? 0.3 : 0.05,
-          shadowRadius: 16,
-          elevation: 4,
-          zIndex: 10,
-        }}>
+      
+      {/* ─── Header: Location + Search (Fixed & Animated) ─── */}
+      <Animated.View style={[{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        paddingTop: 16,
+        paddingBottom: 24,
+        paddingHorizontal: 24,
+        backgroundColor: colors.surface,
+        borderBottomLeftRadius: 32,
+        borderBottomRightRadius: 32,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 16,
+        zIndex: 100,
+      }, headerStyle]}>
+        
+        <Animated.View style={[{ marginHorizontal: -24, paddingHorizontal: 24 }, headerTopRowStyle]}>
           {/* Mobile Header */}
           {!isDesktop && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                   <Ionicons name="location" size={20} color={colors.ink} />
@@ -384,23 +430,47 @@ export default function Home() {
                 </Pressable>
               </View>
 
-              <Pressable
-                style={{
-                  width: 42, height: 42, borderRadius: 21,
-                  backgroundColor: colors.surfaceSoft,
-                  alignItems: 'center', justifyContent: 'center',
-                  borderWidth: 1, borderColor: colors.surfaceMuted,
-                }}
-                onPress={() => router.push('/profile')}
-              >
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>JD</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Pressable
+                  onPress={() => router.push('/notifications')}
+                  style={{ marginRight: 16, position: 'relative' }}
+                >
+                  <Ionicons name="notifications-outline" size={24} color={colors.ink} />
+                  {/* We need to import useNotificationStore at the top of the file to use it here. Let's do that in a separate edit. For now just place the code. */}
+                  {useNotificationStore().getUnreadCount() > 0 && (
+                    <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.surface }}>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#fff' }}>
+                        {useNotificationStore().getUnreadCount()}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  style={{
+                    width: 42, height: 42, borderRadius: 21,
+                    backgroundColor: colors.surfaceSoft,
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1, borderColor: colors.surfaceMuted,
+                    overflow: 'hidden',
+                  }}
+                  onPress={() => router.push('/profile')}
+                >
+                  {user?.image ? (
+                    <Image source={{ uri: user.image }} style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>
+                      {user?.name ? `${user.name.charAt(0)}${user.name.charAt(user.name.length - 1)}`.toUpperCase() : 'U'}
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
           )}
 
           {/* Desktop Location Header */}
           {isDesktop && (
-            <View style={{ paddingHorizontal: 24, paddingBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ paddingBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
               <Pressable onPress={() => setShowLocationSearch(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
                   <Ionicons name="location" size={16} color={colors.ink} />
@@ -413,8 +483,10 @@ export default function Home() {
             </View>
           )}
 
-          {/* Search Bar */}
-          <Pressable
+        </Animated.View>
+
+        {/* Search Bar */}
+        <Pressable
             onPress={() => router.push('/search')}
             style={{
               flexDirection: 'row',
@@ -432,7 +504,18 @@ export default function Home() {
               Search products, brands...
             </Text>
           </Pressable>
-        </View>
+      </Animated.View>
+
+      <Animated.ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ 
+          paddingTop: isDesktop ? 144 : 166, 
+          paddingBottom: Math.max(120, insets.bottom + 120) 
+        }}
+      >
 
         {/* ─── Flash Sales Carousel (image-only, auto-scrolling) ─── */}
         {flashSalesLoading ? (
@@ -546,6 +629,9 @@ export default function Home() {
             </ScrollView>
           )}
         </View>
+
+        {/* ─── Vendor Shelf ─── */}
+        {!selectedCategory && <VendorShelf />}
 
         {/* ─── Filter Row (only when category selected) ─── */}
         {selectedCategory && (
@@ -720,7 +806,7 @@ export default function Home() {
             )}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ─── Main Filter Mega-Modal ─── */}
       <FilterModal

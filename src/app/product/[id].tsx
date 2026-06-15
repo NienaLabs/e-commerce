@@ -63,7 +63,8 @@ export default function ProductDetail() {
     return crossSellShelf.products.map(item => {
       const p = productMap[item.product_id];
       if (!p) return null;
-      const firstImage = p.images?.[0]?.url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
+      const primaryImage = p.images?.find(img => img.is_primary);
+      const firstImage = (primaryImage ?? p.images?.[0])?.image_url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
       return {
         product_id: item.product_id,
         name: p.name,
@@ -71,6 +72,8 @@ export default function ProductDetail() {
         salePrice: p.discount_price ?? undefined,
         imageUrl: firstImage,
         vendorId: p.vendor_id,
+        vendorName: p.vendor_name ?? undefined,
+        vendorAvatar: p.vendor_logo_url ?? undefined,
         reason_label: item.reason_label,
         has_discount: item.has_discount,
       };
@@ -110,7 +113,7 @@ export default function ProductDetail() {
   }
 
   const productColors = product.colors.map(c => c.name);
-  const productImages = product.images.map(i => i.url);
+  const productImages = product.images.map(i => i.image_url);
   const firstImage = productImages[0] ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800';
   const displayColors = productColors.length > 0 ? productColors : ['Default'];
   const currentColor = selectedColor || displayColors[0];

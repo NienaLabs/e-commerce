@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions, Image } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
+import { useAuth } from '../context/AuthContext';
+import { useNotificationStore } from '../store/notificationStore';
 
 export const WebHeader = () => {
   const { colors } = useTheme();
@@ -10,6 +12,8 @@ export const WebHeader = () => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const totalItems = useCartStore((state) => state.getTotalItems());
+  const unreadCount = useNotificationStore((state) => state.getUnreadCount());
+  const { user } = useAuth();
 
   if (!isDesktop) return null;
 
@@ -48,7 +52,6 @@ export const WebHeader = () => {
           { label: 'Discover', path: '/discover' },
           { label: 'Search', path: '/search' },
           { label: 'Cart', path: '/cart', badge: totalItems > 0 ? totalItems.toString() : undefined },
-          { label: 'Profile', path: '/profile' },
         ].map(({ label, path, badge }) => (
           <Pressable
             key={path}
@@ -65,6 +68,42 @@ export const WebHeader = () => {
             )}
           </Pressable>
         ))}
+
+        {/* Notification Bell */}
+        <Pressable
+          onPress={() => handleNav('/notifications')}
+          style={{ paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: isActive('/notifications') ? colors.primary : 'transparent' }}
+        >
+          <View>
+            <Ionicons name={isActive('/notifications') ? "notifications" : "notifications-outline"} size={22} color={isActive('/notifications') ? colors.ink : colors.inkMuted} />
+            {unreadCount > 0 && (
+              <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.surface }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#fff' }}>
+                  {unreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+
+        {/* Profile Link */}
+        <Pressable
+          onPress={() => handleNav('/profile')}
+          style={{ paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: isActive('/profile') ? colors.primary : 'transparent' }}
+        >
+          {user?.image ? (
+            <Image source={{ uri: user.image }} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8 }} />
+          ) : (
+            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 8, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.ink }}>
+                {user?.name ? `${user.name.charAt(0)}${user.name.charAt(user.name.length - 1)}`.toUpperCase() : 'U'}
+              </Text>
+            </View>
+          )}
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: isActive('/profile') ? colors.ink : colors.inkMuted }}>
+            Profile
+          </Text>
+        </Pressable>
       </View>
     </View>
   );

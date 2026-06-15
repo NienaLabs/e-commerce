@@ -33,7 +33,14 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
   // Only create container element on the client side (web)
   const containerRef = useRef<HTMLDivElement | null>(null);
   if (!containerRef.current && typeof document !== 'undefined') {
-    containerRef.current = document.createElement('div');
+    const div = document.createElement('div');
+    div.style.backgroundColor = 'transparent';
+    div.style.border = 'none';
+    div.style.outline = 'none';
+    div.style.padding = '0';
+    div.style.margin = '0';
+    div.style.webkitTapHighlightColor = 'transparent';
+    containerRef.current = div;
   }
   
   // Create the marker once when the map is ready

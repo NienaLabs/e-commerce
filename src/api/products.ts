@@ -9,8 +9,10 @@ const BASE_URL =
 
 export interface ProductImage {
   id: string;
-  url: string;
-  alt?: string;
+  image_url: string;  // matches backend field name
+  alt_text?: string;
+  is_primary?: boolean;
+  display_order?: number;
 }
 
 export interface ProductColor {
@@ -30,6 +32,8 @@ export interface Product {
   warranty_info?: string | null;
   is_active: boolean;
   vendor_id: string;
+  vendor_name?: string | null;
+  vendor_logo_url?: string | null;
   category_id: string;
   avg_rating: number;
   review_count: number;
@@ -68,7 +72,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
 // ── Utility: Map API product to ProductCard-friendly shape ───
 
 export function mapProductToCard(product: Product) {
-  const firstImage = product.images?.[0]?.url ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
+  // Backend field is image_url, not url
+  const primaryImage = product.images?.find(img => img.is_primary);
+  const firstImage = (primaryImage ?? product.images?.[0])?.image_url
+    ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=600';
   return {
     id: product.id,
     name: product.name,
@@ -76,6 +83,8 @@ export function mapProductToCard(product: Product) {
     salePrice: product.discount_price ?? undefined,
     imageUrl: firstImage,
     vendorId: product.vendor_id,
+    vendorName: product.vendor_name ?? undefined,
+    vendorAvatar: product.vendor_logo_url ?? undefined,
     inStock: product.stock_quantity > 0,
   };
 }

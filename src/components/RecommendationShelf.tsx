@@ -22,6 +22,7 @@ interface ShelfProduct {
   imageUrl: string;
   vendorId?: string;
   vendorName?: string;
+  vendorAvatar?: string;
   reason_label: string;
   has_discount: boolean;
 }
@@ -169,6 +170,7 @@ export const RecommendationShelfRow = ({
               imageUrl={product.imageUrl}
               vendorId={product.vendorId}
               vendorName={product.vendorName}
+              vendorAvatar={product.vendorAvatar}
               reasonLabel={product.reason_label}
               hasDiscount={product.has_discount}
               onPress={() =>

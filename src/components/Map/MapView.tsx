@@ -12,9 +12,10 @@ export interface MapViewProps {
   };
   children?: React.ReactNode;
   showUserLocation?: boolean;
+  onPress?: (feature: any) => void;
 }
 
-
+export { GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 
 export const MapView: React.FC<MapViewProps> = ({ 
   style, 
@@ -22,6 +23,7 @@ export const MapView: React.FC<MapViewProps> = ({
   initialRegion = { latitude: 0, longitude: 0, zoom: 1 },
   children,
   showUserLocation = false,
+  onPress,
 }) => {
   return (
     <View style={[styles.container, style]}>
@@ -29,6 +31,7 @@ export const MapView: React.FC<MapViewProps> = ({
         style={styles.map} 
         mapStyle={mapStyle}
         logo={false}
+        onPress={onPress}
       >
         <Camera
           zoom={initialRegion.zoom}
