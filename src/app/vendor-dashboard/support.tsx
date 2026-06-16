@@ -6,12 +6,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '../../theme/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { WebHeader } from '../../components/WebHeader';
 import {
   getMyTickets, createTicket, replyToTicket,
   type SupportTicket,
@@ -55,7 +54,7 @@ function PriorityPill({ priority, colors }: { priority: string; colors: any }) {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export default function ProfileSupportScreen() {
+export default function SupportScreen() {
   const { colors } = useTheme();
   const { token, user } = useContext(AuthContext);
   const { width } = useWindowDimensions();
@@ -386,20 +385,27 @@ export default function ProfileSupportScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      <WebHeader />
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
-        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile')} style={{ padding: 8, marginRight: 8, marginLeft: -8 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.ink} />
-        </Pressable>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Help & Support</Text>
-        
+      {/* Page header */}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 20, paddingVertical: 14,
+        backgroundColor: colors.surface,
+        borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
+      }}>
+        <Ionicons name="headset" size={22} color={colors.primaryDim} style={{ marginRight: 10 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Support</Text>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>
+            Get help from our team
+          </Text>
+        </View>
         {!isDesktop && !selected && (
           <Pressable
             onPress={() => setShowNewModal(true)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginLeft: 'auto' }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 }}
           >
             <Ionicons name="add" size={16} color={colors.surface} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.surface }}>New</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.surface }}>New Ticket</Text>
           </Pressable>
         )}
       </View>

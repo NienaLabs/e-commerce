@@ -39,7 +39,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     div.style.outline = 'none';
     div.style.padding = '0';
     div.style.margin = '0';
-    div.style.webkitTapHighlightColor = 'transparent';
+    (div.style as any).webkitTapHighlightColor = 'transparent';
     containerRef.current = div;
   }
   

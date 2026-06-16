@@ -87,7 +87,7 @@ export default function VendorStorefront() {
         <Ionicons name="storefront-outline" size={64} color={colors.inkGhost} />
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginTop: 16, marginBottom: 8 }}>Store not found</Text>
         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center' }}>
-          This vendor may have been removed or doesn't exist.
+          This vendor may have been removed or doesn&apos;t exist.
         </Text>
         <Pressable
           onPress={() => router.back()}

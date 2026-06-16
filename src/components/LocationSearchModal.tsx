@@ -23,17 +23,6 @@ export const LocationSearchModal = ({ visible, onClose, onSelectLocation }: Loca
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (query.trim()) {
-        searchLocation();
-      } else {
-        setResults([]);
-      }
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [query]);
-
   const searchLocation = async () => {
     if (!query.trim()) return;
     setIsLoading(true);
@@ -49,6 +38,17 @@ export const LocationSearchModal = ({ visible, onClose, onSelectLocation }: Loca
     }
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (query.trim()) {
+        searchLocation();
+      } else {
+        setResults([]);
+      }
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [query]);
 
   const handleSelect = (item: any) => {
     const address = item.address;

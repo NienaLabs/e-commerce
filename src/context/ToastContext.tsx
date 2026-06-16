@@ -23,7 +23,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const [message, setMessage] = useState('');
   const [type, setType] = useState<ToastType>('info');
 
-  const animation = useRef(new Animated.Value(0)).current;
+  const [animation] = useState(() => new Animated.Value(0));
   const timerRef = useRef<any>(null);
 
   const hideToast = useCallback(() => {

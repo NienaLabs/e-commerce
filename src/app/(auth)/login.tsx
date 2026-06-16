@@ -81,7 +81,7 @@ function ImageCarousel({
           <View style={{ width, height }}>
             <Image
               source={{ uri: item }}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
               resizeMode="cover"
             />
           </View>
@@ -98,7 +98,7 @@ function ImageCarousel({
           bg,
         ]}
         locations={[0, 0.38, 0.72, 1]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       {/* Dot indicators */}
@@ -160,7 +160,7 @@ function DesktopCarousel({
           key={i}
           source={{ uri }}
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             {
               opacity: activeIndex === i ? 1 : 0,
               // On web, CSS transition handles the crossfade smoothly
@@ -176,7 +176,7 @@ function DesktopCarousel({
       {/* Tint overlay */}
       <View
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           { backgroundColor: isDark ? 'rgba(0,0,0,0.20)' : 'rgba(255,255,255,0.04)' },
         ]}
       />
@@ -187,7 +187,7 @@ function DesktopCarousel({
         locations={[0, 0.6, 0.85, 1]}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       {/* Dot indicators */}

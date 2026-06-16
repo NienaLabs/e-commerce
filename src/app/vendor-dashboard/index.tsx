@@ -1,13 +1,13 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
-import { getVendorMe, getVendorOrders } from '../../api/vendors';
+import { getVendorOrders } from '../../api/vendors';
 import { getVendorSummary } from '../../api/analytics';
-import { AuthContext } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 const QUICK_ACTIONS = [
   { icon: 'add-circle', label: 'Add Product', path: '/vendor-dashboard/add-product' },
@@ -19,14 +19,7 @@ export default function VendorDashboard() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-  const { token, user } = useContext(AuthContext);
-
-  const { data: vendor, isLoading: vendorLoading, isError } = useQuery({
-    queryKey: ['vendor-me'],
-    queryFn: () => getVendorMe(token!),
-    enabled: !!token,
-    retry: false, // Don't retry if they don't have a profile
-  });
+  const { token, vendor, isLoading: authLoading } = useAuth();
 
   const { data: summary, isLoading: analyticsLoading } = useQuery({
     queryKey: ['vendor-summary'],
@@ -41,7 +34,7 @@ export default function VendorDashboard() {
     select: (orders) => orders.slice(0, 5),
   });
 
-  if (vendorLoading) {
+  if (authLoading || (analyticsLoading && !!vendor)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -49,8 +42,8 @@ export default function VendorDashboard() {
     );
   }
 
-  // If no vendor profile exists (e.g. 404), prompt them to become a vendor
-  if (isError || !vendor) {
+  // If no vendor profile exists, prompt them to become a vendor
+  if (!vendor) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
         <Ionicons name="storefront-outline" size={64} color={colors.inkGhost} />
