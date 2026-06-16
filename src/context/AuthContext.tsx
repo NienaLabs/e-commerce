@@ -56,6 +56,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshVendor: () => Promise<void>;
   updateUserName: (name: string) => Promise<void>;
+  markOnboardingComplete: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -68,6 +69,7 @@ export const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   refreshVendor: async () => {},
   updateUserName: async () => {},
+  markOnboardingComplete: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -76,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [vendor, setVendor] = useState<VendorDetail | null>(null);
   const [hasVendorAccount, setHasVendorAccount] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasPromptedOnboarding, setHasPromptedOnboarding] = useState(false);
   const segments = useSegments();
 
   const fetchVendor = async (authToken: string) => {
@@ -129,12 +132,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inAuthGroup = segments[0] === '(auth)';
     const inVendorGroup = segments[0] === 'vendor-dashboard';
     const isBecomingVendor = segments[0] === 'become-vendor';
+    const isCurrentlyOnboarding = segments[0] === '(auth)' && segments[1] === 'onboarding';
 
     if (!user && !inAuthGroup) {
       // Not authenticated → go to login
       router.replace('/(auth)/login');
     } else if (user) {
-      if (inAuthGroup) {
+      if (!user.onboarding_done && !hasPromptedOnboarding && !isCurrentlyOnboarding) {
+        setHasPromptedOnboarding(true);
+        router.replace('/(auth)/onboarding');
+        return;
+      }
+
+      if (inAuthGroup && !isCurrentlyOnboarding) {
         // Authenticated and in auth screens → redirect to appropriate home
         if (hasVendorAccount) {
           router.replace('/vendor-dashboard');
@@ -149,7 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.replace('/vendor-dashboard');
       }
     }
-  }, [user, segments, isLoading, hasVendorAccount]);
+  }, [user, segments, isLoading, hasVendorAccount, hasPromptedOnboarding]);
 
   const signIn = async (newToken: string, newUser: UserResponse) => {
     await setToken(newToken);
@@ -178,6 +188,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const markOnboardingComplete = () => {
+    if (user) {
+      setUser({ ...user, onboarding_done: true });
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -190,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         refreshVendor,
         updateUserName,
+        markOnboardingComplete,
       }}
     >
       {children}

@@ -22,7 +22,11 @@ export interface LocalOrder {
     name: string;
     street: string;
     city: string;
+    lat?: number;
+    lng?: number;
+    landmark?: string;
   };
+  vendor_id?: string;
   delivery_pin?: string | null;
   payment: {
     type: string;

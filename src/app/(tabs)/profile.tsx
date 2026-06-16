@@ -107,6 +107,7 @@ export default function Profile() {
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, paddingLeft: 8, overflow: 'hidden', marginBottom: 24 }}>
             <SettingsRow icon="cube-outline" title="My Orders" onPress={() => router.push('/profile/orders' as any)} />
             <SettingsRow icon="heart-outline" title="Wishlist" onPress={() => router.push('/profile/wishlist' as any)} />
+            <SettingsRow icon="options-outline" title="Update Preferences" onPress={() => router.push('/(auth)/onboarding' as any)} />
             <SettingsRow icon="star-outline" title="Rewards & Loyalty" onPress={() => router.push('/rewards' as any)} />
             <SettingsRow icon="location-outline" title="Shipping Addresses" onPress={() => router.push('/profile/addresses' as any)} />
             <SettingsRow icon="card-outline" title="Payment Methods" onPress={() => router.push('/profile/payments' as any)} />

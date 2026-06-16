@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, Platform, useWindowDimensions, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../theme/ThemeContext';
 import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
@@ -61,6 +62,28 @@ export default function DiscoverScreen() {
       }
     })();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      async function checkActiveDelivery() {
+        try {
+          const data = await AsyncStorage.getItem('@active_delivery');
+          if (data) {
+            const parsed = JSON.parse(data);
+            if (parsed.lat && parsed.lng) {
+              setDeliveryLocation({ latitude: parsed.lat, longitude: parsed.lng });
+              if (parsed.vendorId) setSelectedVendor(parsed.vendorId);
+              // Clear it so it only applies right after checkout
+              await AsyncStorage.removeItem('@active_delivery');
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse active delivery', e);
+        }
+      }
+      checkActiveDelivery();
+    }, [])
+  );
 
   // Real Vendors from API
   const { data: vendors = [], isLoading: vendorsLoading } = useQuery({

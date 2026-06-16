@@ -14,6 +14,7 @@ export interface UserResponse {
   name: string;
   emailVerified: boolean;
   image: string | null;
+  onboarding_done: boolean;
   created_at: string;
   updated_at: string;
 }

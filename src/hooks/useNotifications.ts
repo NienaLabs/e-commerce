@@ -27,6 +27,27 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
+const FCM_TOKEN_STORAGE_KEY = 'registered_fcm_token';
+
+/** Read the previously-registered FCM token from local storage. */
+async function getStoredFcmToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+  }
+  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+  return AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+}
+
+/** Persist the registered FCM token so we don't re-send it on every login. */
+async function storeRegisteredFcmToken(fcmToken: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(FCM_TOKEN_STORAGE_KEY, fcmToken);
+    return;
+  }
+  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+  await AsyncStorage.setItem(FCM_TOKEN_STORAGE_KEY, fcmToken);
+}
+
 export function useNotifications() {
   const { token, user } = useAuth();
   const addNotification = useNotificationStore((state) => state.addNotification);
@@ -125,10 +146,16 @@ export function useNotifications() {
           });
         }
 
-        // Register token with backend
+        // Only register with the backend if the token is new or has rotated.
         if (fcmToken && isMounted) {
-          console.log('Registering FCM Token:', fcmToken);
-          await registerFcmToken(fcmToken, token);
+          const storedToken = await getStoredFcmToken();
+          if (storedToken === fcmToken) {
+            console.log('FCM token unchanged — skipping backend registration.');
+          } else {
+            console.log('Registering FCM Token with backend:', fcmToken);
+            await registerFcmToken(fcmToken, token);
+            await storeRegisteredFcmToken(fcmToken);
+          }
         }
       } catch (e) {
         console.error('Error setting up notifications:', e);

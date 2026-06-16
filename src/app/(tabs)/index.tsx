@@ -88,6 +88,7 @@ export default function Home() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const insets = useSafeAreaInsets();
+  const unreadCount = useNotificationStore((state) => state.notifications.filter((n) => !n.read).length);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -437,10 +438,10 @@ export default function Home() {
                 >
                   <Ionicons name="notifications-outline" size={24} color={colors.ink} />
                   {/* We need to import useNotificationStore at the top of the file to use it here. Let's do that in a separate edit. For now just place the code. */}
-                  {useNotificationStore().getUnreadCount() > 0 && (
+                  {unreadCount > 0 && (
                     <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.surface }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#fff' }}>
-                        {useNotificationStore().getUnreadCount()}
+                        {unreadCount}
                       </Text>
                     </View>
                   )}

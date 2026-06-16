@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { Button } from '../components/Button';
 import { WebHeader } from '../components/WebHeader';
@@ -12,6 +12,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveLocalOrder } from '../api/localOrders';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
+import { MapView } from '../components/Map/MapView';
+import { MapMarker } from '../components/Map/MapMarker';
+import { LocationSearchModal, LocationResult } from '../components/LocationSearchModal';
+import * as Location from 'expo-location';
+
+async function reverseGeocodeAddress(lat: number, lng: number) {
+  if (Platform.OS === 'web') {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'ElectricApp/1.0' } }
+    );
+    const data = await res.json();
+    const a = data?.address;
+    return {
+      street: `${a?.house_number || ''} ${a?.road || ''}`.trim() || 'Unknown Street',
+      city: `${a?.city || a?.town || a?.village || ''}, ${a?.state || ''} ${a?.postcode || ''}`.trim(),
+    };
+  } else {
+    return null;
+  }
+}
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -20,6 +41,9 @@ interface Address {
   name: string;
   street: string;
   city: string;
+  lat?: number;
+  lng?: number;
+  landmark?: string;
   isDefault?: boolean;
 }
 
@@ -49,44 +73,73 @@ export default function CheckoutScreen() {
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [orderRef, setOrderRef] = useState<string | null>(null);
+  const [showLocationSearch, setShowLocationSearch] = useState(false);
+  const [landmark, setLandmark] = useState('');
+  const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number }>({ latitude: 5.6037, longitude: -0.1870 });
+  const [mapReady, setMapReady] = useState(false);
+
+  // Fetch user location once on mount to center the map
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setMapCenter({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        }
+      } catch (e) {
+        // silently fall back to default Accra coords
+      } finally {
+        setMapReady(true);
+      }
+    })();
+  }, []);
 
   const SHIPPING_FEE = 4.99;
   const subtotal = getSubtotal();
   const total = subtotal + SHIPPING_FEE;
 
-  useFocusEffect(
-    useCallback(() => {
-      async function loadData() {
-        try {
-          const [addrData, payData] = await Promise.all([
-            AsyncStorage.getItem('@user_addresses'),
-            AsyncStorage.getItem('@user_payments'),
-          ]);
-          const addrs: Address[] = addrData ? JSON.parse(addrData) : [];
-          const pays: PaymentMethod[] = payData ? JSON.parse(payData) : [];
+  const selectedAddressIdRef = React.useRef<string | null>(null);
+  const selectedPaymentIdRef = React.useRef<string | null>(null);
 
-          // Only update if changed (to prevent unnecessary re-renders)
-          setAddresses(addrs);
-          setPayments(pays);
+  // Load saved addresses & payments once on mount only — NOT on every focus,
+  // so that in-memory pinned addresses don't get wiped by a re-load.
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [addrData, payData] = await Promise.all([
+          AsyncStorage.getItem('@user_addresses'),
+          AsyncStorage.getItem('@user_payments'),
+        ]);
+        const addrs: Address[] = addrData ? JSON.parse(addrData) : [];
+        const pays: PaymentMethod[] = payData ? JSON.parse(payData) : [];
 
-          // Only auto-select if nothing is selected yet
-          if (!selectedAddressId) {
-            const defaultAddr = addrs.find(a => a.isDefault) ?? addrs[0];
-            if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+        setAddresses(addrs);
+        setPayments(pays);
+
+        // Auto-select default only if nothing is selected yet
+        if (!selectedAddressIdRef.current) {
+          const defaultAddr = addrs.find(a => a.isDefault) ?? addrs[0];
+          if (defaultAddr) {
+            setSelectedAddressId(defaultAddr.id);
+            selectedAddressIdRef.current = defaultAddr.id;
           }
-          if (!selectedPaymentId) {
-            const defaultPay = pays.find(p => p.isDefault) ?? pays[0];
-            if (defaultPay) setSelectedPaymentId(defaultPay.id);
-          }
-        } catch (e) {
-          console.error('Failed to load checkout data', e);
-        } finally {
-          setIsLoading(false);
         }
+        if (!selectedPaymentIdRef.current) {
+          const defaultPay = pays.find(p => p.isDefault) ?? pays[0];
+          if (defaultPay) {
+            setSelectedPaymentId(defaultPay.id);
+            selectedPaymentIdRef.current = defaultPay.id;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load checkout data', e);
+      } finally {
+        setIsLoading(false);
       }
-      loadData();
-    }, [selectedAddressId, selectedPaymentId])
-  );
+    }
+    loadData();
+  }, []); // empty deps — run once on mount only
 
   const selectedAddress = addresses.find(a => a.id === selectedAddressId);
   const selectedPayment = payments.find(p => p.id === selectedPaymentId);
@@ -162,7 +215,11 @@ export default function CheckoutScreen() {
           name: selectedAddress?.name ?? '',
           street: selectedAddress?.street ?? '',
           city: selectedAddress?.city ?? '',
+          lat: selectedAddress?.lat,
+          lng: selectedAddress?.lng,
+          landmark: landmark,
         },
+        vendor_id: cartItems[0]?.vendorId ?? '',
         payment: {
           type: selectedPayment?.type ?? '',
           last4: selectedPayment?.last4 ?? '',
@@ -182,6 +239,15 @@ export default function CheckoutScreen() {
 
       // Clear the cart and refresh queries
       clearCart();
+      
+      if (selectedAddress?.lat && selectedAddress?.lng) {
+        await AsyncStorage.setItem('@active_delivery', JSON.stringify({
+          lat: selectedAddress.lat,
+          lng: selectedAddress.lng,
+          vendorId: cartItems[0]?.vendorId ?? ''
+        }));
+      }
+
       queryClient.invalidateQueries({ queryKey: ['local-orders'] });
       queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
       queryClient.invalidateQueries({ queryKey: ['vendor-analytics'] });
@@ -234,38 +300,124 @@ export default function CheckoutScreen() {
           <View>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 16 }}>Shipping Address</Text>
 
+            {/* Map Container */}
+            <View style={{ height: 250, width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+              {mapReady ? (
+                <MapView
+                  style={{ flex: 1, width: '100%', height: '100%' }}
+                  mapStyle="https://tiles.openfreemap.org/styles/liberty"
+                  initialRegion={{
+                    latitude: selectedAddress?.lat ?? mapCenter.latitude,
+                    longitude: selectedAddress?.lng ?? mapCenter.longitude,
+                    zoom: 14
+                  }}
+                  showUserLocation
+                  onPress={async (feature) => {
+                    if (feature?.geometry?.coordinates) {
+                      const [lng, lat] = feature.geometry.coordinates;
+                      let street = 'Selected Location';
+                      let city = '';
+                      const webResult = await reverseGeocodeAddress(lat, lng);
+                      if (webResult) {
+                        street = webResult.street;
+                        city = webResult.city;
+                      } else {
+                        try {
+                          const geocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+                          if (geocode.length > 0) {
+                            const place = geocode[0];
+                            street = `${place.streetNumber || ''} ${place.street || ''}`.trim() || 'Selected Location';
+                            city = `${place.city || ''}, ${place.region || ''} ${place.postalCode || ''}`.trim();
+                          }
+                        } catch (e) {}
+                      }
+                      const newId = Date.now().toString();
+                      const newAddr = { id: newId, name: 'Pinned Location', street, city, lat, lng };
+                      setAddresses(prev => [newAddr, ...prev]);
+                      setSelectedAddressId(newId);
+                    }
+                  }}
+                >
+                  {selectedAddress && selectedAddress.lat && selectedAddress.lng && (
+                    <MapMarker
+                      id="selected-address"
+                      coordinate={[selectedAddress.lng, selectedAddress.lat]}
+                      title={selectedAddress.name}
+                    >
+                      <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <Ionicons name="location" size={40} color={colors.primary} style={Platform.OS === 'web' ? { filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' } as any : { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }} />
+                      </View>
+                    </MapMarker>
+                  )}
+                </MapView>
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceSoft }}>
+                  <ActivityIndicator size="large" color={colors.primaryDim} />
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginTop: 8 }}>Locating you…</Text>
+                </View>
+              )}
+            </View>
+
+            <Pressable
+              onPress={() => setShowLocationSearch(true)}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.surfaceSoft : colors.surface,
+                padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceMuted,
+                alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: 16
+              })}
+            >
+              <Ionicons name="search" size={20} color={colors.ink} style={{ marginRight: 8 }} />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>Search for Address</Text>
+            </Pressable>
+
             {addresses.length === 0 ? (
               <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceMuted, marginBottom: 16 }}>
                 <Ionicons name="location-outline" size={36} color={colors.surfaceMuted} style={{ marginBottom: 8 }} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkMuted }}>No saved addresses</Text>
               </View>
             ) : (
-              <View style={{ gap: 12, marginBottom: 16 }}>
-                {addresses.map(addr => {
-                  const sel = addr.id === selectedAddressId;
-                  return (
-                    <Pressable key={addr.id} onPress={() => setSelectedAddressId(addr.id)} style={{
-                      backgroundColor: colors.surface, borderRadius: 16, padding: 16,
-                      borderWidth: 1.5, borderColor: sel ? colors.primary : colors.surfaceMuted,
-                    }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name={addr.name === 'Home' ? 'home' : 'location'} size={16} color={sel ? colors.primaryDim : colors.ink} style={{ marginRight: 8 }} />
-                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{addr.name}</Text>
+              <ScrollView style={{ maxHeight: 200, marginBottom: 16 }} nestedScrollEnabled>
+                <View style={{ gap: 12 }}>
+                  {addresses.map(addr => {
+                    const sel = addr.id === selectedAddressId;
+                    return (
+                      <Pressable key={addr.id} onPress={() => setSelectedAddressId(addr.id)} style={{
+                        backgroundColor: colors.surface, borderRadius: 16, padding: 16,
+                        borderWidth: 1.5, borderColor: sel ? colors.primary : colors.surfaceMuted,
+                      }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name={addr.name === 'Home' ? 'home' : 'location'} size={16} color={sel ? colors.primaryDim : colors.ink} style={{ marginRight: 8 }} />
+                            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{addr.name}</Text>
+                          </View>
+                          {sel && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
                         </View>
-                        {sel && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
-                      </View>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>{addr.street}</Text>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>{addr.city}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>{addr.street}</Text>
+                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>{addr.city}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
             )}
 
-            <Pressable onPress={() => router.push('/profile/addresses' as any)} style={{ padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceMuted, borderStyle: 'dashed', alignItems: 'center', marginBottom: 32 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>+ Add New Address</Text>
-            </Pressable>
+            <View style={{ marginBottom: 32 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 8 }}>Landmark (Optional, but recommended)</Text>
+              <TextInput
+                style={{
+                  backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 16, height: 48,
+                  borderWidth: 1, borderColor: colors.surfaceMuted, fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink,
+                  ...Platform.select({ web: { outlineStyle: 'none' }, default: {} }) as any
+                }}
+                placeholder="e.g. Near the big bus stop"
+                placeholderTextColor={colors.inkGhost}
+                value={landmark}
+                onChangeText={setLandmark}
+              />
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 4 }}>
+                Help the vendor locate you easily in case they find it difficult to track your current location.
+              </Text>
+            </View>
 
             <Button title="Continue to Payment" onPress={() => {
               if (!selectedAddressId) { showToast('Please select a shipping address.', 'warning'); return; }
@@ -375,6 +527,18 @@ export default function CheckoutScreen() {
         )}
 
       </ScrollView>
+
+      <LocationSearchModal
+        visible={showLocationSearch}
+        onClose={() => setShowLocationSearch(false)}
+        onSelectLocation={(loc: LocationResult) => {
+          const newId = Date.now().toString();
+          const newAddr = { id: newId, name: loc.name, street: loc.street, city: loc.city, lat: loc.lat, lng: loc.lon };
+          setAddresses(prev => [newAddr, ...prev]);
+          setSelectedAddressId(newId);
+          setShowLocationSearch(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
