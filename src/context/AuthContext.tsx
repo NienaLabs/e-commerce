@@ -68,11 +68,11 @@ export const AuthContext = createContext<AuthContextType>({
   vendor: null,
   hasVendorAccount: false,
   isLoading: true,
-  signIn: async () => {},
-  signOut: async () => {},
-  refreshVendor: async () => {},
-  updateUserName: async () => {},
-  markOnboardingComplete: () => {},
+  signIn: async () => { },
+  signOut: async () => { },
+  refreshVendor: async () => { },
+  updateUserName: async () => { },
+  markOnboardingComplete: () => { },
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (localName && userData) {
               userData.name = localName;
             }
-          } catch (e) {}
+          } catch (e) { }
 
           // Switch all stores to this user's storage partition
           useCartStore.getState()._switchUser(userData.id);
@@ -141,6 +141,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inVendorGroup = segments[0] === 'vendor-dashboard';
     const isBecomingVendor = segments[0] === 'become-vendor';
     const isCurrentlyOnboarding = segments[0] === '(auth)' && segments[1] === 'onboarding';
+    const isSuspendedScreen = segments[0] === 'suspended';
+
+    if (isSuspendedScreen) return;
+    const isCurrentlyOnboarding = segments[0] === '(auth)' && (segments[1] as string) === 'onboarding';
 
     if (!user && !inAuthGroup) {
       // Not authenticated → go to login
@@ -148,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (user) {
       if (!user.onboarding_done && !hasPromptedOnboarding && !isCurrentlyOnboarding) {
         setHasPromptedOnboarding(true);
-        router.replace('/(auth)/onboarding');
+        router.replace('/(auth)/onboarding' as any);
         return;
       }
 

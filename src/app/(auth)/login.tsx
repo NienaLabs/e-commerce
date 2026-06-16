@@ -248,7 +248,7 @@ export default function LoginScreen() {
       const user = await getMe(session.token);
       await signIn(session.token, user);
       if (!user.onboarding_done) {
-        router.replace('/(auth)/onboarding');
+        router.replace('/(auth)/onboarding' as any);
       } else {
         router.replace('/(tabs)');
       }
@@ -270,7 +270,7 @@ export default function LoginScreen() {
           const user = await getMe(token);
           await signIn(token, user);
           if (!user.onboarding_done) {
-            router.replace('/(auth)/onboarding');
+            router.replace('/(auth)/onboarding' as any);
           } else {
             router.replace('/(tabs)');
           }

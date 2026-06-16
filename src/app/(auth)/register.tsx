@@ -252,7 +252,7 @@ export default function RegisterScreen() {
       await signIn(session.token, user);
 
       if (!user.onboarding_done) {
-        router.replace('/(auth)/onboarding');
+        router.replace('/(auth)/onboarding' as any);
       } else if (accountType === 'vendor') {
         router.replace('/vendor-dashboard');
       } else {
