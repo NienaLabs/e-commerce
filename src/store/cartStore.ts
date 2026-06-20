@@ -23,6 +23,7 @@ interface CartState {
   clearCart: () => void;
   getTotalItems: () => number;
   getSubtotal: () => number;
+  _switchUser: (userId: string | null) => void;
 }
 
 // Custom storage wrapper to handle both Web (localStorage) and Native (AsyncStorage) smoothly
@@ -47,6 +48,19 @@ const customStorage = {
       await AsyncStorage.removeItem(name);
     }
   },
+};
+
+// Track the current storage key so we can change it per user
+let currentStorageName = 'vendor-cart-storage';
+
+const jsonStorage = createJSONStorage(() => customStorage);
+
+// Wrap getItem to use the dynamic storage key
+const userScopedStorage = {
+  ...jsonStorage,
+  getItem: (name: string) => jsonStorage.getItem!(currentStorageName),
+  setItem: (name: string, value: any) => jsonStorage.setItem!(currentStorageName, value),
+  removeItem: (name: string) => jsonStorage.removeItem!(currentStorageName),
 };
 
 export const useCartStore = create<CartState>()(
@@ -93,10 +107,21 @@ export const useCartStore = create<CartState>()(
           return sum + (price * item.quantity);
         }, 0);
       },
+
+      _switchUser: (userId: string | null) => {
+        // Update the storage key to be user-scoped
+        currentStorageName = userId
+          ? `vendor-cart-storage-${userId}`
+          : 'vendor-cart-storage-guest';
+        // Clear in-memory state first
+        set({ items: [] });
+        // Rehydrate from the new user-scoped storage
+        useCartStore.persist.rehydrate();
+      },
     }),
     {
-      name: 'vendor-cart-storage',
-      storage: createJSONStorage(() => customStorage),
+      name: 'vendor-cart-storage', // default name; overridden dynamically via userScopedStorage
+      storage: userScopedStorage,
     }
   )
 );

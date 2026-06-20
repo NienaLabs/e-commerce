@@ -4,6 +4,9 @@ import { Platform } from 'react-native';
 import { UserResponse, getMe } from '../api/auth';
 import { VendorDetail, getVendorMe } from '../api/vendors';
 import { router, useSegments } from 'expo-router';
+import { useCartStore } from '../store/cartStore';
+import { useWishlistStore } from '../store/wishlistStore';
+import { useEventStore } from '../store/eventStore';
 
 const TOKEN_KEY = 'vendor_app_token';
 
@@ -112,6 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch (e) {}
 
+          // Switch all stores to this user's storage partition
+          useCartStore.getState()._switchUser(userData.id);
+          useWishlistStore.getState()._switchUser(userData.id);
+          useEventStore.getState()._switchUser(userData.id);
+
           setTokenState(storedToken);
           setUser(userData);
           await fetchVendor(storedToken);
@@ -163,6 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (newToken: string, newUser: UserResponse) => {
     await setToken(newToken);
+    // Switch all stores to this user's storage partition
+    useCartStore.getState()._switchUser(newUser.id);
+    useWishlistStore.getState()._switchUser(newUser.id);
+    useEventStore.getState()._switchUser(newUser.id);
     setTokenState(newToken);
     setUser(newUser);
     await fetchVendor(newToken);
@@ -170,6 +182,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await removeToken();
+    // Switch all stores to guest (clears in-memory state)
+    useCartStore.getState()._switchUser(null);
+    useWishlistStore.getState()._switchUser(null);
+    useEventStore.getState()._switchUser(null);
     setTokenState(null);
     setUser(null);
     setVendor(null);

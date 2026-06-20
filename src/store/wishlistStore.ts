@@ -21,6 +21,7 @@ interface WishlistState {
   removeItem: (id: string) => void;
   clearWishlist: () => void;
   hasItem: (id: string) => boolean;
+  _switchUser: (userId: string | null) => void;
 }
 
 const customStorage = {
@@ -46,6 +47,19 @@ const customStorage = {
   },
 };
 
+// Track the current storage key so we can change it per user
+let currentStorageName = 'vendor-wishlist-storage';
+
+const jsonStorage = createJSONStorage(() => customStorage);
+
+// Wrap storage to use the dynamic key
+const userScopedStorage = {
+  ...jsonStorage,
+  getItem: (name: string) => jsonStorage.getItem!(currentStorageName),
+  setItem: (name: string, value: any) => jsonStorage.setItem!(currentStorageName, value),
+  removeItem: (name: string) => jsonStorage.removeItem!(currentStorageName),
+};
+
 export const useWishlistStore = create<WishlistState>()(
   persist(
     (set, get) => ({
@@ -68,10 +82,21 @@ export const useWishlistStore = create<WishlistState>()(
       clearWishlist: () => set({ items: [] }),
       
       hasItem: (id) => get().items.some((i) => i.id === id),
+
+      _switchUser: (userId: string | null) => {
+        // Update the storage key to be user-scoped
+        currentStorageName = userId
+          ? `vendor-wishlist-storage-${userId}`
+          : 'vendor-wishlist-storage-guest';
+        // Clear in-memory state first
+        set({ items: [] });
+        // Rehydrate from the new user-scoped storage
+        useWishlistStore.persist.rehydrate();
+      },
     }),
     {
-      name: 'vendor-wishlist-storage',
-      storage: createJSONStorage(() => customStorage),
+      name: 'vendor-wishlist-storage', // default name; overridden dynamically via userScopedStorage
+      storage: userScopedStorage,
     }
   )
 );
