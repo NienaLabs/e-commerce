@@ -11,7 +11,6 @@ export default function TabLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const totalItems = useCartStore((state) => state.getTotalItems());
-
   return (
     <View className="flex-1">
       {isDesktop && <WebHeader />}

@@ -16,6 +16,7 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   interpolate,
+  interpolateColor,
   Extrapolation,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,10 +31,12 @@ import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
-import { listProducts, mapProductToCard, Product, getGroupedProducts } from '../../api/products';
+import { listProducts, mapProductToCard, Product, getGroupedProducts, getHeroBanners } from '../../api/products';
 import { getRecommendations, RecommendationResponse } from '../../api/recommendations';
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationStore } from '../../store/notificationStore';
+import HeroBanner from '@/components/HeroBanner';
+import { useSidebar } from '../../context/SidebarContext';
 
 async function reverseGeocodeCity(lat: number, lng: number): Promise<string> {
   try {
@@ -80,6 +83,7 @@ type DropdownKey = 'Sort' | 'Offers' | 'Ratings' | 'Brand' | null;
 export default function Home() {
   const { colors } = useTheme();
   const { token, user } = useAuth();
+  const { toggle } = useSidebar();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
@@ -110,11 +114,43 @@ export default function Home() {
     const shadowOpacity = interpolate(
       scrollY.value,
       [0, 80],
-      [colors.isDark ? 0.3 : 0.05, colors.isDark ? 0.6 : 0.15],
+      [0, colors.isDark ? 0.6 : 0.15],
       Extrapolation.CLAMP
     );
-    const elevation = interpolate(scrollY.value, [0, 80], [4, 8], Extrapolation.CLAMP);
-    return { shadowOpacity, elevation };
+    const elevation = interpolate(scrollY.value, [0, 80], [0, 8], Extrapolation.CLAMP);
+    const backgroundColor = interpolateColor(
+      scrollY.value,
+      [40, 80],
+      ['transparent', colors.surface]
+    );
+    return { shadowOpacity, elevation, backgroundColor };
+  });
+
+  const searchBarStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      scrollY.value,
+      [40, 80],
+      [
+        colors.isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)', 
+        colors.isDark ? 'rgba(255,255,255,0.1)' : colors.surfaceSoft || '#f3f4f6'
+      ]
+    );
+
+    const borderColor = interpolateColor(
+      scrollY.value,
+      [40, 80],
+      [
+        colors.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.8)',
+        colors.isDark ? 'rgba(255,255,255,0.2)' : colors.surfaceMuted || '#e5e7eb'
+      ]
+    );
+
+    return { 
+      backgroundColor, 
+      borderColor, 
+      borderWidth: 1.5,
+      borderRadius: 26,
+    };
   });
 
   // Fetch real products from API
@@ -142,6 +178,12 @@ export default function Home() {
   const { data: flashSales = [], isLoading: flashSalesLoading } = useQuery({
     queryKey: ['products', 'flash-sales'],
     queryFn: () => listProducts({ limit: 10, has_discount: true }),
+  });
+
+  // Fetch Hero Banners from API
+  const { data: heroBanners = [], isLoading: heroBannersLoading } = useQuery({
+    queryKey: ['heroBanners'],
+    queryFn: () => getHeroBanners(),
   });
 
   // Build a product lookup map for hydrating recommendations
@@ -215,55 +257,7 @@ export default function Home() {
       .filter(Boolean) as any[];
   }, [recommendations, productMap]);
 
-  // Flash Sale Carousel state and ref
-  const scrollRef = React.useRef<ScrollView>(null);
-  const [carouselIndex, setCarouselIndex] = useState(0);
-  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
 
-  const fallbackImages = [
-    "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1596462502278-27bf85033e5a?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800",
-  ];
-
-  const flashSaleItems = useMemo(() => {
-    if (flashSalesLoading) return [];
-    if (flashSales.length > 0) {
-      return flashSales.map((p, i) => ({
-        id: p.id,
-        heading: p.name,
-        subtext: p.discount_price ? `Now $${p.discount_price.toFixed(2)}` : 'On Sale',
-        imageUrl: (p.images?.find(img => img.is_primary) ?? p.images?.[0])?.image_url || fallbackImages[i % fallbackImages.length],
-        badge: 'FLASH SALE',
-        ctaLabel: 'Shop Now',
-        product: p,
-      }));
-    }
-    // Fallback if no flash sales from backend yet
-    return fallbackImages.map((url, i) => ({
-      id: `fallback-${i}`,
-      heading: 'Flash Sale',
-      subtext: 'Up to 50% off',
-      imageUrl: url,
-      badge: 'HOT DEAL',
-      ctaLabel: 'Shop Now',
-      product: undefined,
-    }));
-  }, [flashSales, flashSalesLoading]);
-
-  // Auto-scroll effect
-  useEffect(() => {
-    if (!isAutoScrolling || flashSaleItems.length === 0) return;
-    const interval = setInterval(() => {
-      setCarouselIndex((prevIndex) => {
-        const nextIndex = (prevIndex + 1) % flashSaleItems.length;
-        scrollRef.current?.scrollTo({ x: nextIndex * 316, animated: true }); // 300 width + 16 gap
-        return nextIndex;
-      });
-    }, 3500);
-    return () => clearInterval(interval);
-  }, [isAutoScrolling, flashSaleItems.length]);
 
   const mappedProducts = products.map(mapProductToCard);
   const filteredProducts = selectedCategory
@@ -403,7 +397,6 @@ export default function Home() {
         paddingTop: 16,
         paddingBottom: 24,
         paddingHorizontal: 24,
-        backgroundColor: colors.surface,
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
         shadowColor: '#000',
@@ -416,17 +409,28 @@ export default function Home() {
           {/* Mobile Header */}
           {!isDesktop && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                  <Ionicons name="location" size={20} color={colors.ink} />
-                </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Pressable
+                  onPress={toggle}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}
+                >
+                  <Ionicons name="menu" size={24} color="#fff" />
+                </Pressable>
                 <Pressable onPress={() => setShowLocationSearch(true)} style={{ flex: 1, marginRight: 16 }}>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 2 }}>Delivering to</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.9)', marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>Delivering to</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginRight: 4, flexShrink: 1 }} numberOfLines={1}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#fff', marginRight: 4, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
                       {locationName.length > 20 ? locationName.substring(0, 20) + '...' : locationName}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.ink} />
+                    <Ionicons name="chevron-down" size={16} color="#fff" />
                   </View>
                 </Pressable>
               </View>
@@ -434,12 +438,12 @@ export default function Home() {
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Pressable
                   onPress={() => router.push('/notifications')}
-                  style={{ marginRight: 16, position: 'relative' }}
+                  style={{ marginRight: 16, position: 'relative', width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Ionicons name="notifications-outline" size={24} color={colors.ink} />
+                  <Ionicons name="notifications-outline" size={22} color="#fff" />
                   {/* We need to import useNotificationStore at the top of the file to use it here. Let's do that in a separate edit. For now just place the code. */}
                   {unreadCount > 0 && (
-                    <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.surface }}>
+                    <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#fff' }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#fff' }}>
                         {unreadCount}
                       </Text>
@@ -450,9 +454,9 @@ export default function Home() {
                 <Pressable
                   style={{
                     width: 42, height: 42, borderRadius: 21,
-                    backgroundColor: colors.surfaceSoft,
+                    backgroundColor: 'rgba(0,0,0,0.3)',
                     alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1, borderColor: colors.surfaceMuted,
+                    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
                     overflow: 'hidden',
                   }}
                   onPress={() => router.push('/profile')}
@@ -460,7 +464,7 @@ export default function Home() {
                   {user?.image ? (
                     <Image source={{ uri: user.image }} style={{ width: '100%', height: '100%' }} />
                   ) : (
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' }}>
                       {user?.name ? `${user.name.charAt(0)}${user.name.charAt(user.name.length - 1)}`.toUpperCase() : 'U'}
                     </Text>
                   )}
@@ -473,13 +477,13 @@ export default function Home() {
           {isDesktop && (
             <View style={{ paddingBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
               <Pressable onPress={() => setShowLocationSearch(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
-                  <Ionicons name="location" size={16} color={colors.ink} />
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}>
+                  <Ionicons name="location" size={16} color="#fff" />
                 </View>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted, marginRight: 4 }}>
-                  Deliver to: <Text style={{ color: colors.ink, fontFamily: 'Inter_700Bold' }}>{locationName}</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: 'rgba(255,255,255,0.9)', marginRight: 4, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
+                  Deliver to: <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', textShadowRadius: 3 }}>{locationName}</Text>
                 </Text>
-                <Ionicons name="chevron-down" size={14} color={colors.ink} />
+                <Ionicons name="chevron-down" size={14} color="#fff" />
               </Pressable>
             </View>
           )}
@@ -487,24 +491,25 @@ export default function Home() {
         </Animated.View>
 
         {/* Search Bar */}
-        <Pressable
-            onPress={() => router.push('/search')}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: colors.surfaceSoft,
-              borderWidth: 1.5,
-              borderColor: colors.surfaceMuted,
-              height: 52,
-              borderRadius: 26,
-              paddingHorizontal: 18,
-            }}
-          >
-            <Ionicons name="search" size={20} color={colors.primary} />
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkGhost, marginLeft: 10, flex: 1 }}>
-              Search products, brands...
-            </Text>
-          </Pressable>
+        <Animated.View style={[{
+          marginTop: isDesktop ? 0 : 0, // ensure margin is preserved
+          ...(Platform.OS === 'web' ? { backdropFilter: 'blur(10px)' } as any : {}),
+        }, searchBarStyle]}>
+          <Pressable
+              onPress={() => router.push('/search')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                height: 52,
+                paddingHorizontal: 18,
+              }}
+            >
+              <Ionicons name="search" size={20} color={colors.isDark ? '#fff' : colors.ink} />
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.isDark ? 'rgba(255,255,255,0.7)' : colors.inkMuted, marginLeft: 10, flex: 1 }}>
+                Search products, brands...
+              </Text>
+            </Pressable>
+        </Animated.View>
       </Animated.View>
 
       <Animated.ScrollView
@@ -513,77 +518,18 @@ export default function Home() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ 
-          paddingTop: isDesktop ? 144 : 166, 
+          paddingTop: 0, 
           paddingBottom: Math.max(120, insets.bottom + 120) 
         }}
       >
 
-        {/* ─── Flash Sales Carousel (image-only, auto-scrolling) ─── */}
-        {flashSalesLoading ? (
-          <View style={{ height: 200, justifyContent: 'center', alignItems: 'center', marginTop: 24 }}>
+        {/* ─── Hero Banner ─── */}
+        {heroBannersLoading ? (
+          <View style={{ height: 350, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : (
-          <View style={{ paddingTop: 24, paddingBottom: 8 }}>
-            {/* Carousel + Dots wrapper */}
-            <View>
-              <ScrollView
-                ref={scrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingLeft: 24, paddingRight: 24, gap: 16 }}
-                onScrollBeginDrag={() => setIsAutoScrolling(false)}
-                onScrollEndDrag={() => setIsAutoScrolling(true)}
-                scrollEventThrottle={16}
-                onScroll={(e) => {
-                  const offsetX = e.nativeEvent.contentOffset.x;
-                  const idx = Math.round(offsetX / 316);
-                  setCarouselIndex(Math.max(0, Math.min(idx, flashSaleItems.length - 1)));
-                }}
-              >
-                {flashSaleItems.map((item) => (
-                  <PromoCard
-                    key={item.id}
-                    imageUrl={item.imageUrl}
-                    onPress={() => item.product ? router.push(`/product/${item.product.id}` as any) : undefined}
-                  />
-                ))}
-              </ScrollView>
-
-              {/* Dot indicators — only shown when cards overflow the screen */}
-              {flashSaleItems.length > 1 && (flashSaleItems.length * 316 + 48) > width && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    bottom: 14,
-                    left: 0,
-                    right: 0,
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: 6,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {flashSaleItems.map((_, i) => (
-                    <View
-                      key={i}
-                      style={{
-                        width: carouselIndex === i ? 20 : 6,
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: carouselIndex === i ? '#ffffff' : 'rgba(255,255,255,0.45)',
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.4,
-                        shadowRadius: 2,
-                      }}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
+          <HeroBanner images={heroBanners.length > 0 ? heroBanners.map((b: any) => b.image_url) : undefined} height={350} />
         )}
 
         {/* ─── Categories ─── */}

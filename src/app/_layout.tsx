@@ -1,4 +1,6 @@
 import { Stack } from "expo-router";
+import { SidebarProvider } from '../context/SidebarContext';
+import { Sidebar } from '../components/Sidebar';
 import "../../global.css";
 import { useFonts } from 'expo-font';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -64,11 +66,14 @@ function NotificationManager() {
           <ToastProvider>
             <EventTracker />
             <NotificationManager />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(tabs)" />
-            </Stack>
+            <SidebarProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(tabs)" />
+              </Stack>
+              <Sidebar />
+            </SidebarProvider>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>

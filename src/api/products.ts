@@ -7,6 +7,17 @@ const BASE_URL =
 
 // ── Types ────────────────────────────────────
 
+export interface HeroBanner {
+  id: string;
+  title?: string;
+  subtitle?: string;
+  image_url: string;
+  link_url?: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface ProductImage {
   id: string;
   image_url: string;  // matches backend field name
@@ -101,6 +112,12 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Pro
 
   const res = await fetch(`${BASE_URL}/products/?${query.toString()}`);
   return handleResponse<Product[]>(res);
+}
+
+/** GET /products/hero-banners — get active hero banners */
+export async function getHeroBanners(): Promise<HeroBanner[]> {
+  const res = await fetch(`${BASE_URL}/products/hero-banners`);
+  return handleResponse<HeroBanner[]>(res);
 }
 
 export interface CategoryGroupedProducts {

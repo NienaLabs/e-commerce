@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../context/AuthContext';
 import { useNotificationStore } from '../store/notificationStore';
+import { useSidebar } from '../context/SidebarContext';
 
 export const WebHeader = () => {
   const { colors } = useTheme();
@@ -14,6 +15,7 @@ export const WebHeader = () => {
   const totalItems = useCartStore((state) => state.getTotalItems());
   const unreadCount = useNotificationStore((state) => state.getUnreadCount());
   const { user } = useAuth();
+  const { toggle } = useSidebar();
 
   if (!isDesktop) return null;
 
@@ -39,11 +41,16 @@ export const WebHeader = () => {
       shadowOpacity: colors.isDark ? 0.3 : 0.08,
       shadowRadius: 8,
     }}>
-      {/* Brand Logo */}
-      <Pressable onPress={() => handleNav('/')} style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Ionicons name="cube" size={32} color={colors.primary} />
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink, marginLeft: 8 }}>Electric</Text>
-      </Pressable>
+      {/* Brand Logo with Hamburger */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <Pressable onPress={toggle} style={{ padding: 4, cursor: 'pointer' } as any}>
+          <Ionicons name="menu" size={28} color={colors.ink} />
+        </Pressable>
+        <Pressable onPress={() => handleNav('/')} style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="cube" size={32} color={colors.primary} />
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink, marginLeft: 8 }}>Electric</Text>
+        </Pressable>
+      </View>
 
       {/* Navigation Links */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 32 }}>
