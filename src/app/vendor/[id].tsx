@@ -14,10 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
 import { useTheme } from '../../theme/ThemeContext';
-import { useQuery } from '@tanstack/react-query';
-import { getVendor, getVendorProducts } from '../../api/vendors';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getVendor, getVendorProducts, getVendorFollowStatus, toggleVendorFollow } from '../../api/vendors';
 import { mapProductToCard } from '../../api/products';
-import { isFollowing, toggleFollow } from '../../api/localFollows';
+import { useAuth } from '../../context/AuthContext';
 
 const FALLBACK_BANNER = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=1200';
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200';
@@ -33,27 +33,10 @@ export default function VendorStorefront() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vendorId = Array.isArray(id) ? id[0] : id as string;
-  const [following, setFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-
-  // Load persisted follow state
-  useEffect(() => {
-    if (vendorId) {
-      isFollowing(vendorId).then(setFollowing);
-    }
-  }, [vendorId]);
-
-  const handleToggleFollow = async () => {
-    setFollowLoading(true);
-    try {
-      const newState = await toggleFollow(vendorId);
-      setFollowing(newState);
-    } finally {
-      setFollowLoading(false);
-    }
-  };
 
   const formatNumber = (n: number) =>
     n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -62,6 +45,32 @@ export default function VendorStorefront() {
     queryKey: ['vendor', vendorId],
     queryFn: () => getVendor(vendorId),
     enabled: !!vendorId,
+  });
+
+  const { data: followStatus, isLoading: followLoading } = useQuery({
+    queryKey: ['vendor-follow-status', vendorId],
+    queryFn: () => getVendorFollowStatus(token!, vendorId),
+    enabled: !!vendorId && !!token,
+  });
+
+  const following = followStatus?.following ?? false;
+
+  const followMutation = useMutation({
+    mutationFn: () => toggleVendorFollow(token!, vendorId),
+    onMutate: async () => {
+      // Optimistic update
+      await queryClient.cancelQueries({ queryKey: ['vendor-follow-status', vendorId] });
+      const prev = queryClient.getQueryData<{ following: boolean }>(['vendor-follow-status', vendorId]);
+      queryClient.setQueryData(['vendor-follow-status', vendorId], { following: !following });
+      return { prev };
+    },
+    onError: (_err, _vars, context: any) => {
+      queryClient.setQueryData(['vendor-follow-status', vendorId], context.prev);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-follow-status', vendorId] });
+      queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
+    },
   });
 
   const { data: rawProducts = [], isLoading: productsLoading } = useQuery({
@@ -100,6 +109,8 @@ export default function VendorStorefront() {
   }
 
   const joinedYear = new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  // Optimistic follower count adjustment
+  const displayFollowers = vendor.followers + (following ? 0 : 0); // backend already reflects the real count
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -187,8 +198,8 @@ export default function VendorStorefront() {
 
               {/* Follow Button */}
               <Pressable
-                onPress={handleToggleFollow}
-                disabled={followLoading}
+                onPress={() => followMutation.mutate()}
+                disabled={followLoading || followMutation.isPending}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -198,7 +209,7 @@ export default function VendorStorefront() {
                   backgroundColor: following ? colors.surfaceSoft : colors.ink,
                   borderWidth: following ? 1.5 : 0,
                   borderColor: colors.surfaceMuted,
-                  opacity: pressed || followLoading ? 0.7 : 1,
+                  opacity: pressed || followLoading || followMutation.isPending ? 0.7 : 1,
                 })}
               >
                 <Ionicons
@@ -253,11 +264,7 @@ export default function VendorStorefront() {
           }}>
             <StatBox value={String(vendor.products)} label="Products" colors={colors} />
             <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
-            <StatBox value={formatNumber(vendor.followers + (following ? 1 : 0))} label="Followers" colors={colors} />
-            <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
-            <StatBox value={vendor.avg_rating.toFixed(1)} label="Rating" colors={colors} />
-            <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
-            <StatBox value={formatNumber(vendor.reviews)} label="Reviews" colors={colors} />
+            <StatBox value={formatNumber(vendor.followers)} label="Followers" colors={colors} />
           </View>
 
           {/* Joined date */}

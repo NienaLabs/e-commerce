@@ -3,18 +3,20 @@
 // ─────────────────────────────────────────────
 
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1';
 
 // ── Types ────────────────────────────────────
 
 export interface OrderItem {
   id: string;
+  order_id: string;
   product_id: string;
   vendor_id: string;
   quantity: number;
   unit_price: number;
   discount_price?: number | null;
   color_chosen?: string | null;
+  product_name?: string | null;
 }
 
 export interface Order {
@@ -73,4 +75,23 @@ export async function getMyOrder(token: string, orderId: string): Promise<Order>
     headers: { Authorization: `Bearer ${token}` },
   });
   return handleResponse<Order>(res);
+}
+
+/** DELETE /orders/me/{order_id} — permanently delete a completed order */
+export async function deleteMyOrder(token: string, orderId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/orders/me/${orderId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 204) {
+    let detail: any;
+    try {
+      detail = await res.json();
+    } catch {
+      detail = { message: res.statusText };
+    }
+    throw new Error(
+      detail?.message ?? detail?.detail ?? `Request failed (${res.status})`
+    );
+  }
 }

@@ -33,6 +33,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { listProducts, mapProductToCard, Product, getGroupedProducts, getHeroBanners } from '../../api/products';
 import { getRecommendations, RecommendationResponse } from '../../api/recommendations';
+import { listCategories } from '../../api/categories';
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationStore } from '../../store/notificationStore';
 import HeroBanner from '@/components/HeroBanner';
@@ -131,7 +132,7 @@ export default function Home() {
       scrollY.value,
       [40, 80],
       [
-        colors.isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)', 
+        colors.isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
         colors.isDark ? 'rgba(255,255,255,0.1)' : colors.surfaceSoft || '#f3f4f6'
       ]
     );
@@ -145,9 +146,9 @@ export default function Home() {
       ]
     );
 
-    return { 
-      backgroundColor, 
-      borderColor, 
+    return {
+      backgroundColor,
+      borderColor,
       borderWidth: 1.5,
       borderRadius: 26,
     };
@@ -161,8 +162,8 @@ export default function Home() {
 
   // Fetch grouped products for category shelves
   const { data: groupedCategories = [], isLoading: groupedLoading } = useQuery({
-    queryKey: ['groupedProducts'],
-    queryFn: () => getGroupedProducts(15, 5),
+    queryKey: ['groupedProducts', token],
+    queryFn: () => getGroupedProducts(15, 5, token),
   });
 
   // Fetch recommendation shelves (only if authenticated)
@@ -173,6 +174,38 @@ export default function Home() {
     retry: 1,
     staleTime: 5 * 60 * 1000, // Cache for 5 mins
   });
+
+  // Fetch real categories to match user preferences
+  const { data: dbCategories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => listCategories(0, 50),
+  });
+
+  const displayCategories = useMemo(() => {
+    if (dbCategories.length === 0) return CATEGORIES;
+
+    const mapped = dbCategories.map(c => {
+      let img = require('@/assets/3d icons/3d-house.png');
+      const s = c.slug.toLowerCase();
+      if (s.includes('electronic')) img = require('@/assets/3d icons/3d-headphones.png');
+      else if (s.includes('fashion') || s.includes('cloth')) img = require('@/assets/3d icons/3d-clothes.png');
+      else if (s.includes('home')) img = require('@/assets/3d icons/3d-house.png');
+      else if (s.includes('beaut') || s.includes('accessor')) img = require('@/assets/3d icons/3d-watch.png');
+      else if (s.includes('sport')) img = require('@/assets/3d icons/3d-sports.png');
+      else if (s.includes('food')) img = require('@/assets/3d icons/3d-food.png');
+      else if (s.includes('gam')) img = require('@/assets/3d icons/3d-headphones.png');
+      else if (s.includes('book')) img = require('@/assets/3d icons/3d-house.png');
+
+      return { id: c.id, label: c.name, image: img };
+    });
+
+    if (user?.category_interest_ids && user.category_interest_ids.length > 0) {
+      const preferred = mapped.filter(c => user.category_interest_ids!.includes(c.id));
+      const others = mapped.filter(c => !user.category_interest_ids!.includes(c.id));
+      return [...preferred, ...others].slice(0, 8);
+    }
+    return mapped.slice(0, 8);
+  }, [dbCategories, user?.category_interest_ids]);
 
   // Fetch Flash Sales from API
   const { data: flashSales = [], isLoading: flashSalesLoading } = useQuery({
@@ -261,7 +294,7 @@ export default function Home() {
 
   const mappedProducts = products.map(mapProductToCard);
   const filteredProducts = selectedCategory
-    ? mappedProducts.filter((p) => (p as any).category === selectedCategory)
+    ? mappedProducts.filter((p) => (p as any).categoryId === selectedCategory)
     : mappedProducts;
 
   useEffect(() => {
@@ -387,7 +420,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      
+
       {/* ─── Header: Location + Search (Fixed & Animated) ─── */}
       <Animated.View style={[{
         position: 'absolute',
@@ -404,7 +437,7 @@ export default function Home() {
         shadowRadius: 16,
         zIndex: 100,
       }, headerStyle]}>
-        
+
         <Animated.View style={[{ marginHorizontal: -24, paddingHorizontal: 24 }, headerTopRowStyle]}>
           {/* Mobile Header */}
           {!isDesktop && (
@@ -439,6 +472,8 @@ export default function Home() {
                 <Pressable
                   onPress={() => router.push('/notifications')}
                   style={{ marginRight: 16, position: 'relative', width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' }}
+                  onPress={() => router.push('/notifications' as any)}
+                  style={{ marginRight: 16, position: 'relative' }}
                 >
                   <Ionicons name="notifications-outline" size={22} color="#fff" />
                   {/* We need to import useNotificationStore at the top of the file to use it here. Let's do that in a separate edit. For now just place the code. */}
@@ -496,19 +531,19 @@ export default function Home() {
           ...(Platform.OS === 'web' ? { backdropFilter: 'blur(10px)' } as any : {}),
         }, searchBarStyle]}>
           <Pressable
-              onPress={() => router.push('/search')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                height: 52,
-                paddingHorizontal: 18,
-              }}
-            >
-              <Ionicons name="search" size={20} color={colors.isDark ? '#fff' : colors.ink} />
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.isDark ? 'rgba(255,255,255,0.7)' : colors.inkMuted, marginLeft: 10, flex: 1 }}>
-                Search products, brands...
-              </Text>
-            </Pressable>
+            onPress={() => router.push('/search')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              height: 52,
+              paddingHorizontal: 18,
+            }}
+          >
+            <Ionicons name="search" size={20} color={colors.isDark ? '#fff' : colors.ink} />
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.isDark ? 'rgba(255,255,255,0.7)' : colors.inkMuted, marginLeft: 10, flex: 1 }}>
+              Search products, brands...
+            </Text>
+          </Pressable>
         </Animated.View>
       </Animated.View>
 
@@ -517,9 +552,9 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
-        contentContainerStyle={{ 
-          paddingTop: 0, 
-          paddingBottom: Math.max(120, insets.bottom + 120) 
+        contentContainerStyle={{
+          paddingTop: 0,
+          paddingBottom: Math.max(120, insets.bottom + 120)
         }}
       >
 
@@ -551,7 +586,7 @@ export default function Home() {
               paddingBottom: 8,
               gap: 12,
             }}>
-              {CATEGORIES.map(cat => (
+              {displayCategories.map(cat => (
                 <CategoryCard
                   key={cat.id}
                   label={cat.label}
@@ -564,7 +599,7 @@ export default function Home() {
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 12, gap: 16, paddingBottom: 8 }}>
-              {CATEGORIES.map(cat => (
+              {displayCategories.map(cat => (
                 <CategoryCard
                   key={cat.id}
                   label={cat.label}
@@ -666,10 +701,10 @@ export default function Home() {
           <View style={{ paddingBottom: 24 }}>
             {groupedLoading ? (
               <View style={{ paddingVertical: 48, alignItems: 'center' }}>
-                 <ActivityIndicator size="large" color={colors.primary} />
-                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
-                   Loading categories...
-                 </Text>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
+                  Loading categories...
+                </Text>
               </View>
             ) : (
               groupedCategories.map((group) => (
@@ -701,7 +736,7 @@ export default function Home() {
           <View style={{ paddingTop: 24, paddingHorizontal: 24 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, letterSpacing: -0.3 }}>
-                {CATEGORIES.find(c => c.id === selectedCategory)?.label ?? 'Results'}
+                {displayCategories.find(c => c.id === selectedCategory)?.label ?? 'Results'}
               </Text>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkMuted }}>
                 {filteredProducts.length} items

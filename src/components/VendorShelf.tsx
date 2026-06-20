@@ -141,28 +141,6 @@ function VendorCard({ vendor, isFollowed, colors }: VendorCardProps) {
         {vendor.store_name}
       </Text>
 
-      {/* Rating pill */}
-      {vendor.avg_rating > 0 && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginTop: 3,
-          }}
-        >
-          <Ionicons name="star" size={10} color="#F59E0B" />
-          <Text
-            style={{
-              fontFamily: 'OpenSans_400Regular',
-              fontSize: 11,
-              color: colors.inkGhost,
-              marginLeft: 2,
-            }}
-          >
-            {vendor.avg_rating.toFixed(1)}
-          </Text>
-        </View>
-      )}
     </Pressable>
   );
 }

@@ -18,7 +18,6 @@ export interface Vendor {
   logo_url: string | null;
   banner_url: string | null;
   is_verified: boolean;
-  avg_rating: number;
   total_sales: number;
   latitude: number | null;
   longitude: number | null;
@@ -29,7 +28,6 @@ export interface Vendor {
 export interface VendorDetail extends Vendor {
   followers: number;
   products: number;
-  reviews: number;
 }
 
 export interface CreateVendorPayload {
@@ -51,6 +49,14 @@ export interface ListVendorsParams {
 
 // ── Helpers ──────────────────────────────────
 
+class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail: any;
@@ -59,12 +65,15 @@ async function handleResponse<T>(res: Response): Promise<T> {
     } catch {
       detail = { message: res.statusText };
     }
-    throw new Error(
-      detail?.message ?? detail?.detail ?? `Request failed (${res.status})`
+    throw new ApiError(
+      detail?.message ?? detail?.detail ?? `Request failed (${res.status})`,
+      res.status
     );
   }
   return res.json() as Promise<T>;
 }
+
+export { ApiError };
 
 // ── Vendor Endpoints ─────────────────────────
 
@@ -166,7 +175,7 @@ export interface VendorAnalytics {
 }
 
 export async function getVendorOrders(token: string, vendorId: string): Promise<VendorOrder[]> {
-  const res = await fetch(`${BASE_URL}/vendors/me/orders`, {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/orders`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return handleResponse<VendorOrder[]>(res);
@@ -186,4 +195,24 @@ export async function getVendorAnalytics(token: string, vendorId: string): Promi
     headers: { Authorization: `Bearer ${token}` },
   });
   return handleResponse<VendorAnalytics>(res);
+}
+
+/** GET /vendors/{vendor_id}/follow-status */
+export async function getVendorFollowStatus(token: string, vendorId: string): Promise<{ following: boolean }> {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/follow-status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<{ following: boolean }>(res);
+}
+
+/** POST /vendors/{vendor_id}/follow */
+export async function toggleVendorFollow(token: string, vendorId: string): Promise<{ following: boolean }> {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/follow`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return handleResponse<{ following: boolean }>(res);
 }

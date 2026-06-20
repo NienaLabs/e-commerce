@@ -85,6 +85,20 @@ export default function AddProductScreen() {
 
   const mutation = useMutation({
     mutationFn: () => {
+      if (isEditMode) {
+        // In edit mode, DO NOT send a new slug — slugs are immutable after creation
+        const payload: Record<string, any> = {
+          name: form.name,
+          description: form.description,
+          actual_price: parseFloat(form.price) || 0,
+          discount_price: form.salePrice ? parseFloat(form.salePrice) : null,
+          stock_quantity: parseInt(form.stock) || 0,
+          is_active: true,
+          category_id: selectedCategory || null,
+        };
+        return updateProduct(token!, id!, payload);
+      }
+      // Create mode — generate a fresh slug from the name
       const payload = {
         name: form.name,
         slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now(),
@@ -93,11 +107,8 @@ export default function AddProductScreen() {
         discount_price: form.salePrice ? parseFloat(form.salePrice) : undefined,
         stock_quantity: parseInt(form.stock) || 0,
         is_active: true,
-        category_id: selectedCategory,
+        category_id: selectedCategory || null,
       };
-      if (isEditMode) {
-        return updateProduct(token!, id!, payload);
-      }
       return createProduct(token!, payload);
     },
     onSuccess: () => {

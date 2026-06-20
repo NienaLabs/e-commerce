@@ -75,6 +75,7 @@ export default function CheckoutScreen() {
   const [orderRef, setOrderRef] = useState<string | null>(null);
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const [landmark, setLandmark] = useState('');
+  const [phone, setPhone] = useState('');
   const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number }>({ latitude: 5.6037, longitude: -0.1870 });
   const [mapReady, setMapReady] = useState(false);
 
@@ -166,6 +167,8 @@ export default function CheckoutScreen() {
           name: selectedAddress?.name ?? '',
           street: selectedAddress?.street ?? '',
           city: selectedAddress?.city ?? '',
+          phone: phone,
+          landmark: landmark,
         },
         notes: null,
         items: cartItems.map(item => ({
@@ -217,6 +220,7 @@ export default function CheckoutScreen() {
           city: selectedAddress?.city ?? '',
           lat: selectedAddress?.lat,
           lng: selectedAddress?.lng,
+          phone: phone,
           landmark: landmark,
         },
         vendor_id: cartItems[0]?.vendorId ?? '',
@@ -401,6 +405,22 @@ export default function CheckoutScreen() {
               </ScrollView>
             )}
 
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 8 }}>Phone Number</Text>
+              <TextInput
+                style={{
+                  backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 16, height: 48,
+                  borderWidth: 1, borderColor: colors.surfaceMuted, fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink,
+                  ...Platform.select({ web: { outlineStyle: 'none' }, default: {} }) as any
+                }}
+                placeholder="e.g. 055 123 4567"
+                placeholderTextColor={colors.inkGhost}
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+            </View>
+
             <View style={{ marginBottom: 32 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 8 }}>Landmark (Optional, but recommended)</Text>
               <TextInput
@@ -421,6 +441,7 @@ export default function CheckoutScreen() {
 
             <Button title="Continue to Payment" onPress={() => {
               if (!selectedAddressId) { showToast('Please select a shipping address.', 'warning'); return; }
+              if (!phone) { showToast('Please provide a phone number for delivery.', 'warning'); return; }
               setStep(2);
             }} />
           </View>

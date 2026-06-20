@@ -18,7 +18,6 @@ interface PaymentMethod {
 
 const MOCK_CARDS: PaymentMethod[] = [
   { id: '1', type: 'Visa', last4: '4242', expiry: '12/28', isDefault: true },
-  { id: '2', type: 'Mastercard', last4: '8888', expiry: '04/27', isDefault: false },
 ];
 
 export default function PaymentsScreen() {

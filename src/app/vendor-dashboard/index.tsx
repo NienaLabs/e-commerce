@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getVendorOrders } from '../../api/vendors';
 import { getVendorSummary } from '../../api/analytics';
 import { useAuth } from '../../context/AuthContext';
+import { useWsEvent } from '../../context/WebSocketContext';
 
 const QUICK_ACTIONS = [
   { icon: 'add-circle', label: 'Add Product', path: '/vendor-dashboard/add-product' },
@@ -19,7 +20,19 @@ export default function VendorDashboard() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-  const { token, vendor, isLoading: authLoading } = useAuth();
+  const { token, vendor, user, isLoading: authLoading } = useAuth();
+  const isAdmin = (user as any)?.role === 'admin';
+  const queryClient = useQueryClient();
+
+  // Real-time: refresh stats + orders when a new order comes in or status changes
+  useWsEvent('new_order', () => {
+    queryClient.invalidateQueries({ queryKey: ['vendor-orders', vendor?.id] });
+    queryClient.invalidateQueries({ queryKey: ['vendor-summary'] });
+  });
+  useWsEvent('order_status_changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['vendor-orders', vendor?.id] });
+    queryClient.invalidateQueries({ queryKey: ['vendor-summary'] });
+  });
 
   const { data: summary, isLoading: analyticsLoading } = useQuery({
     queryKey: ['vendor-summary'],
@@ -42,8 +55,8 @@ export default function VendorDashboard() {
     );
   }
 
-  // If no vendor profile exists, prompt them to become a vendor
-  if (!vendor) {
+  // Admins without a personal vendor store get a helpful overview instead of the "Become a Vendor" prompt
+  if (!vendor && !isAdmin) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
         <Ionicons name="storefront-outline" size={64} color={colors.inkGhost} />
@@ -64,8 +77,8 @@ export default function VendorDashboard() {
   const STATS = [
     { label: 'Total Revenue', value: `$${(summary?.total_revenue || 0).toFixed(2)}`, change: `$${(summary?.revenue_this_month || 0).toFixed(2)} this month`, up: true, icon: 'wallet' },
     { label: 'Active Orders', value: String(summary?.pending_orders || 0), change: 'Needs fulfillment', up: true, icon: 'cube' },
-    { label: 'Products', value: String(summary?.total_products || vendor.products), change: 'Active in store', up: true, icon: 'grid' },
-    { label: 'Followers', value: String(summary?.total_followers || vendor.followers), change: 'Total followers', up: true, icon: 'people' },
+    { label: 'Products', value: String(summary?.total_products ?? vendor?.products ?? 0), change: 'Active in store', up: true, icon: 'grid' },
+    { label: 'Followers', value: String(summary?.total_followers ?? vendor?.followers ?? 0), change: 'Total followers', up: true, icon: 'people' },
   ];
 
   return (
@@ -87,7 +100,9 @@ export default function VendorDashboard() {
         )}
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Dashboard</Text>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>{vendor.store_name}</Text>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>
+            {isAdmin && !vendor ? 'Platform Admin' : (vendor?.store_name ?? 'My Store')}
+          </Text>
         </View>
         <Pressable
           onPress={() => router.push('/vendor-dashboard/add-product' as any)}

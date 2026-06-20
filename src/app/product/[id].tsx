@@ -81,6 +81,8 @@ export default function ProductDetail() {
   }, [crossSellShelf, crossSellProductDetails]);
 
   const [selectedColor, setSelectedColor] = useState<string>('');
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  const REVIEWS_PAGE_SIZE = 5;
 
   const isWishlisted = useWishlistStore((state) => state.items.some(i => i.id === productId));
   const toggleWishlistItem = useWishlistStore((state) => state.toggleItem);
@@ -269,7 +271,14 @@ export default function ProductDetail() {
 
             {/* Customer Reviews */}
             <View style={{ marginBottom: 40 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 16 }}>Customer Reviews</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>Customer Reviews</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryGhost, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <Ionicons name="star" size={13} color={colors.primaryDim} style={{ marginRight: 4 }} />
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: colors.primaryDim }}>{displayRating.toFixed(1)}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.primaryDim, marginLeft: 4 }}>({totalReviewsCount})</Text>
+                </View>
+              </View>
               
               {localReviews.length === 0 ? (
                 <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, padding: 24, alignItems: 'center' }}>
@@ -281,8 +290,8 @@ export default function ProductDetail() {
                 </View>
               ) : (
                 <View style={{ gap: 16 }}>
-                  {localReviews.map(review => (
-                    <View key={review.id} style={{ backgroundColor: colors.surfaceSoft, padding: 16, borderRadius: 16 }}>
+                  {(showAllReviews ? localReviews : localReviews.slice(0, REVIEWS_PAGE_SIZE)).map(review => (
+                    <View key={review.id} style={{ backgroundColor: colors.surfaceSoft, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{review.userName}</Text>
                         <View style={{ flexDirection: 'row' }}>
@@ -306,6 +315,35 @@ export default function ProductDetail() {
                       <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, lineHeight: 22 }}>{review.body}</Text>
                     </View>
                   ))}
+
+                  {localReviews.length > REVIEWS_PAGE_SIZE && (
+                    <Pressable
+                      onPress={() => setShowAllReviews(prev => !prev)}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 14,
+                        borderRadius: 14,
+                        borderWidth: 1.5,
+                        borderColor: colors.surfaceMuted,
+                        backgroundColor: pressed ? colors.surfaceMuted : colors.surfaceSoft,
+                        gap: 8,
+                      })}
+                    >
+                      <Ionicons
+                        name={showAllReviews ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color={colors.inkSoft}
+                      />
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>
+                        {showAllReviews
+                          ? 'Show Less'
+                          : `Show All ${localReviews.length} Reviews`
+                        }
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
             </View>

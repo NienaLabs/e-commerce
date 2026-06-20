@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, Platform, useWindowDimensions,
   Modal, TextInput, ActivityIndicator
@@ -10,6 +10,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../context/AuthContext';
 import { getVendorOrderDetail } from '../../../api/vendors';
+import { useWsEvent } from '../../../context/WebSocketContext';
 
 const STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
 const STATUS_LABELS: Record<string, string> = {
@@ -34,11 +35,27 @@ export default function VendorOrderDetailScreen() {
 
   const orderId = Array.isArray(id) ? id[0] : id;
 
+  // Track in-flight status update requests so we can abort them on unmount
+  const abortControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => {
+      // Cancel any pending status PATCH when the screen is unmounted (e.g. go back)
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   const { data: order, isLoading } = useQuery({
     queryKey: ['vendor-order', orderId],
     queryFn: () => getVendorOrderDetail(token!, orderId!),
     enabled: !!token && !!orderId,
-    refetchInterval: 3000,
+  });
+
+  // Real-time status updates via WebSocket
+  useWsEvent('order_status_changed', (event) => {
+    if (event.order_id === orderId) {
+      queryClient.invalidateQueries({ queryKey: ['vendor-order', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
+    }
   });
 
   const [currentStatus, setCurrentStatus] = useState<string>('pending');
@@ -46,6 +63,8 @@ export default function VendorOrderDetailScreen() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [verifySuccess, setVerifySuccess] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
 
   useEffect(() => {
     if (order?.status) setCurrentStatus(order.status);
@@ -75,23 +94,46 @@ export default function VendorOrderDetailScreen() {
 
   const updateStatus = async (newStatus: string) => {
     if (newStatus === 'delivered') return; // Must go through PIN verification
-    setCurrentStatus(newStatus);
-    
-    // Call API to update order status
+    if (newStatus === currentStatus) return; // Already at this status — nothing to do
+    if (statusSaving) return;
+
+    const previousStatus = currentStatus;
+    setCurrentStatus(newStatus); // optimistic update
+    setStatusError(null);
+    setStatusSaving(true);
+
+    // Create a new AbortController for this request
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
-      await fetch(`${BASE_URL}/orders/${order.id}/status`, {
+      const res = await fetch(`${BASE_URL}/orders/${order.id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: newStatus }),
+        signal: controller.signal,
       });
-      queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.detail || `Failed to update status (${res.status})`);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
-    } catch (e) {
-      console.error(e);
+      // Use an exact prefix match so only vendor-orders queries are invalidated
+      queryClient.invalidateQueries({ queryKey: ['vendor-orders'], exact: false });
+    } catch (e: any) {
+      // Ignore abort errors — they happen on normal navigation
+      if (e?.name === 'AbortError') return;
+      // Revert the optimistic update on failure
+      setCurrentStatus(previousStatus);
+      setStatusError(e.message || 'Failed to update status. Please try again.');
+    } finally {
+      setStatusSaving(false);
     }
   };
 
@@ -221,51 +263,70 @@ export default function VendorOrderDetailScreen() {
             </View>
           )}
 
-          {/* Customer Info */}
+          {/* Order Summary / Dispatch Info */}
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 14 }}>Customer</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                <Ionicons name="person" size={22} color={colors.primaryDim} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{order.shipping_address?.name || 'Customer'}</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost }}>Contact via App</Text>
-              </View>
-              <Pressable style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="mail-outline" size={18} color={colors.ink} />
-              </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="document-text" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Order Summary / Dispatch Info</Text>
             </View>
-          </View>
 
-          {/* Order Items */}
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 14 }}>Order Items</Text>
-            {order.items.map((item: any) => (
-              <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>Product #{item.product_id.slice(0, 8).toUpperCase()}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>×{item.quantity} {item.color_chosen ? `· ${item.color_chosen}` : ''}</Text>
+            {/* Customer Details */}
+            <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkGhost, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Customer Details</Text>
+              
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="person-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{order.shipping_address?.name || 'Customer'}</Text>
+              </View>
+              
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="call-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink }}>
+                  {order.shipping_address?.phone || 'No phone number provided'}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: order.shipping_address?.landmark ? 8 : 0 }}>
+                <Ionicons name="location-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink, flex: 1, lineHeight: 22 }}>
+                  {order.shipping_address?.street}{'\n'}{order.shipping_address?.city}
+                </Text>
+              </View>
+
+              {order.shipping_address?.landmark ? (
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <Ionicons name="flag-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8, marginTop: 2 }} />
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, flex: 1 }}>
+                    Landmark: {order.shipping_address.landmark}
+                  </Text>
                 </View>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}</Text>
-              </View>
-            ))}
-            <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 12 }} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Total</Text>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primaryDim }}>${vendorTotal.toFixed(2)}</Text>
+              ) : null}
             </View>
-          </View>
 
-          {/* Delivery Address */}
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <Ionicons name="location" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Delivery Address</Text>
+            {/* Order Items */}
+            <View>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkGhost, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Items Ordered</Text>
+              {order.items.map((item: any) => (
+                <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>
+                      {item.product_name ?? `Product #${(item.product_id ?? '').slice(0, 8).toUpperCase()}`}
+                    </Text>
+                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 2 }}>
+                      Quantity: {item.quantity} {item.color_chosen ? `· Color: ${item.color_chosen}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>
+                    ${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+              <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 12 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Total Amount</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.primaryDim }}>${vendorTotal.toFixed(2)}</Text>
+              </View>
             </View>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, lineHeight: 22 }}>
-              {order.shipping_address?.street}{'\n'}{order.shipping_address?.city}
-            </Text>
           </View>
         </View>
 
@@ -274,19 +335,36 @@ export default function VendorOrderDetailScreen() {
           <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Update Order Status</Text>
             <View style={{ gap: 8 }}>
+              {/* Status error banner */}
+              {statusError && (
+                <View style={{
+                  backgroundColor: colors.errorGhost, borderRadius: 12,
+                  padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4,
+                }}>
+                  <Ionicons name="alert-circle" size={16} color={colors.error} />
+                  <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.error }}>
+                    {statusError}
+                  </Text>
+                  <Pressable onPress={() => setStatusError(null)}>
+                    <Ionicons name="close" size={16} color={colors.error} />
+                  </Pressable>
+                </View>
+              )}
               {STATUSES.filter(s => s !== 'delivered').map(status => {
                 const isCurrent = status === currentStatus;
                 const isPast = STATUSES.indexOf(status) < STATUSES.indexOf(currentStatus);
+                // Disable if: already at this status, order is delivered, or a save is in progress
+                const isDisabled = isCurrent || currentStatus === 'delivered' || statusSaving;
                 return (
                   <Pressable
                     key={status}
                     onPress={() => updateStatus(status)}
-                    disabled={currentStatus === 'delivered'}
+                    disabled={isDisabled}
                     style={{
                       flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14,
                       backgroundColor: isCurrent ? colors.ink : colors.surfaceSoft,
                       borderWidth: 1.5, borderColor: isCurrent ? colors.ink : colors.surfaceMuted,
-                      opacity: currentStatus === 'delivered' ? 0.5 : 1,
+                      opacity: isDisabled && !isCurrent ? 0.5 : 1,
                     }}
                   >
                     <View style={{
@@ -346,10 +424,16 @@ export default function VendorOrderDetailScreen() {
           )}
 
           <Pressable
-            onPress={() => router.canGoBack() ? router.back() : router.push('/vendor-dashboard/orders' as any)}
+            onPress={async () => {
+              // Wait for any in-flight status update to finish before navigating away
+              if (router.canGoBack()) router.back();
+              else router.push('/vendor-dashboard/orders' as any);
+            }}
             style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceMuted }}
           >
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>Save & Go Back</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>
+              {statusSaving ? 'Saving…' : 'Go Back'}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>

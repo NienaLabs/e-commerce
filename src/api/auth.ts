@@ -15,6 +15,9 @@ export interface UserResponse {
   emailVerified: boolean;
   image: string | null;
   onboarding_done: boolean;
+  role?: string | null;       // 'admin' | 'vendor' | 'user' — from backend
+  is_suspended?: boolean;
+  category_interest_ids?: string[];
   created_at: string;
   updated_at: string;
 }

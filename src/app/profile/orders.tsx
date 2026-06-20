@@ -1,14 +1,15 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, ScrollView, Pressable, Modal, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, Modal, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import { useTheme } from '../../theme/ThemeContext';
-import { useQuery } from '@tanstack/react-query';
-import { listMyOrders, Order } from '../../api/orders';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { listMyOrders, deleteMyOrder, Order } from '../../api/orders';
 import { getLocalOrders, LocalOrder } from '../../api/localOrders';
 import { AuthContext } from '../../context/AuthContext';
+import { useWsEvent } from '../../context/WebSocketContext';
 
 // Unified display type that covers both backend and local orders
 interface DisplayOrder {
@@ -22,7 +23,10 @@ interface DisplayOrder {
   items: { product_id: string; name?: string; quantity: number }[];
   created_at: string;
   isLocal: boolean;
+  canDelete: boolean;
 }
+
+const DELETABLE_STATUSES = new Set(['delivered', 'cancelled', 'refunded']);
 
 function toDisplayOrder(order: Order): DisplayOrder {
   return {
@@ -33,9 +37,14 @@ function toDisplayOrder(order: Order): DisplayOrder {
     shipping_fee: order.shipping_fee,
     total_amount: order.total_amount,
     delivery_pin: order.delivery_pin,
-    items: order.items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+    items: order.items.map(i => ({
+      product_id: i.product_id,
+      name: i.product_name ?? undefined,
+      quantity: i.quantity,
+    })),
     created_at: order.created_at,
     isLocal: false,
+    canDelete: DELETABLE_STATUSES.has(order.status),
   };
 }
 
@@ -50,6 +59,7 @@ function localToDisplayOrder(order: LocalOrder): DisplayOrder {
     items: order.items.map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity })),
     created_at: order.created_at,
     isLocal: true,
+    canDelete: DELETABLE_STATUSES.has(order.status),
   };
 }
 
@@ -142,7 +152,9 @@ function formatDate(iso: string) {
 export default function OrdersScreen() {
   const { colors } = useTheme();
   const { token } = useContext(AuthContext);
+  const queryClient = useQueryClient();
   const [activePinOrderId, setActivePinOrderId] = useState<string | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
   // Fetch backend orders (may be empty / fail silently)
   const { data: backendOrders = [], isLoading: backendLoading } = useQuery({
@@ -150,7 +162,11 @@ export default function OrdersScreen() {
     queryFn: () => listMyOrders(token!),
     enabled: !!token,
     retry: false,
-    refetchInterval: 3000,
+  });
+
+  // Real-time order status updates via WebSocket
+  useWsEvent('order_status_changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['my-orders'] });
   });
 
   // Fetch local orders (always available)
@@ -160,6 +176,51 @@ export default function OrdersScreen() {
   });
 
   const isLoading = backendLoading || localLoading;
+
+  // Delete mutation (backend orders only)
+  const deleteMutation = useMutation({
+    mutationFn: (orderId: string) => deleteMyOrder(token!, orderId),
+    onSuccess: () => {
+      setDeletingOrderId(null);
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+    },
+    onError: (err: any) => {
+      setDeletingOrderId(null);
+      if (Platform.OS === 'web') {
+        window.alert(`Could not delete order: ${err.message}`);
+      } else {
+        Alert.alert('Error', err.message ?? 'Could not delete order.');
+      }
+    },
+  });
+
+  const handleDelete = (order: DisplayOrder) => {
+    if (order.isLocal) {
+      // Local orders: just remove from AsyncStorage
+      import('../../api/localOrders').then(({ removeLocalOrder }) => {
+        removeLocalOrder(order.id).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['local-orders'] });
+        });
+      });
+      return;
+    }
+    const confirm = () => {
+      setDeletingOrderId(order.id);
+      deleteMutation.mutate(order.id);
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Remove order #${order.ref} from your history? This cannot be undone.`)) confirm();
+    } else {
+      Alert.alert(
+        'Remove Order',
+        `Remove order #${order.ref} from your history? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: confirm },
+        ],
+      );
+    }
+  };
 
   // Merge: live backend orders first, then any offline local orders that aren't on the backend
   const backendOrderIds = new Set(backendOrders.map((o: any) => o.id));
@@ -171,7 +232,7 @@ export default function OrdersScreen() {
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const STATUS_CFG: Record<string, { label: string; bg: string; text: string; icon: any }> = {
-    pending:    { label: 'Pending',    bg: colors.surfaceSoft,  text: colors.inkMuted,   icon: 'time-outline' },
+    pending:    { label: 'New Order',  bg: colors.surfaceSoft,  text: colors.inkMuted,   icon: 'time-outline' },
     confirmed:  { label: 'Confirmed',  bg: colors.infoGhost,    text: colors.info,       icon: 'checkmark-outline' },
     processing: { label: 'Processing', bg: colors.infoGhost,    text: colors.info,       icon: 'time-outline' },
     shipped:    { label: 'Shipped',    bg: colors.primaryGhost, text: colors.primaryDim, icon: 'car-outline' },
@@ -229,7 +290,7 @@ export default function OrdersScreen() {
           {allOrders.map(order => {
             const cfg = STATUS_CFG[order.status] ?? STATUS_CFG.confirmed;
             const needsPin = order.status === 'shipped' && !!order.delivery_pin;
-            const pin = order.delivery_pin ?? '----';
+            const isDeleting = deletingOrderId === order.id && deleteMutation.isPending;
 
             return (
               <View
@@ -242,6 +303,7 @@ export default function OrdersScreen() {
                   shadowOpacity: needsPin ? 0.1 : 0.04,
                   shadowRadius: needsPin ? 16 : 10, elevation: 3,
                   overflow: 'hidden',
+                  opacity: isDeleting ? 0.5 : 1,
                 }}
               >
                 {needsPin && <View style={{ height: 3, backgroundColor: colors.primary }} />}
@@ -255,18 +317,39 @@ export default function OrdersScreen() {
                         {formatDate(order.created_at)} · {order.items.length} item{order.items.length !== 1 ? 's' : ''}
                       </Text>
                     </View>
-                    <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <Ionicons name={cfg.icon} size={13} color={cfg.text} />
-                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name={cfg.icon} size={13} color={cfg.text} />
+                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
+                      </View>
+                      {/* Delete button — only for completed orders */}
+                      {order.canDelete && (
+                        <Pressable
+                          onPress={() => handleDelete(order)}
+                          disabled={isDeleting}
+                          style={({ pressed }) => ({
+                            width: 32, height: 32, borderRadius: 10,
+                            backgroundColor: pressed ? colors.errorGhost : colors.surfaceSoft,
+                            borderWidth: 1, borderColor: colors.errorGhost,
+                            alignItems: 'center', justifyContent: 'center',
+                          })}
+                          accessibilityLabel="Remove order from history"
+                        >
+                          {isDeleting
+                            ? <ActivityIndicator size="small" color={colors.error} />
+                            : <Ionicons name="trash-outline" size={15} color={colors.error} />
+                          }
+                        </Pressable>
+                      )}
                     </View>
                   </View>
 
-                  {/* Items list */}
+                  {/* Items list — show product name */}
                   {order.items.map((item, idx) => (
                     <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                       <Ionicons name="cube-outline" size={14} color={colors.inkGhost} style={{ marginRight: 6 }} />
                       <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1 }} numberOfLines={1}>
-                        {item.name ?? `Product ${item.product_id.slice(0, 8)}`} × {item.quantity}
+                        {item.name ?? `Product #${item.product_id.slice(0, 8).toUpperCase()}`} × {item.quantity}
                       </Text>
                     </View>
                   ))}
@@ -347,6 +430,7 @@ export default function OrdersScreen() {
               </View>
             );
           })}
+          <View style={{ height: 24 }} />
         </ScrollView>
       )}
 

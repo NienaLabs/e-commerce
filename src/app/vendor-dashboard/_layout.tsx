@@ -26,17 +26,19 @@ const SIDE_NAV_ITEMS = [
 
 export default function VendorDashboardLayout() {
   const { colors } = useTheme();
-  const { vendor } = useAuth();
+  const { vendor, user } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const pathname = usePathname();
+  const isAdmin = (user as any)?.role === 'admin';
 
   const isActive = (path: string) => {
     if (path === '/vendor-dashboard') return pathname === '/vendor-dashboard';
     return pathname.startsWith(path);
   };
 
-  if (vendor && vendor.is_verified === false) {
+  // Only gate verified check for non-admin vendor accounts
+  if (!isAdmin && vendor && vendor.is_verified === false) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
@@ -72,12 +74,16 @@ export default function VendorDashboardLayout() {
             onPress={() => router.push('/vendor/v1' as any)}
             style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}
           >
-            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Ionicons name="storefront" size={22} color={colors.primaryDim} />
+            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: isAdmin ? colors.warningGhost : colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name={isAdmin ? 'shield-checkmark' : 'storefront'} size={22} color={isAdmin ? colors.warning : colors.primaryDim} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }} numberOfLines={1}>{vendor?.store_name ?? 'My Store'}</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>Vendor Dashboard</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }} numberOfLines={1}>
+                {isAdmin && !vendor ? 'Admin View' : (vendor?.store_name ?? 'My Store')}
+              </Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>
+                {isAdmin ? 'Platform Admin' : 'Vendor Dashboard'}
+              </Text>
             </View>
           </Pressable>
 

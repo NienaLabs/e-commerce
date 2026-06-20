@@ -14,6 +14,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -51,9 +53,9 @@ async function storeRegisteredFcmToken(fcmToken: string): Promise<void> {
 export function useNotifications() {
   const { token, user } = useAuth();
   const addNotification = useNotificationStore((state) => state.addNotification);
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
-  const webMessageUnsubscribe = useRef<() => void>();
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+  const webMessageUnsubscribe = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -70,15 +72,22 @@ export function useNotifications() {
             console.warn('Firebase config missing on Web. Push notifications disabled.');
             return;
           }
-          const app = initializeApp(firebaseConfig);
-          const messaging = getMessaging(app);
 
-          // Request Web Permission
-          const permission = await Notification.requestPermission();
-          if (permission !== 'granted') {
-            console.log('Web push permission not granted.');
+          // Don't auto-prompt on web — browsers require a user gesture.
+          // If already denied, skip silently. If 'default' (never asked), skip too —
+          // the app should call Notification.requestPermission() in response to a tap.
+          if (typeof Notification === 'undefined') return;
+          if (Notification.permission === 'denied') return;
+          if (Notification.permission !== 'granted') {
+            // Not yet granted — skip for now, will work once the user grants it
+            // via a user gesture elsewhere in the app.
             return;
           }
+
+          // Permission is already granted — safe to proceed without prompting.
+          const { getApps, getApp } = await import('firebase/app');
+          const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+          const messaging = getMessaging(app);
 
           fcmToken = await getToken(messaging, {
             vapidKey: process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
@@ -147,7 +156,7 @@ export function useNotifications() {
         }
 
         // Only register with the backend if the token is new or has rotated.
-        if (fcmToken && isMounted) {
+        if (fcmToken && isMounted && token) {
           const storedToken = await getStoredFcmToken();
           if (storedToken === fcmToken) {
             console.log('FCM token unchanged — skipping backend registration.');
@@ -157,8 +166,12 @@ export function useNotifications() {
             await storeRegisteredFcmToken(fcmToken);
           }
         }
-      } catch (e) {
-        console.error('Error setting up notifications:', e);
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || e?.message?.includes('Registration failed')) {
+          console.warn('Web Push Notifications are not supported or properly configured:', e.message);
+        } else {
+          console.warn('Error setting up notifications:', e);
+        }
       }
     }
 
@@ -167,10 +180,10 @@ export function useNotifications() {
     return () => {
       isMounted = false;
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+        notificationListener.current.remove();
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
       }
       if (webMessageUnsubscribe.current) {
         webMessageUnsubscribe.current();

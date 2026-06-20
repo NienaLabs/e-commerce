@@ -414,9 +414,6 @@ export default function DiscoverScreen() {
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkSoft }}>Store</Text>
-                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>•</Text>
-                        <Ionicons name="star" size={11} color={colors.warning} />
-                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.inkSoft }}>{vendor.avg_rating.toFixed(1)}</Text>
                       </View>
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6 }}>

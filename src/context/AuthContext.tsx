@@ -1,14 +1,15 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { UserResponse, getMe } from '../api/auth';
-import { VendorDetail, getVendorMe } from '../api/vendors';
+import { VendorDetail, getVendorMe, ApiError } from '../api/vendors';
 import { router, useSegments } from 'expo-router';
 import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useEventStore } from '../store/eventStore';
 
 const TOKEN_KEY = 'vendor_app_token';
+const VENDOR_ACCOUNT_KEY = 'vendor_has_account';
 
 async function setToken(token: string) {
   if (Platform.OS === 'web') {
@@ -79,19 +80,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
   const [vendor, setVendor] = useState<VendorDetail | null>(null);
-  const [hasVendorAccount, setHasVendorAccount] = useState(false);
+
+  // Initialise hasVendorAccount from localStorage so that on a hard refresh the routing
+  // guard doesn't momentarily see hasVendorAccount=false and redirect to become-vendor.
+  const persistedHasVendor = Platform.OS === 'web'
+    ? (() => { try { return localStorage.getItem(VENDOR_ACCOUNT_KEY) === 'true'; } catch { return false; } })()
+    : false;
+  const [hasVendorAccount, setHasVendorAccount] = useState(persistedHasVendor);
+
+  // Helper that sets hasVendorAccount AND persists the value to localStorage
+  const setHasVendorAccountPersisted = (value: boolean) => {
+    setHasVendorAccount(value);
+    if (Platform.OS === 'web') {
+      try {
+        if (value) {
+          localStorage.setItem(VENDOR_ACCOUNT_KEY, 'true');
+        } else {
+          localStorage.removeItem(VENDOR_ACCOUNT_KEY);
+        }
+      } catch { }
+    }
+  };
+
+  // isLoading stays true until BOTH user AND vendor check are complete
   const [isLoading, setIsLoading] = useState(true);
+  // isVendorLoading tracks whether a vendor fetch is currently in-flight
+  const [isVendorLoading, setIsVendorLoading] = useState(false);
+  const [isSuspendedState, setIsSuspendedState] = useState(false);
+  const [pendingToast, setPendingToast] = useState<{ msg: string; type: ToastType } | null>(null);
+  const [toastFn, setToastFn] = useState<((m: string, t?: ToastType) => void) | null>(null);
   const [hasPromptedOnboarding, setHasPromptedOnboarding] = useState(false);
+  // Track in-flight vendor fetches so we can cancel stale ones
+  const vendorFetchId = useRef(0);
+  // isInitialLoad is true until the very first loadUser() cycle completes.
+  // The routing guard must never fire before this is false.
+  const isInitialLoad = useRef(true);
   const segments = useSegments();
 
   const fetchVendor = async (authToken: string) => {
+    // Increment fetch ID — if a newer fetch starts before this one finishes, discard this result
+    const fetchId = ++vendorFetchId.current;
+    setIsVendorLoading(true);
     try {
       const vendorData = await getVendorMe(authToken);
+      if (fetchId !== vendorFetchId.current) return; // stale, discard
       setVendor(vendorData);
-      setHasVendorAccount(true);
-    } catch (e) {
-      setVendor(null);
-      setHasVendorAccount(false);
+      setHasVendorAccountPersisted(true);
+    } catch (e: any) {
+      if (fetchId !== vendorFetchId.current) return; // stale, discard
+      // Only clear vendor status on a definitive 404 (user genuinely has no vendor profile).
+      // Network errors / 5xx / timeouts must NOT clear hasVendorAccount so a brief
+      // API hiccup doesn't eject the vendor from their own dashboard.
+      const isDefinitelyNoProfile =
+        (e as ApiError)?.status === 404 ||
+        (e?.message ?? '').toLowerCase().includes('vendor profile');
+      if (isDefinitelyNoProfile) {
+        setVendor(null);
+        setHasVendorAccountPersisted(false);
+      }
+      // Otherwise keep existing state — transient error, don't redirect
+    } finally {
+      if (fetchId === vendorFetchId.current) setIsVendorLoading(false);
     }
   };
 
@@ -122,12 +171,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           setTokenState(storedToken);
           setUser(userData);
+          // IMPORTANT: await vendor fetch before marking loading complete.
+          // This prevents the routing guard from seeing user=set, hasVendorAccount=false
+          // during the brief window between setUser() and fetchVendor() resolving.
           await fetchVendor(storedToken);
         }
       } catch (error) {
         console.error('Failed to load user:', error);
         await removeToken();
       } finally {
+        // Mark the initial load cycle as done, then let the routing guard run
+        isInitialLoad.current = false;
         setIsLoading(false);
       }
     }
@@ -135,7 +189,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isLoading) return;
+    // Never fire the routing guard until loadUser() has fully completed (including the
+    // vendor fetch). isInitialLoad.current prevents redirects on intermediate renders
+    // that happen while user state is being set but isLoading hasn't flipped yet.
+    if (isInitialLoad.current || isLoading || isVendorLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inVendorGroup = segments[0] === 'vendor-dashboard';
@@ -151,10 +208,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace('/(auth)/login');
     } else if (user) {
       if (!user.onboarding_done && !hasPromptedOnboarding && !isCurrentlyOnboarding) {
-        setHasPromptedOnboarding(true);
+        setTimeout(() => setHasPromptedOnboarding(true), 0);
         router.replace('/(auth)/onboarding' as any);
         return;
       }
+
+      const isAdmin = user.role === 'admin';
 
       if (inAuthGroup && !isCurrentlyOnboarding) {
         // Authenticated and in auth screens → redirect to appropriate home
@@ -163,15 +222,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           router.replace('/(tabs)');
         }
-      } else if (inVendorGroup && !hasVendorAccount) {
-        // User tries to access vendor-dashboard but has no vendor account
+      } else if (inVendorGroup && !hasVendorAccount && !isAdmin) {
+        // Non-admin user tries to access vendor-dashboard but has no vendor account.
+        // Only redirect if we are certain there is no vendor account (not just loading).
         router.replace('/become-vendor');
       } else if (isBecomingVendor && hasVendorAccount) {
         // User already has a vendor account, redirect to dashboard
         router.replace('/vendor-dashboard');
       }
     }
-  }, [user, segments, isLoading, hasVendorAccount, hasPromptedOnboarding]);
+  }, [user, segments, isLoading, isVendorLoading, hasVendorAccount, hasPromptedOnboarding]);
 
   const signIn = async (newToken: string, newUser: UserResponse) => {
     await setToken(newToken);
@@ -194,6 +254,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setVendor(null);
     setHasVendorAccount(false);
+    setHasVendorAccountPersisted(false);
+    setIsSuspendedState(false);
   };
 
   const updateUserName = async (name: string) => {
