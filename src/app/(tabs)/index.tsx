@@ -470,10 +470,8 @@ export default function Home() {
 
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Pressable
-                  onPress={() => router.push('/notifications')}
-                  style={{ marginRight: 16, position: 'relative', width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => router.push('/notifications' as any)}
-                  style={{ marginRight: 16, position: 'relative' }}
+                  style={{ marginRight: 16, position: 'relative', width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Ionicons name="notifications-outline" size={22} color="#fff" />
                   {/* We need to import useNotificationStore at the top of the file to use it here. Let's do that in a separate edit. For now just place the code. */}

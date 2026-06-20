@@ -107,8 +107,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // isVendorLoading tracks whether a vendor fetch is currently in-flight
   const [isVendorLoading, setIsVendorLoading] = useState(false);
   const [isSuspendedState, setIsSuspendedState] = useState(false);
-  const [pendingToast, setPendingToast] = useState<{ msg: string; type: ToastType } | null>(null);
-  const [toastFn, setToastFn] = useState<((m: string, t?: ToastType) => void) | null>(null);
   const [hasPromptedOnboarding, setHasPromptedOnboarding] = useState(false);
   // Track in-flight vendor fetches so we can cancel stale ones
   const vendorFetchId = useRef(0);
@@ -201,7 +199,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const isSuspendedScreen = segments[0] === 'suspended';
 
     if (isSuspendedScreen) return;
-    const isCurrentlyOnboarding = segments[0] === '(auth)' && (segments[1] as string) === 'onboarding';
 
     if (!user && !inAuthGroup) {
       // Not authenticated → go to login
