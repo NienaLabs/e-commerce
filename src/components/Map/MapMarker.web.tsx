@@ -23,7 +23,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
 }) => {
   const map = useMapContext();
   const markerRef = useRef<maplibregl.Marker | null>(null);
-  
+
   // Keep onPress in a ref so the click listener is stable (no re-add on every render)
   const onPressRef = useRef(onPress);
   useEffect(() => {
@@ -39,10 +39,11 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     div.style.outline = 'none';
     div.style.padding = '0';
     div.style.margin = '0';
-    div.style.webkitTapHighlightColor = 'transparent';
+    (div.style as any).webkitTapHighlightColor = 'transparent';
+    div.style.setProperty('-webkit-tap-highlight-color', 'transparent');
     containerRef.current = div;
   }
-  
+
   // Create the marker once when the map is ready
   useEffect(() => {
     if (!map || !containerRef.current) return;
@@ -85,8 +86,8 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
       markerRef.current?.remove();
       markerRef.current = null;
     };
-  // Only re-create when map or coordinate changes — not onPress (handled via ref)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only re-create when map or coordinate changes — not onPress (handled via ref)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, coordinate[0], coordinate[1]]);
 
   if (!containerRef.current) return null;

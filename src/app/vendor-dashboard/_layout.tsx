@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { icon: 'grid-outline' as const, activeIcon: 'grid' as const, label: 'Dashboard', path: '/vendor-dashboard' },
   { icon: 'cube-outline' as const, activeIcon: 'cube' as const, label: 'Products', path: '/vendor-dashboard/products' },
   { icon: 'receipt-outline' as const, activeIcon: 'receipt' as const, label: 'Orders', path: '/vendor-dashboard/orders' },
-  { icon: 'bar-chart-outline' as const, activeIcon: 'bar-chart' as const, label: 'Analytics', path: '/vendor-dashboard/analytics' },
+  { icon: 'headset-outline' as const, activeIcon: 'headset' as const, label: 'Support', path: '/vendor-dashboard/support' },
   { icon: 'settings-outline' as const, activeIcon: 'settings' as const, label: 'Settings', path: '/vendor-dashboard/store-settings' },
 ];
 
@@ -20,20 +20,42 @@ const SIDE_NAV_ITEMS = [
   { icon: 'receipt-outline' as const, activeIcon: 'receipt' as const, label: 'Orders', path: '/vendor-dashboard/orders' },
   { icon: 'bar-chart-outline' as const, activeIcon: 'bar-chart' as const, label: 'Analytics', path: '/vendor-dashboard/analytics' },
   { icon: 'wallet-outline' as const, activeIcon: 'wallet' as const, label: 'Payouts', path: '/vendor-dashboard/payouts' },
+  { icon: 'headset-outline' as const, activeIcon: 'headset' as const, label: 'Support', path: '/vendor-dashboard/support' },
   { icon: 'settings-outline' as const, activeIcon: 'settings' as const, label: 'Store Settings', path: '/vendor-dashboard/store-settings' },
 ];
 
 export default function VendorDashboardLayout() {
   const { colors } = useTheme();
-  const { vendor } = useAuth();
+  const { vendor, user } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const pathname = usePathname();
+  const isAdmin = (user as any)?.role === 'admin';
 
   const isActive = (path: string) => {
     if (path === '/vendor-dashboard') return pathname === '/vendor-dashboard';
     return pathname.startsWith(path);
   };
+
+  // Only gate verified check for non-admin vendor accounts
+  if (!isAdmin && vendor && vendor.is_verified === false) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.warningGhost, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+            <Ionicons name="time-outline" size={52} color={colors.warning} />
+          </View>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: colors.ink, marginBottom: 12, textAlign: 'center' }}>Verification Pending</Text>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.inkMuted, textAlign: 'center', lineHeight: 24, marginBottom: 40 }}>
+            Your store application is currently under review by our admin team. Please check back later.
+          </Text>
+          <Pressable onPress={() => router.replace('/(tabs)' as any)} style={{ padding: 16, backgroundColor: colors.primary, borderRadius: 12, alignItems: 'center', width: '100%', maxWidth: 300 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Back to Shopping</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surfaceSoft, flexDirection: isDesktop ? 'row' : 'column' }}>
@@ -52,12 +74,16 @@ export default function VendorDashboardLayout() {
             onPress={() => router.push('/vendor/v1' as any)}
             style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}
           >
-            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Ionicons name="storefront" size={22} color={colors.primaryDim} />
+            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: isAdmin ? colors.warningGhost : colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name={isAdmin ? 'shield-checkmark' : 'storefront'} size={22} color={isAdmin ? colors.warning : colors.primaryDim} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }} numberOfLines={1}>{vendor?.store_name ?? 'My Store'}</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>Vendor Dashboard</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }} numberOfLines={1}>
+                {isAdmin && !vendor ? 'Admin View' : (vendor?.store_name ?? 'My Store')}
+              </Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>
+                {isAdmin ? 'Platform Admin' : 'Vendor Dashboard'}
+              </Text>
             </View>
           </Pressable>
 

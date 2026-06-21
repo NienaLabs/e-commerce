@@ -8,7 +8,6 @@ import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createVendor } from '../api/vendors';
-import { useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
@@ -86,10 +85,8 @@ export default function BecomeVendorScreen() {
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { token, refreshVendor } = useAuth();
   const { showToast } = useToast();
-  const queryClient = useQueryClient();
   
   const [step, setStep] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [form, setForm] = useState({
@@ -138,27 +135,6 @@ export default function BecomeVendorScreen() {
     }
   };
 
-  if (submitted) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
-            <Ionicons name="checkmark-circle" size={52} color={colors.primaryDim} />
-          </View>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: colors.ink, marginBottom: 12, textAlign: 'center' }}>Application Submitted!</Text>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.inkMuted, textAlign: 'center', lineHeight: 24, marginBottom: 40 }}>
-            We've received your vendor application. Our team will review it and get back to you within 2–3 business days.
-          </Text>
-          <View style={{ width: '100%', gap: 12 }}>
-            <Button title="Go to Dashboard" onPress={() => router.replace('/vendor-dashboard' as any)} />
-            <Pressable onPress={() => router.replace('/(tabs)')} style={{ padding: 16, alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>Back to Shopping</Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -280,16 +256,15 @@ export default function BecomeVendorScreen() {
                       store_name: form.storeName,
                       store_slug: form.storeSlug,
                       bio: form.description,
-                      ...(form.logoUrl && { logo_url: form.logoUrl }),
-                      ...(form.bannerUrl && { banner_url: form.bannerUrl }),
+                      // Logo & banner upload temporarily disabled — AWS S3 coming soon
                       ...(form.latitude !== null && { latitude: form.latitude }),
                       ...(form.longitude !== null && { longitude: form.longitude }),
                     });
                     
+                    showToast('Vendor account created! Pending admin review.', 'success');
+                    // Refresh vendor in context THEN navigate — the layout will show the pending screen
                     await refreshVendor();
-                    await queryClient.invalidateQueries({ queryKey: ['vendor-me'] });
-                    showToast('Vendor account created successfully!', 'success');
-                    setSubmitted(true);
+                    router.replace('/vendor-dashboard' as any);
                   } else {
                     showToast('You must be logged in to register as a vendor.', 'error');
                   }

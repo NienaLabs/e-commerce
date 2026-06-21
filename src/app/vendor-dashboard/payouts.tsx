@@ -1,22 +1,29 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, Alert } from 'react-native';
+import React, { useContext } from 'react';
+import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { Button } from '../../components/Button';
+import { useQuery } from '@tanstack/react-query';
+import { AuthContext } from '../../context/AuthContext';
+import { getVendorSummary } from '../../api/analytics';
 
 const PAYOUT_HISTORY = [
   { id: 'PO-001', amount: 1840.00, date: 'May 25, 2026', method: 'Bank Transfer', status: 'completed' },
-  { id: 'PO-002', amount: 960.50, date: 'May 10, 2026', method: 'Bank Transfer', status: 'completed' },
-  { id: 'PO-003', amount: 2100.00, date: 'Apr 25, 2026', method: 'Mobile Money', status: 'completed' },
-  { id: 'PO-004', amount: 750.75, date: 'Apr 10, 2026', method: 'Bank Transfer', status: 'pending' },
 ];
 
 export default function VendorPayoutsScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { token } = useContext(AuthContext);
+
+  const { data: summary, isLoading } = useQuery({
+    queryKey: ['vendor-summary'],
+    queryFn: () => getVendorSummary(token!),
+    enabled: !!token,
+  });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -27,14 +34,21 @@ export default function VendorPayoutsScreen() {
         <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Earnings & Payouts</Text>
       </View>
 
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 20, maxWidth: isDesktop ? 720 : undefined, alignSelf: 'center', width: '100%' }}>
 
         {/* Balance Card */}
         <View style={{ backgroundColor: colors.ink, borderRadius: 24, padding: 28 }}>
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#ffffff70', marginBottom: 6 }}>Available Balance</Text>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 44, color: colors.primary, lineHeight: 52 }}>$2,340.00</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 44, color: colors.primary, lineHeight: 52 }}>
+            ${(summary?.total_revenue ?? 0).toFixed(2)}
+          </Text>
           <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: '#ffffff60', marginBottom: 24 }}>
-            Next auto-payout on Jun 10, 2026
+            Next auto-payout on the 1st of next month
           </Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Pressable
@@ -55,8 +69,8 @@ export default function VendorPayoutsScreen() {
         {/* Stats Row */}
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {[
-            { label: 'This Month', value: '$4,820', icon: 'trending-up', color: colors.success },
-            { label: 'Total Earned', value: '$21,400', icon: 'wallet', color: colors.primaryDim },
+            { label: 'This Month', value: `$${(summary?.revenue_this_month ?? 0).toFixed(2)}`, icon: 'trending-up', color: colors.success },
+            { label: 'Total Earned', value: `$${(summary?.total_revenue ?? 0).toFixed(2)}`, icon: 'wallet', color: colors.primaryDim },
             { label: 'Commission', value: '8%', icon: 'receipt', color: colors.warning },
           ].map(stat => (
             <View key={stat.label} style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.surfaceMuted, alignItems: 'center' }}>
@@ -108,6 +122,7 @@ export default function VendorPayoutsScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

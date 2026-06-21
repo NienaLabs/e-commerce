@@ -187,24 +187,6 @@ function VendorGridCard({ vendor, isFollowed, colors }: GridCardProps) {
         {/* Stats row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="star" size={11} color="#F59E0B" />
-            <Text
-              style={{
-                fontFamily: 'Inter_600SemiBold',
-                fontSize: 11,
-                color: colors.inkMuted,
-                marginLeft: 3,
-              }}
-            >
-              {vendor.avg_rating.toFixed(1)}
-            </Text>
-          </View>
-
-          <View
-            style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: colors.surfaceMuted }}
-          />
-
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="storefront-outline" size={11} color={colors.inkGhost} />
             <Text
               style={{
@@ -392,8 +374,7 @@ export default function AllVendorsScreen() {
               fontFamily: 'OpenSans_400Regular',
               fontSize: 14,
               color: colors.ink,
-              // @ts-ignore
-              outlineStyle: 'none',
+              ...({ outlineStyle: 'none' } as any),
             }}
           />
           {search.length > 0 && (

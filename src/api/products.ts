@@ -97,6 +97,7 @@ export function mapProductToCard(product: Product) {
     vendorName: product.vendor_name ?? undefined,
     vendorAvatar: product.vendor_logo_url ?? undefined,
     inStock: product.stock_quantity > 0,
+    categoryId: product.category_id,
   };
 }
 
@@ -127,12 +128,17 @@ export interface CategoryGroupedProducts {
 }
 
 /** GET /products/grouped-by-category — top categories with their top products */
-export async function getGroupedProducts(limit_per_category: number = 15, num_categories: number = 5): Promise<CategoryGroupedProducts[]> {
+export async function getGroupedProducts(limit_per_category: number = 15, num_categories: number = 5, token?: string | null): Promise<CategoryGroupedProducts[]> {
   const query = new URLSearchParams();
   query.set('limit_per_category', String(limit_per_category));
   query.set('num_categories', String(num_categories));
   
-  const res = await fetch(`${BASE_URL}/products/grouped-by-category?${query.toString()}`);
+  const headers: any = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${BASE_URL}/products/grouped-by-category?${query.toString()}`, { headers });
   return handleResponse<CategoryGroupedProducts[]>(res);
 }
 

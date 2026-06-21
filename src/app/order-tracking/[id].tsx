@@ -10,16 +10,17 @@ import { listMyOrders, Order } from '../../api/orders';
 import { AuthContext } from '../../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
+import { useWsEvent } from '../../context/WebSocketContext';
 
 const STEPS = [
-  { key: 'confirmed', label: 'Order Confirmed', icon: 'checkmark-circle', desc: 'Your order has been placed and confirmed.' },
-  { key: 'packed', label: 'Packed', icon: 'cube', desc: 'Your items are being packaged by the vendor.' },
-  { key: 'shipped', label: 'Shipped', icon: 'car', desc: 'Your order is on its way to the delivery hub.' },
-  { key: 'out_for_delivery', label: 'Out for Delivery', icon: 'bicycle', desc: 'Your delivery agent has picked up your order.' },
+  { key: 'pending', label: 'New Order', icon: 'document-text', desc: 'Your order has been placed.' },
+  { key: 'confirmed', label: 'Confirmed', icon: 'checkmark-circle', desc: 'Your order has been confirmed by the vendor.' },
+  { key: 'processing', label: 'Processing', icon: 'cube', desc: 'Your items are being packaged.' },
+  { key: 'shipped', label: 'Shipped', icon: 'car', desc: 'Your order is on its way to be delivered.' },
   { key: 'delivered', label: 'Delivered', icon: 'home', desc: 'Package delivered successfully. Enjoy!' },
 ];
 
-const MOCK_AGENT = { name: 'Kofi Mensah', phone: '+233 55 000 1234', rating: 4.9 };
+
 
 export default function OrderTracking() {
   const { colors } = useTheme();
@@ -36,7 +37,13 @@ export default function OrderTracking() {
     queryFn: () => listMyOrders(token!),
     enabled: !!token,
     retry: false,
-    refetchInterval: 3000,
+  });
+
+  // Live status updates via WebSocket
+  useWsEvent('order_status_changed', (event) => {
+    if (event.order_id === orderId) {
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+    }
   });
 
   const { data: localOrders = [], isLoading: localLoading } = useQuery({
@@ -57,7 +64,7 @@ export default function OrderTracking() {
   // Find the specific order
   const localOrder = localOrders.find((o) => o.id === orderId);
   const backendOrder = backendOrders.find((o) => o.id === orderId);
-  
+
   // Prioritize the backend order (live status) over the local offline copy
   const order = backendOrder || localOrder;
 
@@ -76,12 +83,12 @@ export default function OrderTracking() {
   // Normalize order properties between local and backend
   const isLocal = !!localOrder;
   const ref = (order as LocalOrder).ref || order.id.slice(-8).toUpperCase();
-  
+
   // Build a readable address from whichever shape the order has
   const shippingAddr = (order as LocalOrder).shipping_address ?? (order as Order).shipping_address ?? null;
   const address = shippingAddr
     ? [shippingAddr.name, shippingAddr.street, shippingAddr.city, (shippingAddr as any).country]
-        .filter(Boolean).join(', ')
+      .filter(Boolean).join(', ')
     : 'Address not available';
 
   // Resolve the delivery PIN — from local order stub or real backend field
@@ -90,12 +97,11 @@ export default function OrderTracking() {
   // Determine the current step index based on status
   let currentStepIndex = 0;
   switch (order.status) {
-    case 'pending':
-    case 'processing': currentStepIndex = 1; break;
-    case 'shipped': currentStepIndex = 2; break;
-    case 'out_for_delivery': currentStepIndex = 3; break;
+    case 'pending': currentStepIndex = 0; break;
+    case 'confirmed': currentStepIndex = 1; break;
+    case 'processing': currentStepIndex = 2; break;
+    case 'shipped': currentStepIndex = 3; break;
     case 'delivered': currentStepIndex = 4; break;
-    case 'confirmed':
     default: currentStepIndex = 0; break;
   }
 
@@ -231,28 +237,53 @@ export default function OrderTracking() {
             {!isDelivered && currentStepIndex >= 2 && (
               <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Delivery Agent</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                    <Ionicons name="person" size={24} color={colors.primaryDim} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{MOCK_AGENT.name}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                      <Ionicons name="star" size={13} color={colors.primary} />
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkSoft, marginLeft: 4 }}>{MOCK_AGENT.rating}</Text>
+                
+                {(order as any).agent_name ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                      <Ionicons name="person" size={24} color={colors.primaryDim} />
                     </View>
-                  </View>
-                  
-                  {isLocal && !isDelivered && (
-                    <Pressable onPress={simulateDelivery} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.ink, marginRight: 8 }}>
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.surface }}>Test Delivery</Text>
-                    </Pressable>
-                  )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>{(order as any).agent_name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Ionicons name="call" size={13} color={colors.inkSoft} style={{ marginRight: 4 }} />
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkSoft }}>
+                          {(order as any).agent_phone || 'Phone not provided'}
+                        </Text>
+                      </View>
+                    </View>
 
-                  <Pressable style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="call" size={20} color={colors.primaryDim} />
-                  </Pressable>
-                </View>
+                    {isLocal && !isDelivered && (
+                      <Pressable onPress={simulateDelivery} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.ink, marginRight: 8 }}>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.surface }}>Test Delivery</Text>
+                      </Pressable>
+                    )}
+
+                    {(order as any).agent_phone && (
+                      <Pressable style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="call" size={20} color={colors.primaryDim} />
+                      </Pressable>
+                    )}
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                      <Ionicons name="time" size={24} color={colors.inkMuted} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Assigning Agent...</Text>
+                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginTop: 4 }}>
+                        We are currently assigning a delivery agent to your order.
+                      </Text>
+                    </View>
+                    
+                    {isLocal && !isDelivered && (
+                      <Pressable onPress={simulateDelivery} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.ink, marginRight: 8 }}>
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.surface }}>Test Delivery</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
               </View>
             )}
 
@@ -261,7 +292,9 @@ export default function OrderTracking() {
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Order Summary</Text>
               {order.items.map((item: any, i: number) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1, marginRight: 8 }} numberOfLines={2}>{item.name ?? `Product ${item.product_id}`} ×{item.quantity}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1, marginRight: 8 }} numberOfLines={2}>
+                    {item.name ?? item.product_name ?? `Product #${(item.product_id ?? '').slice(0, 8).toUpperCase()}`} ×{item.quantity}
+                  </Text>
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>${(item.unit_price ?? item.price ?? 0).toFixed(2)}</Text>
                 </View>
               ))}

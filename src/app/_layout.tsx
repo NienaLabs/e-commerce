@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-query'
 import { AuthProvider } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
+import { WebSocketProvider } from '../context/WebSocketContext';
 import { EventTracker } from '../components/EventTracker';
 
 
@@ -63,18 +64,21 @@ function NotificationManager() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <ToastProvider>
-            <EventTracker />
-            <NotificationManager />
-            <SidebarProvider>
+          <WebSocketProvider>
+            <ToastProvider>
+              <EventTracker />
+              <NotificationManager />
+              <SidebarProvider>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="(auth)" />
                 <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="suspended" />
               </Stack>
               <Sidebar />
             </SidebarProvider>
           </ToastProvider>
+          </WebSocketProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

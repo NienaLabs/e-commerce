@@ -61,3 +61,13 @@ export async function saveLocalOrder(order: LocalOrder): Promise<void> {
     console.error('Failed to save local order', e);
   }
 }
+
+export async function removeLocalOrder(orderId: string): Promise<void> {
+  try {
+    const existing = await getLocalOrders();
+    const updated = existing.filter(o => o.id !== orderId);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to remove local order', e);
+  }
+}

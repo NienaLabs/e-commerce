@@ -5,12 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  getVendorMe, 
-  getVendorDashboardOverview, 
-  getVendorDashboardAlerts, 
-  getVendorDashboardBenchmark 
-} from '../../api/vendors';
+import { getVendorMe, getVendorOrders, getVendorDashboardOverview, getVendorDashboardAlerts, getVendorDashboardBenchmark } from '../../api/vendors';
+import { getVendorSummary } from '../../api/analytics';
 import { AuthContext } from '../../context/AuthContext';
 import { PerformanceCards, AlertsFeed, BenchmarkPanel } from '../../components/VendorDashboard';
 
@@ -25,18 +21,24 @@ export default function VendorDashboard() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-  const { token } = useContext(AuthContext);
+  const { token, user, isLoading: authLoading } = useContext(AuthContext);
 
   const { data: vendor, isLoading: vendorLoading, isError } = useQuery({
     queryKey: ['vendor-me'],
     queryFn: () => getVendorMe(token!),
     enabled: !!token,
-    retry: false,
+    retry: false, // Don't retry if they don't have a profile
+  });
+
+  const { data: summary, isLoading: analyticsLoading } = useQuery({
+    queryKey: ['vendor-summary'],
+    queryFn: () => getVendorSummary(token!),
+    enabled: !!token,
   });
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ['vendor-overview', vendor?.id],
-    queryFn: () => getVendorDashboardOverview(token!, vendor!.id, '7d'),
+    queryFn: () => getVendorDashboardOverview(token!, vendor!.id),
     enabled: !!token && !!vendor?.id,
   });
 
@@ -52,7 +54,7 @@ export default function VendorDashboard() {
     enabled: !!token && !!vendor?.id,
   });
 
-  if (vendorLoading) {
+  if (authLoading || (analyticsLoading && !!vendor)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -60,6 +62,7 @@ export default function VendorDashboard() {
     );
   }
 
+  // If no vendor profile exists (e.g. 404), prompt them to become a vendor
   if (isError || !vendor) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
@@ -77,6 +80,13 @@ export default function VendorDashboard() {
       </SafeAreaView>
     );
   }
+
+  const STATS = [
+    { label: 'Total Revenue', value: `$${(summary?.total_revenue || 0).toFixed(2)}`, change: `$${(summary?.revenue_this_month || 0).toFixed(2)} this month`, up: true, icon: 'wallet' },
+    { label: 'Active Orders', value: String(summary?.pending_orders || 0), change: 'Needs fulfillment', up: true, icon: 'cube' },
+    { label: 'Products', value: String(summary?.total_products || vendor.products), change: 'Active in store', up: true, icon: 'grid' },
+    { label: 'Followers', value: String(summary?.total_followers || vendor.followers), change: 'Total followers', up: true, icon: 'people' },
+  ];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -96,7 +106,7 @@ export default function VendorDashboard() {
           </Pressable>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Insights Dashboard</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Dashboard</Text>
           <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>{vendor.store_name}</Text>
         </View>
       </View>
