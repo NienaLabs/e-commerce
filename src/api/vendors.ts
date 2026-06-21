@@ -187,3 +187,47 @@ export async function getVendorAnalytics(token: string, vendorId: string): Promi
   });
   return handleResponse<VendorAnalytics>(res);
 }
+
+// ── Dashboard Insights ─────────────────────────
+
+export async function getVendorDashboardOverview(token: string, vendorId: string, range: string = '7d') {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/dashboard/overview?range=${range}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any>(res);
+}
+
+export async function getVendorDashboardProducts(token: string, vendorId: string, sort: string = 'revenue', range: string = '30d') {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/dashboard/products?sort=${sort}&range=${range}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any[]>(res);
+}
+
+export async function getVendorDashboardProductFunnel(token: string, vendorId: string, productId: string, range: string = '30d') {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/dashboard/product/${productId}/funnel?range=${range}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any>(res);
+}
+
+export async function getVendorDashboardBenchmark(token: string, vendorId: string, category: string) {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/dashboard/benchmark?category=${category}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any>(res);
+}
+
+export async function getVendorDashboardSearchGaps(token: string, vendorId: string) {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/dashboard/search-gaps`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any[]>(res);
+}
+
+export async function getVendorDashboardAlerts(token: string, vendorId: string) {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/dashboard/alerts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<any[]>(res);
+}

@@ -5,13 +5,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
-import { getVendorMe, getVendorOrders } from '../../api/vendors';
-import { getVendorSummary } from '../../api/analytics';
+import { 
+  getVendorMe, 
+  getVendorDashboardOverview, 
+  getVendorDashboardAlerts, 
+  getVendorDashboardBenchmark 
+} from '../../api/vendors';
 import { AuthContext } from '../../context/AuthContext';
+import { PerformanceCards, AlertsFeed, BenchmarkPanel } from '../../components/VendorDashboard';
 
 const QUICK_ACTIONS = [
   { icon: 'add-circle', label: 'Add Product', path: '/vendor-dashboard/add-product' },
   { icon: 'grid', label: 'Products', path: '/vendor-dashboard/products' },
+  { icon: 'search-outline', label: 'Search Gaps', path: '/vendor-dashboard/search-gaps' },
   { icon: 'settings', label: 'Store Settings', path: '/vendor-dashboard/store-settings' },
 ];
 
@@ -19,26 +25,31 @@ export default function VendorDashboard() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-  const { token, user } = useContext(AuthContext);
+  const { token } = useContext(AuthContext);
 
   const { data: vendor, isLoading: vendorLoading, isError } = useQuery({
     queryKey: ['vendor-me'],
     queryFn: () => getVendorMe(token!),
     enabled: !!token,
-    retry: false, // Don't retry if they don't have a profile
+    retry: false,
   });
 
-  const { data: summary, isLoading: analyticsLoading } = useQuery({
-    queryKey: ['vendor-summary'],
-    queryFn: () => getVendorSummary(token!),
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ['vendor-overview', vendor?.id],
+    queryFn: () => getVendorDashboardOverview(token!, vendor!.id, '7d'),
     enabled: !!token && !!vendor?.id,
   });
 
-  const { data: recentOrders = [] } = useQuery({
-    queryKey: ['vendor-orders', vendor?.id],
-    queryFn: () => getVendorOrders(token!, vendor!.id),
+  const { data: alerts = [], isLoading: alertsLoading } = useQuery({
+    queryKey: ['vendor-alerts', vendor?.id],
+    queryFn: () => getVendorDashboardAlerts(token!, vendor!.id),
     enabled: !!token && !!vendor?.id,
-    select: (orders) => orders.slice(0, 5),
+  });
+
+  const { data: benchmark, isLoading: benchmarkLoading } = useQuery({
+    queryKey: ['vendor-benchmark', vendor?.id],
+    queryFn: () => getVendorDashboardBenchmark(token!, vendor!.id, 'electronics'), // Use default category or vendor's primary category
+    enabled: !!token && !!vendor?.id,
   });
 
   if (vendorLoading) {
@@ -49,7 +60,6 @@ export default function VendorDashboard() {
     );
   }
 
-  // If no vendor profile exists (e.g. 404), prompt them to become a vendor
   if (isError || !vendor) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
@@ -67,13 +77,6 @@ export default function VendorDashboard() {
       </SafeAreaView>
     );
   }
-
-  const STATS = [
-    { label: 'Total Revenue', value: `$${(summary?.total_revenue || 0).toFixed(2)}`, change: `$${(summary?.revenue_this_month || 0).toFixed(2)} this month`, up: true, icon: 'wallet' },
-    { label: 'Active Orders', value: String(summary?.pending_orders || 0), change: 'Needs fulfillment', up: true, icon: 'cube' },
-    { label: 'Products', value: String(summary?.total_products || vendor.products), change: 'Active in store', up: true, icon: 'grid' },
-    { label: 'Followers', value: String(summary?.total_followers || vendor.followers), change: 'Total followers', up: true, icon: 'people' },
-  ];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -93,51 +96,21 @@ export default function VendorDashboard() {
           </Pressable>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Dashboard</Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Insights Dashboard</Text>
           <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>{vendor.store_name}</Text>
         </View>
-        <Pressable
-          onPress={() => router.push('/vendor-dashboard/add-product' as any)}
-          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.ink, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, gap: 6 }}
-        >
-          <Ionicons name="add" size={18} color={colors.surface} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: colors.surface }}>Add Product</Text>
-        </Pressable>
       </View>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: isDesktop ? 32 : 100, gap: 20 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: isDesktop ? 32 : 100, gap: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── Stats Grid ─── */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          {STATS.map(stat => (
-            <View
-              key={stat.label}
-              style={{
-                flex: 1,
-                minWidth: isDesktop ? 180 : '46%',
-                backgroundColor: colors.surface,
-                borderRadius: 20, padding: 18,
-                borderWidth: 1, borderColor: colors.surfaceMuted,
-                shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.04, shadowRadius: 12, elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={stat.icon as any} size={20} color={colors.primaryDim} />
-                </View>
-                <View style={{ backgroundColor: stat.up ? '#f0fdf4' : colors.surfaceSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: stat.up ? '#15803d' : colors.inkGhost }}>{stat.change}</Text>
-                </View>
-              </View>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 26 : 22, color: colors.ink, marginBottom: 2 }}>{stat.value}</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>{stat.label}</Text>
-            </View>
-          ))}
-        </View>
+        <PerformanceCards data={overview} loading={overviewLoading} />
+        
+        <AlertsFeed alerts={alerts} loading={alertsLoading} />
+        
+        <BenchmarkPanel data={benchmark} loading={benchmarkLoading} />
 
         {/* ─── Quick Actions ─── */}
         <View>
@@ -148,7 +121,7 @@ export default function VendorDashboard() {
                 key={action.label}
                 onPress={() => router.push(action.path as any)}
                 style={({ pressed }) => ({
-                  flex: 1, minWidth: isDesktop ? 140 : '30%',
+                  flex: 1, minWidth: isDesktop ? 140 : '46%',
                   backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
                   borderRadius: 18, paddingVertical: 18, paddingHorizontal: 12,
                   alignItems: 'center', gap: 8,
@@ -165,47 +138,6 @@ export default function VendorDashboard() {
             ))}
           </View>
         </View>
-
-        {/* Recent Transactions */}
-        <View style={{ marginTop: 8 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Recent Orders</Text>
-            <Pressable onPress={() => router.push('/vendor-dashboard/orders' as any)}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primaryDim }}>View All</Text>
-            </Pressable>
-          </View>
-          
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, padding: 16, gap: 16 }}>
-            {analyticsLoading ? (
-              <ActivityIndicator size="small" color={colors.primaryDim} style={{ marginVertical: 20 }} />
-            ) : recentOrders.length === 0 ? (
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', paddingVertical: 20 }}>No recent orders.</Text>
-            ) : (
-              recentOrders.map((order, i) => (
-                <View key={order.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.surfaceMuted, paddingTop: i === 0 ? 0 : 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="cube-outline" size={20} color={colors.ink} />
-                    </View>
-                    <View>
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>{order.customer_name}</Text>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>
-                        {new Date(order.created_at).toLocaleDateString()} • {order.items_count} item{order.items_count > 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: order.status === 'delivered' ? colors.success : colors.warning, marginTop: 2, textTransform: 'capitalize' }}>
-                      {order.status}
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        </View>
-
       </ScrollView>
     </SafeAreaView>
   );
