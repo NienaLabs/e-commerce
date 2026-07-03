@@ -179,15 +179,13 @@ export function VendorShelf() {
   const { colors } = useTheme();
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
 
-  // Load followed vendor IDs from local storage
-  const loadFollows = useCallback(async () => {
-    const ids = await getAllFollowing();
-    setFollowedIds(new Set(ids));
-  }, []);
-
   useEffect(() => {
+    async function loadFollows() {
+      const ids = await getAllFollowing();
+      setFollowedIds(new Set(ids));
+    }
     loadFollows();
-  }, [loadFollows]);
+  }, []);
 
   const { data: vendors = [], isLoading } = useQuery({
     queryKey: ['vendors-shelf'],

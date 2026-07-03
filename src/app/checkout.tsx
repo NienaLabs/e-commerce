@@ -15,6 +15,7 @@ import { AuthContext } from '../context/AuthContext';
 import { MapView } from '../components/Map/MapView';
 import { MapMarker } from '../components/Map/MapMarker';
 import { LocationSearchModal, LocationResult } from '../components/LocationSearchModal';
+import { useLocationStore } from '../store/locationStore';
 import * as Location from 'expo-location';
 
 async function reverseGeocodeAddress(lat: number, lng: number) {
@@ -79,22 +80,17 @@ export default function CheckoutScreen() {
   const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number }>({ latitude: 5.6037, longitude: -0.1870 });
   const [mapReady, setMapReady] = useState(false);
 
-  // Fetch user location once on mount to center the map
+  // Get live location
+  const { latitude: liveLat, longitude: liveLng, status: locationStatus } = useLocationStore();
+  
   useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          setMapCenter({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        }
-      } catch (e) {
-        // silently fall back to default Accra coords
-      } finally {
-        setMapReady(true);
-      }
-    })();
-  }, []);
+    if (liveLat && liveLng && !mapReady) {
+      setMapCenter({ latitude: liveLat, longitude: liveLng });
+      setMapReady(true);
+    } else if (locationStatus === 'error' || locationStatus === 'denied') {
+      setMapReady(true); // fall back
+    }
+  }, [liveLat, liveLng, locationStatus, mapReady]);
 
   const SHIPPING_FEE = 4.99;
   const subtotal = getSubtotal();
@@ -172,9 +168,10 @@ export default function CheckoutScreen() {
         },
         notes: null,
         items: cartItems.map(item => ({
-          product_id: item.id,
+          product_id: item.productId || item.id,
           quantity: item.quantity,
           color_chosen: null,
+          selected_attributes: item.selectedAttributes,
         })),
       };
 

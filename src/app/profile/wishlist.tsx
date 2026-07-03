@@ -25,6 +25,7 @@ export default function WishlistScreen() {
       if (item.inStock) {
         addCartItem({
           id: item.id,
+          productId: item.id,
           name: item.name,
           price: item.price,
           salePrice: item.salePrice,
@@ -110,6 +111,7 @@ export default function WishlistScreen() {
                           e.stopPropagation?.();
                           addCartItem({
                             id: item.id,
+                            productId: item.id,
                             name: item.name,
                             price: item.price,
                             salePrice: item.salePrice,

@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getVendor, getVendorProducts, getVendorFollowStatus, toggleVendorFollow } from '../../api/vendors';
 import { mapProductToCard } from '../../api/products';
 import { useAuth } from '../../context/AuthContext';
+import { ToastAndroid } from 'react-native';
 
 const FALLBACK_BANNER = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=1200';
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200';
@@ -33,7 +34,7 @@ export default function VendorStorefront() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vendorId = Array.isArray(id) ? id[0] : id as string;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
@@ -58,14 +59,31 @@ export default function VendorStorefront() {
   const followMutation = useMutation({
     mutationFn: () => toggleVendorFollow(token!, vendorId),
     onMutate: async () => {
-      // Optimistic update
+      // Optimistic update for follow status
       await queryClient.cancelQueries({ queryKey: ['vendor-follow-status', vendorId] });
-      const prev = queryClient.getQueryData<{ following: boolean }>(['vendor-follow-status', vendorId]);
-      queryClient.setQueryData(['vendor-follow-status', vendorId], { following: !following });
-      return { prev };
+      await queryClient.cancelQueries({ queryKey: ['vendor', vendorId] });
+      
+      const prevFollow = queryClient.getQueryData<{ following: boolean }>(['vendor-follow-status', vendorId]);
+      const prevVendor = queryClient.getQueryData<any>(['vendor', vendorId]);
+      
+      const isCurrentlyFollowing = prevFollow?.following ?? false;
+      
+      queryClient.setQueryData(['vendor-follow-status', vendorId], { following: !isCurrentlyFollowing });
+      
+      if (prevVendor) {
+        queryClient.setQueryData(['vendor', vendorId], {
+          ...prevVendor,
+          followers: Math.max(0, (prevVendor.followers || 0) + (isCurrentlyFollowing ? -1 : 1))
+        });
+      }
+      
+      return { prevFollow, prevVendor };
     },
     onError: (_err, _vars, context: any) => {
-      queryClient.setQueryData(['vendor-follow-status', vendorId], context.prev);
+      queryClient.setQueryData(['vendor-follow-status', vendorId], context.prevFollow);
+      if (context.prevVendor) {
+        queryClient.setQueryData(['vendor', vendorId], context.prevVendor);
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor-follow-status', vendorId] });
@@ -109,8 +127,8 @@ export default function VendorStorefront() {
   }
 
   const joinedYear = new Date(vendor.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  // Optimistic follower count adjustment
-  const displayFollowers = vendor.followers + (following ? 0 : 0); // backend already reflects the real count
+
+  const isOwnStore = user?.id === vendor.user_id;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -176,52 +194,72 @@ export default function VendorStorefront() {
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
-              {/* Message Button */}
-              <Pressable
-                onPress={() => router.push(`/chat/${vendor.id}` as any)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 18,
-                  paddingVertical: 11,
-                  borderRadius: 24,
-                  backgroundColor: colors.surfaceSoft,
-                  borderWidth: 1.5,
-                  borderColor: colors.surfaceMuted,
-                  opacity: pressed ? 0.85 : 1,
-                  marginRight: 10,
-                })}
-              >
-                <Ionicons name="chatbubble-ellipses" size={16} color={colors.inkMuted} style={{ marginRight: 6 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Message</Text>
-              </Pressable>
+              {!isOwnStore && (
+                <>
+                  {/* Message Button */}
+                  <Pressable
+                    onPress={() => {
+                      if (!token) {
+                        if (Platform.OS === 'web') alert('Please log in to message this vendor');
+                        else ToastAndroid.show('Please log in to message this vendor', ToastAndroid.SHORT);
+                        router.push('/(auth)/login');
+                        return;
+                      }
+                      router.push(`/chat/${vendor.id}` as any);
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 18,
+                      paddingVertical: 11,
+                      borderRadius: 24,
+                      backgroundColor: colors.surfaceSoft,
+                      borderWidth: 1.5,
+                      borderColor: colors.surfaceMuted,
+                      opacity: pressed ? 0.85 : 1,
+                      marginRight: 10,
+                    })}
+                  >
+                    <Ionicons name="chatbubble-ellipses" size={16} color={colors.inkMuted} style={{ marginRight: 6 }} />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Message</Text>
+                  </Pressable>
 
-              {/* Follow Button */}
-              <Pressable
-                onPress={() => followMutation.mutate()}
-                disabled={followLoading || followMutation.isPending}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 22,
-                  paddingVertical: 11,
-                  borderRadius: 24,
-                  backgroundColor: following ? colors.surfaceSoft : colors.ink,
-                  borderWidth: following ? 1.5 : 0,
-                  borderColor: colors.surfaceMuted,
-                  opacity: pressed || followLoading || followMutation.isPending ? 0.7 : 1,
-                })}
-              >
-                <Ionicons
-                  name={following ? 'checkmark' : 'add'}
-                  size={16}
-                  color={following ? colors.inkMuted : colors.surface}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: following ? colors.inkMuted : colors.surface }}>
-                  {following ? 'Following' : 'Follow'}
-                </Text>
-              </Pressable>
+                  {/* Follow Button */}
+                  <Pressable
+                    onPress={() => {
+                      if (!token) {
+                        if (Platform.OS === 'web') alert('Please log in to follow this store');
+                        else ToastAndroid.show('Please log in to follow this store', ToastAndroid.SHORT);
+                        router.push('/(auth)/login');
+                        return;
+                      }
+                      followMutation.mutate();
+                    }}
+                    disabled={(!!token && followLoading) || followMutation.isPending}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 22,
+                      paddingVertical: 11,
+                      borderRadius: 24,
+                      backgroundColor: following ? colors.surfaceSoft : colors.ink,
+                      borderWidth: following ? 1.5 : 0,
+                      borderColor: colors.surfaceMuted,
+                      opacity: pressed || (!!token && followLoading) || followMutation.isPending ? 0.7 : 1,
+                    })}
+                  >
+                    <Ionicons
+                      name={following ? 'checkmark' : 'add'}
+                      size={16}
+                      color={following ? colors.inkMuted : colors.surface}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: following ? colors.inkMuted : colors.surface }}>
+                      {following ? 'Following' : 'Follow'}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           </View>
 
@@ -264,7 +302,7 @@ export default function VendorStorefront() {
           }}>
             <StatBox value={String(vendor.products)} label="Products" colors={colors} />
             <View style={{ width: 1, backgroundColor: colors.surfaceMuted }} />
-            <StatBox value={formatNumber(vendor.followers)} label="Followers" colors={colors} />
+            <StatBox value={formatNumber(vendor.followers || 0)} label="Followers" colors={colors} />
           </View>
 
           {/* Joined date */}

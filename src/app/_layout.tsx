@@ -19,6 +19,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import { WebSocketProvider } from '../context/WebSocketContext';
 import { EventTracker } from '../components/EventTracker';
+import { useLocationStore } from '../store/locationStore';
 
 
 SplashScreen.preventAutoHideAsync();
@@ -54,11 +55,16 @@ export default function RootLayout() {
     return null;
   }
 
-function NotificationManager() {
-  const { useNotifications } = require('../hooks/useNotifications');
-  useNotifications();
-  return null;
-}
+  useEffect(() => {
+    // Start live location tracking globally on app load
+    useLocationStore.getState().startTracking();
+  }, []);
+
+  function NotificationManager() {
+    const { useNotifications } = require('../hooks/useNotifications');
+    useNotifications();
+    return null;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -69,15 +75,15 @@ function NotificationManager() {
               <EventTracker />
               <NotificationManager />
               <SidebarProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="suspended" />
-              </Stack>
-              <Sidebar />
-            </SidebarProvider>
-          </ToastProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="(auth)" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="suspended" />
+                </Stack>
+                <Sidebar />
+              </SidebarProvider>
+            </ToastProvider>
           </WebSocketProvider>
         </AuthProvider>
       </ThemeProvider>

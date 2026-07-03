@@ -25,6 +25,7 @@ export interface LocalOrder {
     lat?: number;
     lng?: number;
     landmark?: string;
+    phone?: string;
   };
   vendor_id?: string;
   delivery_pin?: string | null;

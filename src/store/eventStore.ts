@@ -46,12 +46,12 @@ let currentStorageName = 'ecommerce-event-store';
 const jsonStorage = createJSONStorage(() => customStorage);
 
 // Wrap storage to use the dynamic key
-const userScopedStorage = {
+const userScopedStorage = jsonStorage ? {
   ...jsonStorage,
-  getItem: (name: string) => jsonStorage.getItem!(currentStorageName),
-  setItem: (name: string, value: any) => jsonStorage.setItem!(currentStorageName, value),
-  removeItem: (name: string) => jsonStorage.removeItem!(currentStorageName),
-};
+  getItem: (name: string) => jsonStorage.getItem(currentStorageName),
+  setItem: (name: string, value: any) => jsonStorage.setItem(currentStorageName, value),
+  removeItem: (name: string) => jsonStorage.removeItem(currentStorageName),
+} : undefined;
 
 export const useEventStore = create<EventStoreState>()(
   persist(

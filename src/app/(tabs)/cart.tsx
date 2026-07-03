@@ -124,6 +124,11 @@ export default function Cart() {
                       <View style={{ flex: 1, marginRight: 12 }}>
                         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }} numberOfLines={2}>{item.name}</Text>
                         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 4 }}>Vendor: {item.vendorName || 'Unknown'}</Text>
+                        {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 && (
+                          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkSoft, marginTop: 4, textTransform: 'capitalize' }}>
+                            {Object.entries(item.selectedAttributes).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' | ')}
+                          </Text>
+                        )}
                       </View>
                       <Pressable style={{ padding: 4 }} onPress={() => removeItem(item.id)}>
                         <Ionicons name="trash-outline" size={18} color="#d93651" />

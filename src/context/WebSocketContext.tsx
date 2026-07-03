@@ -73,7 +73,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     if (vendor?.id) return `${BASE_URL}/ws/vendor/${vendor.id}`;
     if (user?.id)   return `${BASE_URL}/ws/user/${user.id}`;
     return null;
-  }, [vendor?.id, user?.id]);
+  }, [vendor, user]);
 
   // ── Emit incoming events to all subscribers ───────────────────────────────
 
@@ -95,6 +95,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   // ── Connect / reconnect ───────────────────────────────────────────────────
+
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     if (!shouldConnectRef.current) return;
@@ -140,14 +142,18 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         isConnectedRef.current = false;
         if (pingTimerRef.current) clearInterval(pingTimerRef.current);
         if (shouldConnectRef.current) {
-          reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
+          reconnectTimerRef.current = setTimeout(() => connectRef.current(), RECONNECT_DELAY_MS);
         }
       };
     } catch (e) {
       console.warn('[WS] failed to open socket:', e);
-      reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
+      reconnectTimerRef.current = setTimeout(() => connectRef.current(), RECONNECT_DELAY_MS);
     }
   }, [buildWsUrl, emit]);
+
+  React.useLayoutEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -204,7 +210,9 @@ export function useWebSocket() {
 export function useWsEvent(type: WsEventType, handler: (event: WsEvent) => void) {
   const { subscribe } = useWebSocket();
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+  React.useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
 
   useEffect(() => {
     const unsub = subscribe((event) => {

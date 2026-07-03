@@ -65,13 +65,14 @@ export default function BusinessSettingsScreen() {
   // Pre-populate from vendor data once loaded
   useEffect(() => {
     if (vendor) {
-      setForm(f => ({
-        ...f,
-        // Use bio-extracted contact info if we stored it there, else use store_name as fallback
-        phone: (vendor as any).contact_phone ?? '',
-        email: (vendor as any).contact_email ?? '',
-        address: (vendor as any).store_address ?? '',
-      }));
+      setTimeout(() => {
+        setForm(f => ({
+          ...f,
+          phone: (vendor as any).contact_phone ?? '',
+          email: (vendor as any).contact_email ?? '',
+          address: (vendor as any).store_address ?? '',
+        }));
+      }, 0);
     }
   }, [vendor]);
 

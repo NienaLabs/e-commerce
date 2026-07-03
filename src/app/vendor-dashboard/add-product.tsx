@@ -8,6 +8,7 @@ import { Button } from '../../components/Button';
 import { AuthContext } from '../../context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createProduct, updateProduct, getProduct, listCategories, deleteProduct } from '../../api/products';
+import { CATEGORY_SCHEMAS, DEFAULT_SCHEMA } from '../../utils/filterSchemas';
 
 function Field({ label, placeholder, value, onChangeText, colors, multiline = false, keyboardType = 'default' }: any) {
   const [focused, setFocused] = useState(false);
@@ -55,6 +56,8 @@ export default function AddProductScreen() {
 
   const [form, setForm] = useState({ name: '', price: '', salePrice: '', stock: '', sku: '', description: '', category: '' });
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [attributes, setAttributes] = useState<Record<string, any>>({});
+  const [customSpecs, setCustomSpecs] = useState<{ key: string; value: string }[]>([]);
   const [saved, setSaved] = useState(false);
 
   const { data: categories = [] } = useQuery({
@@ -80,6 +83,10 @@ export default function AddProductScreen() {
         category: existingProduct.category_id || '',
       });
       setSelectedCategory(existingProduct.category_id || '');
+      const existingAttrs = existingProduct.attributes || {};
+      // Separate any truly custom (non-schema) keys into customSpecs state
+      setAttributes(existingAttrs);
+      setCustomSpecs([]);
     }
   }, [existingProduct]);
 
@@ -95,6 +102,7 @@ export default function AddProductScreen() {
           stock_quantity: parseInt(form.stock) || 0,
           is_active: true,
           category_id: selectedCategory || null,
+          attributes: { ...attributes, ...Object.fromEntries(customSpecs.filter(s => s.key.trim() && s.value.trim()).map(s => [s.key.trim().toLowerCase().replace(/\s+/g, '_'), s.value.trim()])) },
         };
         return updateProduct(token!, id!, payload);
       }
@@ -108,6 +116,7 @@ export default function AddProductScreen() {
         stock_quantity: parseInt(form.stock) || 0,
         is_active: true,
         category_id: selectedCategory || null,
+        attributes: { ...attributes, ...Object.fromEntries(customSpecs.filter(s => s.key.trim() && s.value.trim()).map(s => [s.key.trim().toLowerCase().replace(/\s+/g, '_'), s.value.trim()])) },
       };
       return createProduct(token!, payload);
     },
@@ -236,6 +245,150 @@ export default function AddProductScreen() {
           ))}
         </View>
 
+        {(() => {
+          const catObj = categories.find(c => c.id === selectedCategory);
+          const activeSchemaKey = catObj ? (() => {
+            const s = catObj.slug.toLowerCase();
+            if (s.includes('electronic')) return 'electronics';
+            if (s.includes('fashion') || s.includes('cloth')) return 'fashion';
+            if (s.includes('home') && !s.includes('appli')) return 'home';
+            if (s.includes('accessor') && !s.includes('autom')) return 'beauty';
+            if (s.includes('sport') && !s.includes('outdoor')) return 'sports';
+            if (s.includes('food')) return 'food';
+            if (s.includes('gam')) return 'gaming';
+            if (s.includes('book')) return 'books';
+            if (s.includes('wearable') || s.includes('smartwatch')) return 'wearables';
+            if (s.includes('camera') || s.includes('photo')) return 'cameras';
+            if (s.includes('appli')) return 'home_appliances';
+            if (s.includes('health') || s.includes('beaut')) return 'health_beauty';
+            if (s.includes('auto') || s.includes('car')) return 'automotive';
+            if (s.includes('toy') || s.includes('hobb')) return 'toys';
+            if (s.includes('comput') || s.includes('tablet') || s.includes('laptop')) return 'computers';
+            if (s.includes('phone') || s.includes('mobile')) return 'phones';
+            if (s.includes('outdoor')) return 'outdoor';
+            if (s.includes('art') || s.includes('craft')) return 'art_crafts';
+            if (s.includes('pet')) return 'pet_supplies';
+            return 'default';
+          })() : null;
+
+          const activeSchema = activeSchemaKey ? CATEGORY_SCHEMAS[activeSchemaKey] || DEFAULT_SCHEMA : null;
+
+          if (!activeSchema) return null;
+
+          return (
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 16 }}>Product Specifications</Text>
+              {activeSchema.sections.filter(s => s.id !== 'price').map(section => (
+                <View key={section.id} style={{ marginBottom: 20 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 10 }}>{section.label}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {section.options.map(opt => {
+                      const isSelected = section.multiSelect
+                        ? (attributes[section.id] || []).includes(opt.value)
+                        : attributes[section.id] === opt.value;
+
+                      return (
+                        <Pressable
+                          key={opt.value}
+                          onPress={() => {
+                            setAttributes(prev => {
+                              if (section.multiSelect) {
+                                const current = prev[section.id] || [];
+                                if (current.includes(opt.value)) {
+                                  return { ...prev, [section.id]: current.filter((v: any) => v !== opt.value) };
+                                } else {
+                                  return { ...prev, [section.id]: [...current, opt.value] };
+                                }
+                              } else {
+                                return { ...prev, [section.id]: isSelected ? undefined : opt.value };
+                              }
+                            });
+                          }}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 20,
+                            backgroundColor: isSelected ? colors.primary : colors.surfaceSoft,
+                            borderWidth: isSelected ? 0 : 1,
+                            borderColor: colors.surfaceMuted,
+                          }}
+                        >
+                          <Text style={{
+                            fontFamily: 'Inter_600SemiBold',
+                            fontSize: 13,
+                            color: isSelected ? (colors.isDark ? '#18181a' : '#ffffff') : colors.inkSoft,
+                          }}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+
+        {/* ── Custom Specifications ── */}
+        <View style={{ marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>Custom Specifications</Text>
+          </View>
+          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginBottom: 16 }}>
+            Add any extra product details not covered above — e.g. "Bluetooth Version: 5.3" or "Battery Life: 30 hours".
+          </Text>
+
+          {customSpecs.map((spec, idx) => (
+            <View key={idx} style={{ flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+              <TextInput
+                value={spec.key}
+                onChangeText={(v) => setCustomSpecs(prev => prev.map((s, i) => i === idx ? { ...s, key: v } : s))}
+                placeholder="e.g. Battery Life"
+                placeholderTextColor={colors.inkGhost}
+                style={{
+                  flex: 1, backgroundColor: colors.surfaceSoft, borderRadius: 12,
+                  paddingHorizontal: 12, paddingVertical: 10,
+                  fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.ink,
+                  borderWidth: 1.5, borderColor: colors.surfaceMuted,
+                  ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+                }}
+              />
+              <TextInput
+                value={spec.value}
+                onChangeText={(v) => setCustomSpecs(prev => prev.map((s, i) => i === idx ? { ...s, value: v } : s))}
+                placeholder="e.g. 30 hours"
+                placeholderTextColor={colors.inkGhost}
+                style={{
+                  flex: 1, backgroundColor: colors.surfaceSoft, borderRadius: 12,
+                  paddingHorizontal: 12, paddingVertical: 10,
+                  fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.ink,
+                  borderWidth: 1.5, borderColor: colors.surfaceMuted,
+                  ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+                }}
+              />
+              <Pressable
+                onPress={() => setCustomSpecs(prev => prev.filter((_, i) => i !== idx))}
+                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.errorGhost, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="close" size={18} color={colors.error} />
+              </Pressable>
+            </View>
+          ))}
+
+          <Pressable
+            onPress={() => setCustomSpecs(prev => [...prev, { key: '', value: '' }])}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              paddingVertical: 12, borderRadius: 14,
+              borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.primary,
+              backgroundColor: colors.primaryGhost, gap: 8,
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.primaryDim} />
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.primaryDim }}>Add Custom Specification</Text>
+          </Pressable>
+        </View>
         <Button 
           title={mutation.isPending ? "Saving..." : (isEditMode ? "Update Product" : "Save Product")} 
           onPress={() => {

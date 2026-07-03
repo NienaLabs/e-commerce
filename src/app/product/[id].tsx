@@ -81,6 +81,7 @@ export default function ProductDetail() {
   }, [crossSellShelf, crossSellProductDetails]);
 
   const [selectedColor, setSelectedColor] = useState<string>('');
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const [showAllReviews, setShowAllReviews] = useState(false);
   const REVIEWS_PAGE_SIZE = 5;
 
@@ -120,6 +121,9 @@ export default function ProductDetail() {
   const displayColors = productColors.length > 0 ? productColors : ['Default'];
   const currentColor = selectedColor || displayColors[0];
   const inStock = product.stock_quantity > 0;
+
+  const variantAttributes = Object.entries(product.attributes || {}).filter(([k, v]) => Array.isArray(v) && v.length > 1);
+  const specAttributes = Object.entries(product.attributes || {}).filter(([k, v]) => !Array.isArray(v) || v.length <= 1);
 
   const totalReviewsCount = product.review_count + localReviews.length;
   // Calculate average rating considering local reviews
@@ -242,6 +246,40 @@ export default function ProductDetail() {
               </View>
             )}
 
+            {/* Variants */}
+            {variantAttributes.length > 0 && (
+              <View style={{ marginBottom: 32 }}>
+                {variantAttributes.map(([key, options]) => (
+                  <View key={key} style={{ marginBottom: 16 }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 12, textTransform: 'capitalize' }}>
+                      {key.replace(/_/g, ' ')}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                      {(options as string[]).map((opt) => {
+                        const isSelected = selectedVariants[key] === String(opt);
+                        return (
+                          <Pressable
+                            key={String(opt)}
+                            onPress={() => setSelectedVariants(prev => ({ ...prev, [key]: String(opt) }))}
+                            style={{
+                              paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20,
+                              backgroundColor: isSelected ? colors.ink : colors.surface,
+                              borderWidth: isSelected ? 0 : 1,
+                              borderColor: colors.surfaceMuted,
+                            }}
+                          >
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: isSelected ? colors.surface : colors.inkSoft }}>
+                              {String(opt).replace(/_/g, ' ')}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* Description */}
             <View style={{ marginBottom: 32 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 12 }}>Description</Text>
@@ -249,6 +287,25 @@ export default function ProductDetail() {
                 {product.description}
               </Text>
             </View>
+
+            {/* Specifications */}
+            {specAttributes.length > 0 && (
+              <View style={{ marginBottom: 32 }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 12 }}>Specifications</Text>
+                <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, padding: 16 }}>
+                  {specAttributes.map(([key, value], idx, arr) => (
+                    <View key={key} style={{ flexDirection: 'row', paddingVertical: 12, borderBottomWidth: idx === arr.length - 1 ? 0 : 1, borderBottomColor: colors.surfaceMuted }}>
+                      <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted, textTransform: 'capitalize' }}>
+                        {key.replace(/_/g, ' ')}
+                      </Text>
+                      <Text style={{ flex: 2, fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.ink }}>
+                        {Array.isArray(value) ? value.map(v => String(v).replace(/_/g, ' ')).join(', ') : String(value).replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
             
             {/* Benefits */}
             <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, padding: 20, marginBottom: 40 }}>
@@ -381,13 +438,29 @@ export default function ProductDetail() {
             title={inStock ? 'Add to Cart' : 'Out of Stock'}
             onPress={() => {
               if (!inStock) return;
+              
+              const missingVariants = variantAttributes.filter(([key]) => !selectedVariants[key]).map(([key]) => key);
+              if (missingVariants.length > 0) {
+                showToast(`Please select: ${missingVariants.map(k => k.replace(/_/g, ' ')).join(', ')}`, 'error');
+                return;
+              }
+
+              const finalAttributes = { ...selectedVariants };
+              if (displayColors.length > 1 || (displayColors.length === 1 && displayColors[0] !== 'Default')) {
+                 finalAttributes['Color'] = currentColor;
+              }
+
+              const cartItemId = `${product.id}-${JSON.stringify(finalAttributes)}`;
+
               addCartItem({
-                id: product.id,
+                id: cartItemId,
+                productId: product.id,
                 name: product.name,
                 price: product.actual_price,
                 salePrice: product.discount_price ?? undefined,
                 imageUrl: firstImage,
                 quantity: 1,
+                selectedAttributes: Object.keys(finalAttributes).length > 0 ? finalAttributes : undefined,
               });
               showToast(`${product.name} added to cart`, 'success');
               router.push('/(tabs)/cart');

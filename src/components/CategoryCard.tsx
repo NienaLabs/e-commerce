@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, Pressable, Image, Platform, useWindowDimensions, Animated } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -22,7 +22,7 @@ export const CategoryCard = ({
   const isDesktop = width >= 768 && Platform.OS === 'web';
 
   // ── Hover animation (desktop web only) ──
-  const hoverAnim = useRef(new Animated.Value(0)).current;
+  const [hoverAnim] = useState(() => new Animated.Value(0));
 
   const handleMouseEnter = () => {
     if (!isDesktop) return;

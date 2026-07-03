@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../theme/ThemeContext';
-import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
+import { useLocationStore } from '../../store/locationStore';
 import { listVendors } from '../../api/vendors';
 import haversine from 'haversine';
 import { MapView, GeoJSONSource, Layer } from '../../components/Map/MapView';
@@ -27,9 +27,10 @@ export default function DiscoverScreen() {
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const insets = useSafeAreaInsets();
 
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { latitude, longitude, status: locationStatus, errorMsg } = useLocationStore();
+  const userLocation = latitude && longitude ? { latitude, longitude } : null;
+  const loading = locationStatus === 'loading' || locationStatus === 'idle';
+  const locationError = errorMsg;
   
   // UI State
   const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
@@ -41,27 +42,10 @@ export default function DiscoverScreen() {
   const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setLocationError('Location permission denied. Showing approximate distances.');
-          setUserLocation({ latitude: 5.6037, longitude: -0.187 });
-        } else {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          setDeliveryLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        }
-      } catch (e) {
-        setLocationError('Could not fetch location. Showing approximate distances.');
-        setUserLocation({ latitude: 5.6037, longitude: -0.187 });
-        setDeliveryLocation({ latitude: 5.6037, longitude: -0.187 });
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    if (userLocation && !deliveryLocation) {
+      setDeliveryLocation(userLocation);
+    }
+  }, [userLocation]);
 
   useFocusEffect(
     React.useCallback(() => {

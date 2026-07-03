@@ -31,22 +31,25 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
   }, [onPress]);
 
   // Only create container element on the client side (web)
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  if (!containerRef.current && typeof document !== 'undefined') {
-    const div = document.createElement('div');
-    div.style.backgroundColor = 'transparent';
-    div.style.border = 'none';
-    div.style.outline = 'none';
-    div.style.padding = '0';
-    div.style.margin = '0';
-    (div.style as any).webkitTapHighlightColor = 'transparent';
-    div.style.setProperty('-webkit-tap-highlight-color', 'transparent');
-    containerRef.current = div;
-  }
+  const [container] = React.useState<HTMLDivElement | null>(() => {
+    if (typeof document !== 'undefined') {
+      const div = document.createElement('div');
+      div.style.backgroundColor = 'transparent';
+      div.style.border = 'none';
+      div.style.outline = 'none';
+      div.style.padding = '0';
+      div.style.margin = '0';
+      div.style.cursor = 'pointer';
+      (div.style as any).webkitTapHighlightColor = 'transparent';
+      div.style.setProperty('-webkit-tap-highlight-color', 'transparent');
+      return div;
+    }
+    return null;
+  });
 
   // Create the marker once when the map is ready
   useEffect(() => {
-    if (!map || !containerRef.current) return;
+    if (!map || !container) return;
 
     // Create popup if title or description exists
     let popup: maplibregl.Popup | undefined;
@@ -60,7 +63,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     }
 
     markerRef.current = new maplibregl.Marker({
-      element: containerRef.current,
+      element: container,
     })
       .setLngLat(coordinate)
       .addTo(map);
@@ -70,9 +73,8 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
       onPressRef.current?.();
     };
 
-    if (containerRef.current) {
-      containerRef.current.addEventListener('click', stableClickHandler);
-      containerRef.current.style.cursor = 'pointer';
+    if (container) {
+      container.addEventListener('click', stableClickHandler);
     }
 
     if (popup) {
@@ -80,8 +82,8 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     }
 
     return () => {
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('click', stableClickHandler);
+      if (container) {
+        container.removeEventListener('click', stableClickHandler);
       }
       markerRef.current?.remove();
       markerRef.current = null;
@@ -90,7 +92,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, coordinate[0], coordinate[1]]);
 
-  if (!containerRef.current) return null;
+  if (!container) return null;
 
   return createPortal(
     children ? children : (
@@ -98,7 +100,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
         <View style={styles.innerDot} />
       </View>
     ),
-    containerRef.current
+    container
   );
 };
 

@@ -121,7 +121,7 @@ export default function BecomeVendorScreen() {
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
       setForm(prev => ({ 
         ...prev, 
         latitude: location.coords.latitude, 

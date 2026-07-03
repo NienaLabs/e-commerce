@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1';
 
 // ── Types ────────────────────────────────────
 
@@ -54,6 +54,7 @@ export interface Product {
   updated_at: string;
   images: ProductImage[];
   colors: ProductColor[];
+  attributes?: Record<string, any>;
 }
 
 export interface ListProductsParams {
@@ -152,7 +153,7 @@ export interface ProductCreatePayload {
   stock_quantity: number;
   warranty_info?: string;
   is_active: boolean;
-  category_id: string;
+  category_id?: string | null;
 }
 
 export interface Category {

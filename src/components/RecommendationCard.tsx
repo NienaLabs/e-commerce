@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -61,7 +61,7 @@ export const RecommendationCard = ({
   const IMAGE_HEIGHT = isDesktop ? 210 : 150;
 
   // ── Hover animation (desktop web only) ──
-  const hoverAnim = useRef(new Animated.Value(0)).current;
+  const [hoverAnim] = useState(() => new Animated.Value(0));
 
   const handleMouseEnter = () => {
     if (!isDesktop) return;
@@ -83,13 +83,19 @@ export const RecommendationCard = ({
     }).start();
   };
 
-  const hoverScale = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] });
-  const hoverTranslateY = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+  const [hoverScale, setHoverScale] = useState<any>(null);
+  const [hoverTranslateY, setHoverTranslateY] = useState<any>(null);
+
+  useEffect(() => {
+    setHoverScale(hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] }));
+    setHoverTranslateY(hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }));
+  }, [hoverAnim]);
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation?.();
     addItem({
       id,
+      productId: id,
       name,
       price,
       salePrice,

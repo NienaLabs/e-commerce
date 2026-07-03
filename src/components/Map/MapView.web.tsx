@@ -27,13 +27,13 @@ export const GeoJSONSource: React.FC<any> = ({ id, data, children }) => {
     if (!map) return;
     if (!map.getSource(id)) {
       map.addSource(id, { type: 'geojson', data });
-      setReady(true);
+      setTimeout(() => setReady(true), 0);
     } else {
       const source = map.getSource(id) as maplibregl.GeoJSONSource;
       if (source && source.setData) {
         source.setData(data);
       }
-      setReady(true);
+      setTimeout(() => setReady(true), 0);
     }
   }, [map, id, data]);
 

@@ -96,7 +96,7 @@ export default function AddressesScreen() {
       }
 
       let loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.Highest,
       });
 
       const webResult = await reverseGeocodeAddress(loc.coords.latitude, loc.coords.longitude);

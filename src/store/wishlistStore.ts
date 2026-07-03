@@ -53,12 +53,12 @@ let currentStorageName = 'vendor-wishlist-storage';
 const jsonStorage = createJSONStorage(() => customStorage);
 
 // Wrap storage to use the dynamic key
-const userScopedStorage = {
+const userScopedStorage = jsonStorage ? {
   ...jsonStorage,
-  getItem: (name: string) => jsonStorage.getItem!(currentStorageName),
-  setItem: (name: string, value: any) => jsonStorage.setItem!(currentStorageName, value),
-  removeItem: (name: string) => jsonStorage.removeItem!(currentStorageName),
-};
+  getItem: (name: string) => jsonStorage.getItem(currentStorageName),
+  setItem: (name: string, value: any) => jsonStorage.setItem(currentStorageName, value),
+  removeItem: (name: string) => jsonStorage.removeItem(currentStorageName),
+} : undefined;
 
 export const useWishlistStore = create<WishlistState>()(
   persist(

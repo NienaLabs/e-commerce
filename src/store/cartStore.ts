@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 export interface CartItem {
-  id: string;
+  id: string; // unique identifier in cart (e.g. productId + attributes)
+  productId: string;
   name: string;
   price: number;
   salePrice?: number;
@@ -13,6 +14,7 @@ export interface CartItem {
   vendorName?: string;
   vendorAvatar?: string;
   quantity: number;
+  selectedAttributes?: Record<string, string>;
 }
 
 interface CartState {
@@ -56,12 +58,12 @@ let currentStorageName = 'vendor-cart-storage';
 const jsonStorage = createJSONStorage(() => customStorage);
 
 // Wrap getItem to use the dynamic storage key
-const userScopedStorage = {
+const userScopedStorage = jsonStorage ? {
   ...jsonStorage,
-  getItem: (name: string) => jsonStorage.getItem!(currentStorageName),
-  setItem: (name: string, value: any) => jsonStorage.setItem!(currentStorageName, value),
-  removeItem: (name: string) => jsonStorage.removeItem!(currentStorageName),
-};
+  getItem: (name: string) => jsonStorage.getItem(currentStorageName),
+  setItem: (name: string, value: any) => jsonStorage.setItem(currentStorageName, value),
+  removeItem: (name: string) => jsonStorage.removeItem(currentStorageName),
+} : undefined;
 
 export const useCartStore = create<CartState>()(
   persist(
@@ -70,10 +72,11 @@ export const useCartStore = create<CartState>()(
       
       addItem: (item) => set((state) => {
         const quantityToAdd = item.quantity ?? 1;
+        // Use the provided id (which should be unique per variant combination)
         const existingItem = state.items.find((i) => i.id === item.id);
         
         if (existingItem) {
-          // If the item already exists in the cart, increase its quantity
+          // If the exact variant already exists in the cart, increase its quantity
           return {
             items: state.items.map((i) =>
               i.id === item.id ? { ...i, quantity: i.quantity + quantityToAdd } : i

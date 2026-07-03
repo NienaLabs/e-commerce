@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, Image, Pressable, useWindowDimensions, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -44,7 +44,7 @@ export const ProductCard = ({
   const addEvent = useEventStore((state) => state.addEvent);
 
   // ── Hover animation (desktop web only) ──
-  const hoverAnim = useRef(new Animated.Value(0)).current;
+  const [hoverAnim] = useState(() => new Animated.Value(0));
 
   const handleMouseEnter = () => {
     if (!isDesktop) return;
@@ -85,6 +85,7 @@ export const ProductCard = ({
     // Always add to the global cart store
     addItem({
       id,
+      productId: id,
       name,
       price,
       salePrice,

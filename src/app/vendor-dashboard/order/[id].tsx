@@ -315,6 +315,11 @@ export default function VendorOrderDetailScreen() {
                     <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 2 }}>
                       Quantity: {item.quantity} {item.color_chosen ? `· Color: ${item.color_chosen}` : ''}
                     </Text>
+                    {item.selected_attributes && Object.keys(item.selected_attributes).length > 0 && (
+                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkSoft, marginTop: 4, textTransform: 'capitalize' }}>
+                        {Object.entries(item.selected_attributes).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' | ')}
+                      </Text>
+                    )}
                   </View>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>
                     ${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}

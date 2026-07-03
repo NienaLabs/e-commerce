@@ -52,26 +52,6 @@ export default function HeroBanner({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPaused = useRef(false);
 
-  useEffect(() => {
-    startAutoPlay();
-    return stopAutoPlay;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.length, interval]);
-
-  const startAutoPlay = () => {
-    stopAutoPlay();
-    timerRef.current = setInterval(() => {
-      if (!isPaused.current) goToNext();
-    }, interval);
-  };
-
-  const stopAutoPlay = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
   const goToNext = () => {
     const nextPos = slidePos.current + 1;
     if (nextPos === slides.length - 1) {
@@ -87,6 +67,28 @@ export default function HeroBanner({
       setDotIndex(nextPos);
     }
   };
+
+  const stopAutoPlay = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const startAutoPlay = () => {
+    stopAutoPlay();
+    timerRef.current = setInterval(() => {
+      if (!isPaused.current) goToNext();
+    }, interval);
+  };
+
+  useEffect(() => {
+    startAutoPlay();
+    return stopAutoPlay;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images.length, interval]);
+
+
 
   const handlePrev = () => {
     stopAutoPlay();

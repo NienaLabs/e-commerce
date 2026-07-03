@@ -38,39 +38,29 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotificationStore } from '../../store/notificationStore';
 import HeroBanner from '@/components/HeroBanner';
 import { useSidebar } from '../../context/SidebarContext';
+import { useLocationStore } from '../../store/locationStore';
 
-async function reverseGeocodeCity(lat: number, lng: number): Promise<string> {
-  try {
-    if (Platform.OS === 'web') {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'ElectricApp/1.0' } }
-      );
-      const data = await res.json();
-      const a = data?.address;
-      return a?.city || a?.town || a?.village || a?.county || a?.state || 'Current Location';
-    } else {
-      const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      if (results.length > 0) {
-        const p = results[0];
-        return p.city || p.district || p.region || p.subregion || 'Current Location';
-      }
-      return 'Current Location';
-    }
-  } catch {
-    return 'Current Location';
-  }
-}
 
 const CATEGORIES = [
   { id: 'electronics', label: 'Electronics', image: require('@/assets/3d icons/3d-headphones.png') },
   { id: 'fashion', label: 'Fashion', image: require('@/assets/3d icons/3d-clothes.png') },
   { id: 'home', label: 'Home & Living', image: require('@/assets/3d icons/3d-house.png') },
-  { id: 'beauty', label: 'Accessories', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'sports', label: 'Sports', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'food', label: 'Food', image: require('@/assets/3d icons/3d-food.png') },
+  { id: 'phones', label: 'Mobile Phones', image: require('@/assets/3d icons/3d-headphones.png') },
+  { id: 'computers', label: 'Computers & Tablets', image: require('@/assets/3d icons/3d-headphones.png') },
+  { id: 'wearables', label: 'Wearables', image: require('@/assets/3d icons/3d-watch.png') },
+  { id: 'cameras', label: 'Cameras', image: require('@/assets/3d icons/3d-headphones.png') },
   { id: 'gaming', label: 'Gaming', image: require('@/assets/3d icons/3d-headphones.png') },
+  { id: 'beauty', label: 'Accessories', image: require('@/assets/3d icons/3d-watch.png') },
+  { id: 'health_beauty', label: 'Health & Beauty', image: require('@/assets/3d icons/3d-watch.png') },
+  { id: 'sports', label: 'Sports', image: require('@/assets/3d icons/3d-sports.png') },
+  { id: 'outdoor', label: 'Outdoors', image: require('@/assets/3d icons/3d-sports.png') },
+  { id: 'home_appliances', label: 'Home Appliances', image: require('@/assets/3d icons/3d-house.png') },
+  { id: 'food', label: 'Food', image: require('@/assets/3d icons/3d-food.png') },
+  { id: 'automotive', label: 'Automotive', image: require('@/assets/3d icons/3d-headphones.png') },
+  { id: 'toys', label: 'Toys & Hobbies', image: require('@/assets/3d icons/3d-headphones.png') },
   { id: 'books', label: 'Books', image: require('@/assets/3d icons/3d-house.png') },
+  { id: 'art_crafts', label: 'Art & Crafts', image: require('@/assets/3d icons/3d-watch.png') },
+  { id: 'pet_supplies', label: 'Pet Supplies', image: require('@/assets/3d icons/3d-house.png') },
 ];
 
 const SORT_OPTIONS = ['Recommended', 'Price: Low to High', 'Price: High to Low', 'Newest Arrivals', 'Best Sellers', 'Top Rated'];
@@ -88,12 +78,14 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
-  const [locationName, setLocationName] = useState('Detecting location...');
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const insets = useSafeAreaInsets();
   const unreadCount = useNotificationStore((state) => state.notifications.filter((n) => !n.read).length);
+  
+  // Location tracking
+  const { city: locationName, status: locationStatus, startTracking } = useLocationStore();
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -182,21 +174,23 @@ export default function Home() {
   });
 
   const displayCategories = useMemo(() => {
-    if (dbCategories.length === 0) return CATEGORIES;
+    if (dbCategories.length === 0) return CATEGORIES.map(c => ({ ...c, schemaKey: 'default' }));
 
     const mapped = dbCategories.map(c => {
       let img = require('@/assets/3d icons/3d-house.png');
       const s = c.slug.toLowerCase();
-      if (s.includes('electronic')) img = require('@/assets/3d icons/3d-headphones.png');
-      else if (s.includes('fashion') || s.includes('cloth')) img = require('@/assets/3d icons/3d-clothes.png');
-      else if (s.includes('home')) img = require('@/assets/3d icons/3d-house.png');
-      else if (s.includes('beaut') || s.includes('accessor')) img = require('@/assets/3d icons/3d-watch.png');
-      else if (s.includes('sport')) img = require('@/assets/3d icons/3d-sports.png');
-      else if (s.includes('food')) img = require('@/assets/3d icons/3d-food.png');
-      else if (s.includes('gam')) img = require('@/assets/3d icons/3d-headphones.png');
-      else if (s.includes('book')) img = require('@/assets/3d icons/3d-house.png');
+      let schemaKey = 'default';
 
-      return { id: c.id, label: c.name, image: img };
+      if (s.includes('electronic')) { img = require('@/assets/3d icons/3d-headphones.png'); schemaKey = 'electronics'; }
+      else if (s.includes('fashion') || s.includes('cloth')) { img = require('@/assets/3d icons/3d-clothes.png'); schemaKey = 'fashion'; }
+      else if (s.includes('home')) { img = require('@/assets/3d icons/3d-house.png'); schemaKey = 'home'; }
+      else if (s.includes('beaut') || s.includes('accessor')) { img = require('@/assets/3d icons/3d-watch.png'); schemaKey = 'beauty'; }
+      else if (s.includes('sport')) { img = require('@/assets/3d icons/3d-sports.png'); schemaKey = 'sports'; }
+      else if (s.includes('food')) { img = require('@/assets/3d icons/3d-food.png'); schemaKey = 'food'; }
+      else if (s.includes('gam')) { img = require('@/assets/3d icons/3d-headphones.png'); schemaKey = 'gaming'; }
+      else if (s.includes('book')) { img = require('@/assets/3d icons/3d-house.png'); schemaKey = 'books'; }
+
+      return { id: c.id, label: c.name, image: img, schemaKey };
     });
 
     if (user?.category_interest_ids && user.category_interest_ids.length > 0) {
@@ -298,23 +292,7 @@ export default function Home() {
     : mappedProducts;
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setLocationName('Location unavailable');
-          return;
-        }
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        const city = await reverseGeocodeCity(loc.coords.latitude, loc.coords.longitude);
-        setLocationName(city);
-      } catch (e) {
-        console.log('Location fetch error on home:', e);
-        setLocationName('Location unavailable');
-      }
-    })();
+    startTracking();
   }, []);
 
 
@@ -461,7 +439,7 @@ export default function Home() {
                   <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.9)', marginBottom: 2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>Delivering to</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#fff', marginRight: 4, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }} numberOfLines={1}>
-                      {locationName.length > 20 ? locationName.substring(0, 20) + '...' : locationName}
+                      {locationStatus === 'loading' ? 'Detecting...' : (locationName || 'Select Location')}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color="#fff" />
                   </View>
@@ -474,7 +452,6 @@ export default function Home() {
                   style={{ marginRight: 16, position: 'relative', width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Ionicons name="notifications-outline" size={22} color="#fff" />
-                  {/* We need to import useNotificationStore at the top of the file to use it here. Let's do that in a separate edit. For now just place the code. */}
                   {unreadCount > 0 && (
                     <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#fff' }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#fff' }}>
@@ -514,7 +491,7 @@ export default function Home() {
                   <Ionicons name="location" size={16} color="#fff" />
                 </View>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: 'rgba(255,255,255,0.9)', marginRight: 4, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>
-                  Deliver to: <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', textShadowRadius: 3 }}>{locationName}</Text>
+                  Deliver to: <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', textShadowRadius: 3 }}>{locationStatus === 'loading' ? '...' : (locationName || 'Current Location')}</Text>
                 </Text>
                 <Ionicons name="chevron-down" size={14} color="#fff" />
               </Pressable>
@@ -792,13 +769,18 @@ export default function Home() {
       <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
+        categoryId={selectedCategory ? displayCategories.find(c => c.id === selectedCategory)?.schemaKey : null}
+        onApply={(filters) => {
+          console.log('Applied filters:', filters);
+          // In the future, send these filters to the listProducts query
+        }}
       />
       {/* Location Search Modal */}
       <LocationSearchModal
         visible={showLocationSearch}
         onClose={() => setShowLocationSearch(false)}
         onSelectLocation={(loc) => {
-          setLocationName(loc.city || loc.name);
+          useLocationStore.setState({ city: loc.city || loc.name, latitude: loc.lat || null, longitude: loc.lon || null });
           setShowLocationSearch(false);
         }}
       />
