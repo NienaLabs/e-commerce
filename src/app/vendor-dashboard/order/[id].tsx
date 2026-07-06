@@ -229,7 +229,7 @@ export default function VendorOrderDetailScreen() {
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>Delivery Verification Required</Text>
               </View>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.ink, lineHeight: 20, marginBottom: 16 }}>
-                When the driver reaches the customer, ask for their 4-digit delivery code to confirm successful delivery.
+                When you personally deliver the item to the customer and they pay you in cash, ask for their 4-digit code to confirm delivery.
               </Text>
               <Pressable
                 onPress={() => setShowVerifyModal(true)}
@@ -529,7 +529,7 @@ export default function VendorOrderDetailScreen() {
                 )}
 
                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, textAlign: 'center', marginBottom: 20 }}>
-                  The customer received this code after payment. Both parties must agree before confirming delivery.
+                  The customer receives this code when they place the order. Enter it here after they have paid you in cash.
                 </Text>
 
                 <Pressable

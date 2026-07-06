@@ -4,7 +4,7 @@ import { Pressable, Text, View, useWindowDimensions, Image } from 'react-native'
 import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../context/AuthContext';
-import { useNotificationStore } from '../store/notificationStore';
+import { useNotifications } from '../context/NotificationContext';
 import { useSidebar } from '../context/SidebarContext';
 
 export const WebHeader = () => {
@@ -13,8 +13,8 @@ export const WebHeader = () => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const totalItems = useCartStore((state) => state.getTotalItems());
-  const unreadCount = useNotificationStore((state) => state.getUnreadCount());
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   const { toggle } = useSidebar();
 
   if (!isDesktop) return null;

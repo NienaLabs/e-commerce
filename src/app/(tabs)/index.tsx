@@ -35,7 +35,7 @@ import { listProducts, mapProductToCard, Product, getGroupedProducts, getHeroBan
 import { getRecommendations, RecommendationResponse } from '../../api/recommendations';
 import { listCategories } from '../../api/categories';
 import { useAuth } from '../../context/AuthContext';
-import { useNotificationStore } from '../../store/notificationStore';
+import { useNotifications } from '../../context/NotificationContext';
 import HeroBanner from '@/components/HeroBanner';
 import { useSidebar } from '../../context/SidebarContext';
 import { useLocationStore } from '../../store/locationStore';
@@ -82,7 +82,7 @@ export default function Home() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const insets = useSafeAreaInsets();
-  const unreadCount = useNotificationStore((state) => state.notifications.filter((n) => !n.read).length);
+  const { unreadCount, pushPermissionStatus, requestPushPermission } = useNotifications();
   
   // Location tracking
   const { city: locationName, status: locationStatus, startTracking } = useLocationStore();
@@ -293,7 +293,7 @@ export default function Home() {
 
   useEffect(() => {
     startTracking();
-  }, []);
+  }, [startTracking]);
 
 
   const renderDropdownChip = (

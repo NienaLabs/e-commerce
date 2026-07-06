@@ -85,10 +85,10 @@ export default function BecomeVendorScreen() {
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { token, refreshVendor } = useAuth();
   const { showToast } = useToast();
-  
+
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [form, setForm] = useState({
     storeName: '', storeSlug: '', description: '',
     logoUrl: '', bannerUrl: '',
@@ -122,10 +122,10 @@ export default function BecomeVendorScreen() {
       }
 
       let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-      setForm(prev => ({ 
-        ...prev, 
-        latitude: location.coords.latitude, 
-        longitude: location.coords.longitude 
+      setForm(prev => ({
+        ...prev,
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude
       }));
       showToast('Location accurately captured!', 'success');
     } catch (error) {
@@ -153,7 +153,7 @@ export default function BecomeVendorScreen() {
           <View style={{ margin: 20, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.ink }}>
             <View style={{ padding: 24 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.surface, marginBottom: 6 }}>Join 2,400+ Vendors</Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: '#000000ff', lineHeight: 22 }}>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.surface, lineHeight: 22 }}>
                 Sell to thousands of customers across the platform. No listing fees. Pay only when you sell.
               </Text>
             </View>
@@ -260,7 +260,7 @@ export default function BecomeVendorScreen() {
                       ...(form.latitude !== null && { latitude: form.latitude }),
                       ...(form.longitude !== null && { longitude: form.longitude }),
                     });
-                    
+
                     showToast('Vendor account created! Pending admin review.', 'success');
                     // Refresh vendor in context THEN navigate — the layout will show the pending screen
                     await refreshVendor();

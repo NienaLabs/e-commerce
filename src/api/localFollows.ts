@@ -38,3 +38,13 @@ export async function getAllFollowing(): Promise<string[]> {
   const set = await getFollowingSet();
   return [...set];
 }
+
+export async function setFollowState(vendorId: string, following: boolean): Promise<void> {
+  const set = await getFollowingSet();
+  if (following) {
+    set.add(vendorId);
+  } else {
+    set.delete(vendorId);
+  }
+  await saveFollowingSet(set);
+}

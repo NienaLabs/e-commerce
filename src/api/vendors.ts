@@ -89,7 +89,13 @@ export async function listVendors(params: ListVendorsParams = {}): Promise<Vendo
 
 /** GET /vendors/{vendor_id} — single vendor with stats */
 export async function getVendor(vendorId: string): Promise<VendorDetail> {
-  const res = await fetch(`${BASE_URL}/vendors/${vendorId}`);
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}?_t=${Date.now()}`, {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
   return handleResponse<VendorDetail>(res);
 }
 
@@ -243,8 +249,13 @@ export async function getVendorDashboardAlerts(token: string, vendorId: string) 
 
 /** GET /vendors/{vendor_id}/follow-status */
 export async function getVendorFollowStatus(token: string, vendorId: string): Promise<{ following: boolean }> {
-  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/follow-status`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/follow-status?_t=${Date.now()}`, {
+    headers: { 
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    },
   });
   return handleResponse<{ following: boolean }>(res);
 }

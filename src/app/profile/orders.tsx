@@ -97,7 +97,7 @@ function PinModal({
               Your Delivery PIN
             </Text>
             <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
-              Give this code to the delivery driver when your order arrives. Do not share it before delivery.
+              Show this code to the vendor when they deliver your order and hand it to you in person. Do not share it before then.
             </Text>
           </View>
 
@@ -126,7 +126,7 @@ function PinModal({
           }}>
             <Ionicons name="information-circle" size={18} color={colors.warning} style={{ marginTop: 1 }} />
             <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.warning, lineHeight: 20 }}>
-              For order <Text style={{ fontFamily: 'Inter_700Bold' }}>{orderId}</Text>. This PIN confirms the driver handed the package to you personally.
+              For order <Text style={{ fontFamily: 'Inter_700Bold' }}>{orderId}</Text>. The vendor enters this code on their app to confirm the delivery is complete.
             </Text>
           </View>
 
@@ -289,7 +289,7 @@ export default function OrdersScreen() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
           {allOrders.map(order => {
             const cfg = STATUS_CFG[order.status] ?? STATUS_CFG.confirmed;
-            const needsPin = order.status === 'shipped' && !!order.delivery_pin;
+            const needsPin = ['confirmed', 'processing', 'shipped'].includes(order.status) && !!order.delivery_pin;
             const isDeleting = deletingOrderId === order.id && deleteMutation.isPending;
 
             return (
@@ -355,12 +355,13 @@ export default function OrdersScreen() {
                   ))}
 
                   {/* Totals */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.surfaceMuted, marginBottom: 14 }}>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>
-                      Subtotal ${order.subtotal.toFixed(2)} · Shipping ${order.shipping_fee.toFixed(2)}
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
-                  </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.surfaceMuted, marginBottom: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="cash-outline" size={13} color={colors.success} />
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.success }}>Pay on Delivery</Text>
+                      </View>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>GH₵{order.total_amount.toFixed(2)}</Text>
+                    </View>
 
                   {/* PIN banner for shipped orders */}
                   {needsPin && (
@@ -380,7 +381,7 @@ export default function OrdersScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.primaryDim }}>Tap to see your Delivery PIN</Text>
                         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.primaryDim, marginTop: 2 }}>
-                          Show this code to the driver to complete delivery
+                          Show this code to the vendor when they deliver your items
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={colors.primaryDim} />

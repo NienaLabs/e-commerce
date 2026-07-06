@@ -19,6 +19,7 @@ import { getVendor, getVendorProducts, getVendorFollowStatus, toggleVendorFollow
 import { mapProductToCard } from '../../api/products';
 import { useAuth } from '../../context/AuthContext';
 import { ToastAndroid } from 'react-native';
+import { setFollowState } from '../../api/localFollows';
 
 const FALLBACK_BANNER = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=1200';
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200';
@@ -56,6 +57,12 @@ export default function VendorStorefront() {
 
   const following = followStatus?.following ?? false;
 
+  useEffect(() => {
+    if (followStatus) {
+      setFollowState(vendorId, followStatus.following);
+    }
+  }, [followStatus, vendorId]);
+
   const followMutation = useMutation({
     mutationFn: () => toggleVendorFollow(token!, vendorId),
     onMutate: async () => {
@@ -79,14 +86,37 @@ export default function VendorStorefront() {
       
       return { prevFollow, prevVendor };
     },
+    onSuccess: (data, _vars, context: any) => {
+      // Apply the authoritative response directly to the cache
+      queryClient.setQueryData(['vendor-follow-status', vendorId], data);
+      
+      // Keep local AsyncStorage in sync
+      setFollowState(vendorId, data.following);
+      
+      if (context?.prevVendor) {
+        const wasFollowing = context.prevFollow?.following ?? false;
+        const isNowFollowing = data.following;
+        if (wasFollowing !== isNowFollowing) {
+          const diff = isNowFollowing ? 1 : -1;
+          queryClient.setQueryData(['vendor', vendorId], {
+            ...context.prevVendor,
+            followers: Math.max(0, (context.prevVendor.followers || 0) + diff)
+          });
+        } else {
+          queryClient.setQueryData(['vendor', vendorId], context.prevVendor);
+        }
+      }
+    },
     onError: (_err, _vars, context: any) => {
       queryClient.setQueryData(['vendor-follow-status', vendorId], context.prevFollow);
       if (context.prevVendor) {
         queryClient.setQueryData(['vendor', vendorId], context.prevVendor);
       }
+      ToastAndroid.show('Failed to update follow status', ToastAndroid.SHORT);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendor-follow-status', vendorId] });
+      // Still invalidate the main vendor profile to get fresh stats (followers count)
+      // but the follow-status is already correctly synced by onSuccess
       queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
     },
   });

@@ -148,8 +148,7 @@ export default function OrderTracking() {
             {/* @ts-ignore */}
             <iframe src={osmUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Delivery Map" />
             <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8 }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginRight: 8 }} />
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>Agent en route</Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>Vendor en route</Text>
             </View>
           </View>
         )}
@@ -176,7 +175,7 @@ export default function OrderTracking() {
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Delivery PIN</Text>
                 </View>
                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginBottom: 16 }}>
-                  Provide this code to your delivery agent to receive your order. Do not share it until the package is handed to you.
+                  Show this code to the vendor to receive your order. Do not share it until the package is handed to you in person.
                 </Text>
                 <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, paddingVertical: 16, alignItems: 'center' }}>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 32, letterSpacing: 12, color: colors.ink }}>
@@ -233,10 +232,10 @@ export default function OrderTracking() {
           {/* Right column */}
           <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '100%', gap: 16 }}>
 
-            {/* Delivery Agent */}
+            {/* Vendor Contact */}
             {!isDelivered && currentStepIndex >= 2 && (
               <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Delivery Agent</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Vendor Contact</Text>
                 
                 {(order as any).agent_name ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -271,9 +270,9 @@ export default function OrderTracking() {
                       <Ionicons name="time" size={24} color={colors.inkMuted} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Assigning Agent...</Text>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Connecting with Vendor...</Text>
                       <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginTop: 4 }}>
-                        We are currently assigning a delivery agent to your order.
+                        Waiting for vendor contact details for delivery.
                       </Text>
                     </View>
                     
@@ -295,13 +294,13 @@ export default function OrderTracking() {
                   <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1, marginRight: 8 }} numberOfLines={2}>
                     {item.name ?? item.product_name ?? `Product #${(item.product_id ?? '').slice(0, 8).toUpperCase()}`} ×{item.quantity}
                   </Text>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>${(item.unit_price ?? item.price ?? 0).toFixed(2)}</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink }}>GH₵{(item.unit_price ?? item.price ?? 0).toFixed(2)}</Text>
                 </View>
               ))}
               <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 12 }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Total</Text>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primary }}>${order.total_amount.toFixed(2)}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Total (Pay on Delivery)</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.primary }}>GH₵{order.total_amount.toFixed(2)}</Text>
               </View>
             </View>
 

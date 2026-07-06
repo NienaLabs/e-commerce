@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,14 +48,6 @@ interface Address {
   isDefault?: boolean;
 }
 
-interface PaymentMethod {
-  id: string;
-  type: string;
-  last4: string;
-  expiry: string;
-  isDefault?: boolean;
-}
-
 export default function CheckoutScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
@@ -67,66 +59,46 @@ export default function CheckoutScreen() {
   const queryClient = useQueryClient();
   const { token } = React.useContext(AuthContext);
 
+  // Checkout is a single step: Address → Place Order → Confirmation
   const [step, setStep] = useState(1);
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [payments, setPayments] = useState<PaymentMethod[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPlacing, setIsPlacing] = useState(false);
   const [orderRef, setOrderRef] = useState<string | null>(null);
+  const [deliveryPin, setDeliveryPin] = useState<string | null>(null);
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const [landmark, setLandmark] = useState('');
   const [phone, setPhone] = useState('');
   const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number }>({ latitude: 5.6037, longitude: -0.1870 });
   const [mapReady, setMapReady] = useState(false);
 
-  // Get live location
   const { latitude: liveLat, longitude: liveLng, status: locationStatus } = useLocationStore();
-  
+
   useEffect(() => {
     if (liveLat && liveLng && !mapReady) {
       setMapCenter({ latitude: liveLat, longitude: liveLng });
       setMapReady(true);
     } else if (locationStatus === 'error' || locationStatus === 'denied') {
-      setMapReady(true); // fall back
+      setMapReady(true);
     }
   }, [liveLat, liveLng, locationStatus, mapReady]);
 
-  const SHIPPING_FEE = 4.99;
   const subtotal = getSubtotal();
-  const total = subtotal + SHIPPING_FEE;
 
   const selectedAddressIdRef = React.useRef<string | null>(null);
-  const selectedPaymentIdRef = React.useRef<string | null>(null);
 
-  // Load saved addresses & payments once on mount only — NOT on every focus,
-  // so that in-memory pinned addresses don't get wiped by a re-load.
   useEffect(() => {
     async function loadData() {
       try {
-        const [addrData, payData] = await Promise.all([
-          AsyncStorage.getItem('@user_addresses'),
-          AsyncStorage.getItem('@user_payments'),
-        ]);
+        const addrData = await AsyncStorage.getItem('@user_addresses');
         const addrs: Address[] = addrData ? JSON.parse(addrData) : [];
-        const pays: PaymentMethod[] = payData ? JSON.parse(payData) : [];
-
         setAddresses(addrs);
-        setPayments(pays);
-
-        // Auto-select default only if nothing is selected yet
         if (!selectedAddressIdRef.current) {
           const defaultAddr = addrs.find(a => a.isDefault) ?? addrs[0];
           if (defaultAddr) {
             setSelectedAddressId(defaultAddr.id);
             selectedAddressIdRef.current = defaultAddr.id;
-          }
-        }
-        if (!selectedPaymentIdRef.current) {
-          const defaultPay = pays.find(p => p.isDefault) ?? pays[0];
-          if (defaultPay) {
-            setSelectedPaymentId(defaultPay.id);
-            selectedPaymentIdRef.current = defaultPay.id;
           }
         }
       } catch (e) {
@@ -136,18 +108,17 @@ export default function CheckoutScreen() {
       }
     }
     loadData();
-  }, []); // empty deps — run once on mount only
+  }, []);
 
   const selectedAddress = addresses.find(a => a.id === selectedAddressId);
-  const selectedPayment = payments.find(p => p.id === selectedPaymentId);
 
   const handlePlaceOrder = async () => {
     if (!selectedAddressId) {
-      showToast('Please select a shipping address.', 'warning');
+      showToast('Please select a delivery address.', 'warning');
       return;
     }
-    if (!selectedPaymentId) {
-      showToast('Please select a payment method.', 'warning');
+    if (!phone) {
+      showToast('Please provide a phone number for delivery.', 'warning');
       return;
     }
     if (cartItems.length === 0) {
@@ -155,9 +126,8 @@ export default function CheckoutScreen() {
       return;
     }
 
-    setIsLoading(true);
+    setIsPlacing(true);
     try {
-      // Build the backend order payload
       const orderPayload = {
         shipping_address: {
           name: selectedAddress?.name ?? '',
@@ -175,7 +145,6 @@ export default function CheckoutScreen() {
         })),
       };
 
-      // POST to the real backend
       const res = await fetch(`${BASE_URL}/orders/`, {
         method: 'POST',
         headers: {
@@ -196,19 +165,18 @@ export default function CheckoutScreen() {
       }
 
       const backendOrder = await res.json();
-
       const realRef = backendOrder.id.slice(-8).toUpperCase();
       setOrderRef(realRef);
+      setDeliveryPin(backendOrder.delivery_pin ?? null);
 
-      // Also save a local copy for offline order-tracking page
       const now = new Date().toISOString();
       await saveLocalOrder({
         id: backendOrder.id,
         ref: realRef,
         status: backendOrder.status,
         subtotal,
-        shipping_fee: SHIPPING_FEE,
-        total_amount: total,
+        shipping_fee: 0,
+        total_amount: subtotal,
         delivery_pin: backendOrder.delivery_pin,
         discount_amount: backendOrder.discount_amount ?? 0,
         shipping_address: {
@@ -221,10 +189,7 @@ export default function CheckoutScreen() {
           landmark: landmark,
         },
         vendor_id: cartItems[0]?.vendorId ?? '',
-        payment: {
-          type: selectedPayment?.type ?? '',
-          last4: selectedPayment?.last4 ?? '',
-        },
+        payment: { type: 'cash_on_delivery', last4: '' },
         items: cartItems.map(item => ({
           id: `item-${item.id}`,
           product_id: item.id,
@@ -238,26 +203,16 @@ export default function CheckoutScreen() {
         updated_at: backendOrder.updated_at ?? now,
       });
 
-      // Clear the cart and refresh queries
       clearCart();
-      
-      if (selectedAddress?.lat && selectedAddress?.lng) {
-        await AsyncStorage.setItem('@active_delivery', JSON.stringify({
-          lat: selectedAddress.lat,
-          lng: selectedAddress.lng,
-          vendorId: cartItems[0]?.vendorId ?? ''
-        }));
-      }
-
       queryClient.invalidateQueries({ queryKey: ['local-orders'] });
       queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
       queryClient.invalidateQueries({ queryKey: ['vendor-analytics'] });
-      showToast('Order placed successfully!', 'success');
-      setStep(3);
+      showToast('Order placed! Show your PIN to the vendor on delivery.', 'success');
+      setStep(2);
     } catch (err: any) {
       showToast(err?.message ?? 'Failed to place order. Please try again.', 'error');
     } finally {
-      setIsLoading(false);
+      setIsPlacing(false);
     }
   };
 
@@ -273,36 +228,26 @@ export default function CheckoutScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       {isDesktop && <WebHeader />}
 
+      {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/cart')} style={{ padding: 8, marginRight: 8, marginLeft: -8 }}>
           <Ionicons name="arrow-back" size={24} color={colors.ink} />
         </Pressable>
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, flex: 1 }}>Checkout</Text>
-
-        {/* Step indicator */}
-        {step < 3 && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {[1, 2].map(s => (
-              <React.Fragment key={s}>
-                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: s <= step ? colors.ink : colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: s <= step ? colors.surface : colors.inkGhost }}>{s}</Text>
-                </View>
-                {s < 2 && <View style={{ width: 20, height: 2, backgroundColor: step > 1 ? colors.ink : colors.surfaceMuted, borderRadius: 1 }} />}
-              </React.Fragment>
-            ))}
-          </View>
-        )}
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, maxWidth: 600, alignSelf: 'center', width: '100%' }}>
 
-        {/* ─── Step 1: Address ─── */}
+        {/* ─── Step 1: Address + Place Order ─── */}
         {step === 1 && (
           <View>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 16 }}>Shipping Address</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 4 }}>Delivery Address</Text>
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginBottom: 16 }}>
+              The vendor will deliver to this location. You'll pay them in cash upon delivery.
+            </Text>
 
-            {/* Map Container */}
-            <View style={{ height: 250, width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+            {/* Map */}
+            <View style={{ height: 220, width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: colors.surfaceMuted }}>
               {mapReady ? (
                 <MapView
                   style={{ flex: 1, width: '100%', height: '100%' }}
@@ -375,6 +320,9 @@ export default function CheckoutScreen() {
               <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceMuted, marginBottom: 16 }}>
                 <Ionicons name="location-outline" size={36} color={colors.surfaceMuted} style={{ marginBottom: 8 }} />
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkMuted }}>No saved addresses</Text>
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 4, textAlign: 'center' }}>
+                  Tap the map or search above to set your delivery location
+                </Text>
               </View>
             ) : (
               <ScrollView style={{ maxHeight: 200, marginBottom: 16 }} nestedScrollEnabled>
@@ -418,8 +366,8 @@ export default function CheckoutScreen() {
               />
             </View>
 
-            <View style={{ marginBottom: 32 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 8 }}>Landmark (Optional, but recommended)</Text>
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 8 }}>Landmark (Optional)</Text>
               <TextInput
                 style={{
                   backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 16, height: 48,
@@ -432,109 +380,85 @@ export default function CheckoutScreen() {
                 onChangeText={setLandmark}
               />
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 4 }}>
-                Help the vendor locate you easily in case they find it difficult to track your current location.
+                Help the vendor locate you easily.
               </Text>
             </View>
 
-            <Button title="Continue to Payment" onPress={() => {
-              if (!selectedAddressId) { showToast('Please select a shipping address.', 'warning'); return; }
-              if (!phone) { showToast('Please provide a phone number for delivery.', 'warning'); return; }
-              setStep(2);
-            }} />
-          </View>
-        )}
-
-        {/* ─── Step 2: Payment + Summary ─── */}
-        {step === 2 && (
-          <View>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 16 }}>Payment Method</Text>
-
-            {payments.length === 0 ? (
-              <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceMuted, marginBottom: 16 }}>
-                <Ionicons name="card-outline" size={36} color={colors.surfaceMuted} style={{ marginBottom: 8 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkMuted }}>No saved payment methods</Text>
-              </View>
-            ) : (
-              <View style={{ gap: 12, marginBottom: 16 }}>
-                {payments.map(pay => {
-                  const sel = pay.id === selectedPaymentId;
-                  return (
-                    <Pressable key={pay.id} onPress={() => setSelectedPaymentId(pay.id)} style={{
-                      backgroundColor: colors.surface, borderRadius: 16, padding: 16,
-                      borderWidth: 1.5, borderColor: sel ? colors.primary : colors.surfaceMuted,
-                    }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="card" size={20} color={sel ? colors.primaryDim : colors.ink} style={{ marginRight: 12 }} />
-                          <View>
-                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{pay.type} •••• {pay.last4}</Text>
-                            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>Expires {pay.expiry}</Text>
-                          </View>
-                        </View>
-                        {sel && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-
-            <Pressable onPress={() => router.push('/profile/payments' as any)} style={{ padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceMuted, borderStyle: 'dashed', alignItems: 'center', marginBottom: 24 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>+ Add Payment Method</Text>
-            </Pressable>
-
             {/* Order Summary */}
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginBottom: 12 }}>Order Summary</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 12 }}>Order Summary</Text>
             <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.surfaceMuted, marginBottom: 8 }}>
               {cartItems.map(item => (
                 <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.ink, flex: 1, marginRight: 8 }} numberOfLines={1}>{item.name} × {item.quantity}</Text>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>${((item.salePrice ?? item.price) * item.quantity).toFixed(2)}</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>GH₵{((item.salePrice ?? item.price) * item.quantity).toFixed(2)}</Text>
                 </View>
               ))}
               <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 10 }} />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>Subtotal</Text>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>${subtotal.toFixed(2)}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>Shipping</Text>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>${SHIPPING_FEE.toFixed(2)}</Text>
-              </View>
-              <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 8 }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Total</Text>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>${total.toFixed(2)}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Total (Pay on Delivery)</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>GH₵{subtotal.toFixed(2)}</Text>
               </View>
             </View>
 
-            {selectedAddress && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingHorizontal: 4 }}>
-                <Ionicons name="location" size={14} color={colors.inkGhost} style={{ marginRight: 6 }} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>Delivering to: {selectedAddress.name} — {selectedAddress.street}</Text>
-              </View>
-            )}
-
-            <View style={{ gap: 12 }}>
-              <Button title="Place Order" onPress={handlePlaceOrder} />
-              <Pressable onPress={() => setStep(1)} style={{ padding: 14, alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>← Back to Address</Text>
-              </Pressable>
+            {/* Cash on delivery info banner */}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: colors.infoGhost, borderRadius: 14, padding: 14, marginBottom: 24 }}>
+              <Ionicons name="cash-outline" size={20} color={colors.info} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.info, lineHeight: 20 }}>
+                You'll pay <Text style={{ fontFamily: 'Inter_700Bold' }}>GH₵{subtotal.toFixed(2)}</Text> directly to the vendor when they deliver your order. No online payment needed.
+              </Text>
             </View>
+
+            <Button
+              title={isPlacing ? 'Placing Order…' : 'Place Order'}
+              onPress={handlePlaceOrder}
+              disabled={isPlacing}
+            />
           </View>
         )}
 
-        {/* ─── Step 3: Confirmation ─── */}
-        {step === 3 && (
-          <View style={{ alignItems: 'center', paddingTop: 60 }}>
+        {/* ─── Step 2: Confirmation with PIN ─── */}
+        {step === 2 && (
+          <View style={{ alignItems: 'center', paddingTop: 40 }}>
             <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
               <Ionicons name="checkmark" size={44} color={colors.primaryDim} />
             </View>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: colors.ink, marginBottom: 8 }}>Order Confirmed!</Text>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.primaryDim, marginBottom: 12 }}>#{orderRef}</Text>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.inkMuted, textAlign: 'center', lineHeight: 24, marginBottom: 32, maxWidth: 320 }}>
-              Your order has been placed successfully. You'll receive updates on your order status shortly.
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: colors.ink, marginBottom: 8 }}>Order Placed!</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.primaryDim, marginBottom: 4 }}>#{orderRef}</Text>
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center', lineHeight: 22, marginBottom: 32, maxWidth: 320 }}>
+              Your order is confirmed. The vendor will contact you to arrange delivery. Pay in cash when they arrive.
             </Text>
+
+            {/* Delivery PIN */}
+            {deliveryPin && (
+              <View style={{ width: '100%', backgroundColor: colors.surface, borderRadius: 24, padding: 24, borderWidth: 2, borderColor: colors.primaryBorder, marginBottom: 28, alignItems: 'center' }}>
+                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Ionicons name="shield-checkmark" size={28} color={colors.primaryDim} />
+                </View>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: colors.ink, marginBottom: 6 }}>Your Delivery PIN</Text>
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, textAlign: 'center', marginBottom: 20, maxWidth: 280, lineHeight: 20 }}>
+                  Show this code to the vendor when they deliver your order and hand it to you. Do not share it before delivery.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
+                  {deliveryPin.split('').map((digit, i) => (
+                    <View key={i} style={{
+                      width: 60, height: 72, borderRadius: 16,
+                      backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+                      shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
+                    }}>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 34, color: '#222022' }}>{digit}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.warningGhost, borderRadius: 12, padding: 12 }}>
+                  <Ionicons name="information-circle" size={16} color={colors.warning} />
+                  <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.warning, lineHeight: 18 }}>
+                    The vendor enters this code on their app to confirm delivery was completed.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             <View style={{ width: '100%', gap: 12 }}>
               <Button title="View My Orders" onPress={() => router.replace('/profile/orders' as any)} />
               <Pressable onPress={() => router.replace('/(tabs)')} style={{ padding: 16, alignItems: 'center' }}>
@@ -543,7 +467,6 @@ export default function CheckoutScreen() {
             </View>
           </View>
         )}
-
       </ScrollView>
 
       <LocationSearchModal

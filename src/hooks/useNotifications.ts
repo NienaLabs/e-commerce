@@ -1,25 +1,27 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import type * as ExpoNotifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { useAuth } from '../context/AuthContext';
-import { useNotificationStore } from '../store/notificationStore';
 import { registerFcmToken } from '../api/auth';
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
-// Configure foreground notification behavior for Native
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Only load expo-notifications on native or client-side web to avoid SSR errors
+let Notifications: any = null;
+if (Platform.OS !== 'web' || typeof window !== 'undefined') {
+  Notifications = require('expo-notifications');
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
-// Firebase Web config (only initialize on Web)
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -31,163 +33,201 @@ const firebaseConfig = {
 
 const FCM_TOKEN_STORAGE_KEY = 'registered_fcm_token';
 
-/** Read the previously-registered FCM token from local storage. */
 async function getStoredFcmToken(): Promise<string | null> {
   if (Platform.OS === 'web') {
-    return localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+    return typeof window !== 'undefined' ? localStorage.getItem(FCM_TOKEN_STORAGE_KEY) : null;
   }
   const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
   return AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY);
 }
 
-/** Persist the registered FCM token so we don't re-send it on every login. */
 async function storeRegisteredFcmToken(fcmToken: string): Promise<void> {
   if (Platform.OS === 'web') {
-    localStorage.setItem(FCM_TOKEN_STORAGE_KEY, fcmToken);
+    if (typeof window !== 'undefined') localStorage.setItem(FCM_TOKEN_STORAGE_KEY, fcmToken);
     return;
   }
   const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
   await AsyncStorage.setItem(FCM_TOKEN_STORAGE_KEY, fcmToken);
 }
 
-export function useNotifications() {
-  const { token, user } = useAuth();
-  const addNotification = useNotificationStore((state) => state.addNotification);
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
-  const webMessageUnsubscribe = useRef<(() => void) | null>(null);
+/** Gets a web FCM token — permission must already be granted */
+async function getWebFcmToken(): Promise<string | undefined> {
+  if (typeof Notification === 'undefined') {
+    console.warn('[FCM] Notification API not available (SSR?)');
+    return;
+  }
+  if (Notification.permission !== 'granted') {
+    console.warn('[FCM] Permission not granted, status:', Notification.permission);
+    return;
+  }
+  if (!firebaseConfig.apiKey) {
+    console.error('[FCM] Firebase config missing. Check EXPO_PUBLIC_FIREBASE_* env vars.');
+    return;
+  }
 
+  try {
+    const { getApps, getApp } = await import('firebase/app');
+    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+
+    // Register the service worker
+    await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+
+    // CRITICAL: Wait until the service worker is fully activated.
+    // navigator.serviceWorker.ready blocks until there is an active (not just installing) SW.
+    // Without this, getToken throws "no active Service Worker".
+    const swRegistration = await navigator.serviceWorker.ready;
+    console.log('[FCM] Service worker is active at scope:', swRegistration.scope);
+
+    const fcmToken = await getToken(messaging, {
+      vapidKey: process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: swRegistration,
+    });
+
+    if (fcmToken) {
+      console.log('[FCM] Token obtained:', fcmToken.slice(0, 20) + '...');
+      // Handle foreground (in-app) messages
+      onMessage(messaging, (payload) => {
+        console.log('[FCM] Foreground message:', payload);
+        // Show native notification even when app is in foreground
+        if (Notification.permission === 'granted') {
+          new Notification(payload.notification?.title || 'New Notification', {
+            body: payload.notification?.body || '',
+            icon: '/favicon.png',
+          });
+        }
+      });
+    } else {
+      console.error('[FCM] getToken returned empty token — check VAPID key in Firebase console');
+    }
+    return fcmToken || undefined;
+  } catch (err: any) {
+    // Brave browser specifically blocks FCM by default and throws an AbortError.
+    // We catch it here and use console.warn instead of console.error so it doesn't crash
+    // the Expo app with a red screen for users on Brave.
+    if (err.name === 'AbortError' || (err.message && err.message.includes('push service error'))) {
+      console.warn('[FCM] Push notifications are blocked by this browser (e.g., Brave). Please enable Google Push Services in browser settings if you want notifications.');
+    } else {
+      console.error('[FCM] Failed to get FCM token:', err);
+    }
+    return undefined;
+  }
+}
+
+export function usePushNotificationsSetup() {
+  const { token: sessionToken } = useAuth();
+  const notificationListener = useRef<ExpoNotifications.Subscription | null>(null);
+  const responseListener = useRef<ExpoNotifications.Subscription | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<string>('default');
+
+  // Read initial permission status on mount
   useEffect(() => {
-    if (!token || !user) return;
+    if (Platform.OS === 'web' && typeof Notification !== 'undefined') {
+      const status = Notification.permission;
+      console.log('[FCM] Initial browser permission status:', status);
+      setPermissionStatus(status);
+    } else if (Platform.OS !== 'web' && Device.isDevice) {
+      Notifications?.getPermissionsAsync().then(({ status }: any) => {
+        console.log('[FCM] Initial native permission status:', status);
+        setPermissionStatus(status);
+      });
+    }
+  }, []);
 
-    let isMounted = true;
+  // When BOTH permission is granted AND user is logged in, register the token
+  useEffect(() => {
+    if (permissionStatus !== 'granted' || !sessionToken) {
+      if (permissionStatus === 'granted' && !sessionToken) {
+        console.log('[FCM] Permission granted but user not logged in yet — will register after login.');
+      }
+      return;
+    }
 
-    async function setupNotifications() {
-      try {
-        let fcmToken: string | undefined;
+    console.log('[FCM] Ready to register token (permission=granted, logged in).');
 
-        if (Platform.OS === 'web') {
-          // --- WEB SETUP ---
-          if (!firebaseConfig.apiKey) {
-            console.warn('Firebase config missing on Web. Push notifications disabled.');
-            return;
-          }
-
-          // Don't auto-prompt on web — browsers require a user gesture.
-          // If already denied, skip silently. If 'default' (never asked), skip too —
-          // the app should call Notification.requestPermission() in response to a tap.
-          if (typeof Notification === 'undefined') return;
-          if (Notification.permission === 'denied') return;
-          if (Notification.permission !== 'granted') {
-            // Not yet granted — skip for now, will work once the user grants it
-            // via a user gesture elsewhere in the app.
-            return;
-          }
-
-          // Permission is already granted — safe to proceed without prompting.
-          const { getApps, getApp } = await import('firebase/app');
-          const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-          const messaging = getMessaging(app);
-
-          fcmToken = await getToken(messaging, {
-            vapidKey: process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
-          });
-
-          // Listen for foreground messages on Web
-          webMessageUnsubscribe.current = onMessage(messaging, (payload) => {
-            console.log('Foreground Web Push received:', payload);
-            if (payload.notification) {
-              addNotification({
-                id: payload.messageId ?? String(Date.now()),
-                title: payload.notification.title ?? 'New Notification',
-                body: payload.notification.body ?? '',
-                data: payload.data,
-              });
-            }
-          });
+    if (Platform.OS === 'web') {
+      getWebFcmToken().then(async (fcmToken) => {
+        if (!fcmToken || !sessionToken) return;
+        const stored = await getStoredFcmToken();
+        if (stored !== fcmToken) {
+          console.log('[FCM] Registering new token with backend...');
+          await registerFcmToken(fcmToken, sessionToken);
+          await storeRegisteredFcmToken(fcmToken);
+          console.log('[FCM] ✅ Token registered with backend!');
         } else {
-          // --- NATIVE SETUP (iOS/Android) ---
-          if (!Device.isDevice) {
-            console.log('Must use physical device for native Push Notifications');
-            return;
-          }
-
-          const { status: existingStatus } = await Notifications.getPermissionsAsync();
-          let finalStatus = existingStatus;
-          if (existingStatus !== 'granted') {
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-          }
-          if (finalStatus !== 'granted') {
-            console.log('Failed to get push token for push notification!');
-            return;
-          }
-
-          // Important: getDevicePushTokenAsync() gets the raw FCM/APNs token
-          // Since our backend uses Firebase Admin SDK natively, this is correct for Android.
-          // Note: On iOS, this returns an APNs token. If you want FCM on iOS without react-native-firebase,
-          // you would typically need to upload APNs auth keys to Firebase and let Firebase map them.
+          console.log('[FCM] Token unchanged, skipping backend registration.');
+        }
+      });
+    } else if (Device.isDevice) {
+      (async () => {
+        try {
           const tokenData = await Notifications.getDevicePushTokenAsync();
-          fcmToken = tokenData.data;
-
+          const fcmToken = tokenData?.data;
+          if (fcmToken && sessionToken) {
+            const stored = await getStoredFcmToken();
+            if (stored !== fcmToken) {
+              await registerFcmToken(fcmToken, sessionToken);
+              await storeRegisteredFcmToken(fcmToken);
+              console.log('[FCM] ✅ Native token registered with backend!');
+            }
+          }
           if (Platform.OS === 'android') {
-            Notifications.setNotificationChannelAsync('default', {
+            await Notifications.setNotificationChannelAsync('default', {
               name: 'default',
               importance: Notifications.AndroidImportance.MAX,
               vibrationPattern: [0, 250, 250, 250],
               lightColor: '#FF231F7C',
             });
           }
-
-          // Native Foreground Listeners
-          notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-            const req = notification.request;
-            addNotification({
-              id: req.identifier,
-              title: req.content.title ?? 'New Notification',
-              body: req.content.body ?? '',
-              data: req.content.data,
-            });
+          notificationListener.current = Notifications.addNotificationReceivedListener((notification: any) => {
+            console.log('[FCM] Foreground Native Push:', notification);
           });
-
-          responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-            console.log('User tapped notification:', response);
+          responseListener.current = Notifications.addNotificationResponseReceivedListener((response: any) => {
+            console.log('[FCM] User tapped notification:', response);
           });
+        } catch (e) {
+          console.error('[FCM] Native registration failed:', e);
         }
-
-        // Only register with the backend if the token is new or has rotated.
-        if (fcmToken && isMounted && token) {
-          const storedToken = await getStoredFcmToken();
-          if (storedToken === fcmToken) {
-            console.log('FCM token unchanged — skipping backend registration.');
-          } else {
-            console.log('Registering FCM Token with backend:', fcmToken);
-            await registerFcmToken(fcmToken, token);
-            await storeRegisteredFcmToken(fcmToken);
-          }
-        }
-      } catch (e: any) {
-        if (e?.name === 'AbortError' || e?.message?.includes('Registration failed')) {
-          console.warn('Web Push Notifications are not supported or properly configured:', e.message);
-        } else {
-          console.warn('Error setting up notifications:', e);
-        }
-      }
+      })();
     }
 
-    setupNotifications();
-
     return () => {
-      isMounted = false;
-      if (notificationListener.current) {
-        notificationListener.current.remove();
-      }
-      if (responseListener.current) {
-        responseListener.current.remove();
-      }
-      if (webMessageUnsubscribe.current) {
-        webMessageUnsubscribe.current();
-      }
+      if (notificationListener.current) notificationListener.current.remove();
+      if (responseListener.current) responseListener.current.remove();
     };
-  }, [token, user]);
+  }, [permissionStatus, sessionToken]);
+
+  /**
+   * Show the OS permission prompt. Safe to call before user is logged in.
+   * Token registration happens automatically once the user logs in.
+   */
+  const requestPermission = async (): Promise<boolean> => {
+    console.log('[FCM] requestPermission() called');
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof Notification === 'undefined') {
+          console.error('[FCM] Notification API unavailable.');
+          return false;
+        }
+        if (Notification.permission === 'denied') {
+          console.warn('[FCM] Permission DENIED — user must reset it manually in browser settings (🔒 in address bar).');
+          return false;
+        }
+        const result = await Notification.requestPermission();
+        console.log('[FCM] Browser permission result:', result);
+        setPermissionStatus(result);
+        return result === 'granted';
+      } else {
+        const { status } = await Notifications.requestPermissionsAsync();
+        console.log('[FCM] Native permission result:', status);
+        setPermissionStatus(status);
+        return status === 'granted';
+      }
+    } catch (e) {
+      console.error('[FCM] requestPermission error:', e);
+      return false;
+    }
+  };
+
+  return { permissionStatus, requestPermission };
 }

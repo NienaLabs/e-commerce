@@ -57,7 +57,7 @@ const RECONNECT_DELAY_MS = 3000;
 const PING_INTERVAL_MS = 25000;
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { user, vendor } = useAuth();
+  const { user, vendor, token } = useAuth();
   const queryClient = useQueryClient();
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -70,10 +70,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   // ── Build the WS URL based on who is logged in ────────────────────────────
 
   const buildWsUrl = useCallback((): string | null => {
-    if (vendor?.id) return `${BASE_URL}/ws/vendor/${vendor.id}`;
-    if (user?.id)   return `${BASE_URL}/ws/user/${user.id}`;
+    if (!token) return null; // no session — don't connect
+    const params = `?token=${encodeURIComponent(token)}`;
+    if (vendor?.id) return `${BASE_URL}/ws/vendor/${vendor.id}${params}`;
+    if (user?.id)   return `${BASE_URL}/ws/user/${user.id}${params}`;
     return null;
-  }, [vendor, user]);
+  }, [vendor, user, token]);
 
   // ── Emit incoming events to all subscribers ───────────────────────────────
 

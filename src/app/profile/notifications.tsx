@@ -1,15 +1,33 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, Switch } from 'react-native';
+import { View, Text, ScrollView, Pressable, Switch, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import { useTheme } from '../../theme/ThemeContext';
+import { useNotifications } from '../../context/NotificationContext';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
-  const [orderUpdates, setOrderUpdates] = useState(true);
-  const [promotions, setPromotions] = useState(false);
+  const { pushPermissionStatus, requestPushPermission } = useNotifications();
+  
+  const isPushEnabled = pushPermissionStatus === 'granted';
+
+  const handleTogglePush = async (newValue: boolean) => {
+    if (newValue) {
+      await requestPushPermission();
+    } else {
+      if (Platform.OS === 'web') {
+        window.alert("To disable push notifications, please change your browser settings.");
+      } else {
+        Alert.alert(
+          "Disable Notifications",
+          "To disable push notifications, please change your device settings.",
+          [{ text: "OK" }]
+        );
+      }
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -29,8 +47,8 @@ export default function NotificationsScreen() {
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>Get notified about your order status, shipping, and delivery.</Text>
             </View>
             <Switch
-              value={orderUpdates}
-              onValueChange={setOrderUpdates}
+              value={isPushEnabled}
+              onValueChange={handleTogglePush}
               trackColor={{ false: colors.surfaceMuted, true: colors.primary }}
               thumbColor={colors.surface}
             />
@@ -42,8 +60,8 @@ export default function NotificationsScreen() {
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>Receive special offers, discounts, and exclusive deals.</Text>
             </View>
             <Switch
-              value={promotions}
-              onValueChange={setPromotions}
+              value={isPushEnabled}
+              onValueChange={handleTogglePush}
               trackColor={{ false: colors.surfaceMuted, true: colors.primary }}
               thumbColor={colors.surface}
             />

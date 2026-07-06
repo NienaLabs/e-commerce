@@ -237,15 +237,28 @@ export default function RegisterScreen() {
       alert('Please fill out all required fields.');
       return;
     }
+    if (fullName.trim().length < 2) {
+      alert('Please enter your full name (at least 2 characters).');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 8) {
+      alert('Password must be at least 8 characters long.');
+      return;
+    }
     if (password !== confirmPassword) {
       alert('Passwords do not match.');
       return;
     }
 
     try {
-      await registerMutation.mutateAsync({ email, name: fullName, password });
+      await registerMutation.mutateAsync({ email: email.trim(), name: fullName.trim(), password });
 
-      const session = await login({ username: email, password });
+      const session = await login({ username: email.trim(), password });
       const { getMe } = await import('../../api/auth');
       const user = await getMe(session.token);
 

@@ -5,12 +5,12 @@ importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-comp
 
 // NOTE: Replace the placeholders below with the values from your .env file.
 firebase.initializeApp({
-  apiKey: 'YOUR_EXPO_PUBLIC_FIREBASE_API_KEY',
-  authDomain: 'YOUR_EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  projectId: 'YOUR_EXPO_PUBLIC_FIREBASE_PROJECT_ID',
-  storageBucket: 'YOUR_EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
-  messagingSenderId: 'YOUR_EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  appId: 'YOUR_EXPO_PUBLIC_FIREBASE_APP_ID',
+  apiKey: "AIzaSyB8TmubkjGN0DMdtzFx7qumGFZhMt8Uh88",
+  authDomain: "niena-f0339.firebaseapp.com",
+  projectId: "niena-f0339",
+  storageBucket: "niena-f0339.firebasestorage.app",
+  messagingSenderId: "137439028204",
+  appId: "1:137439028204:web:c2c0bae77e6433900116c9",
 });
 
 const messaging = firebase.messaging();
@@ -24,4 +24,26 @@ messaging.onBackgroundMessage((payload) => {
     data: payload.data,
   };
   self.registration.showNotification(title, options);
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const action_url = event.notification.data?.action_url || '/';
+  
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Check if there is already a window/tab open
+      for (let i = 0; i < windowClients.length; i++) {
+        let client = windowClients[i];
+        // If it's open, just focus it
+        if (client.url.includes(action_url) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // If not, open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(action_url);
+      }
+    })
+  );
 });

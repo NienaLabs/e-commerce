@@ -71,7 +71,7 @@ export default function VendorPayoutsScreen() {
           {[
             { label: 'This Month', value: `$${(summary?.revenue_this_month ?? 0).toFixed(2)}`, icon: 'trending-up', color: colors.success },
             { label: 'Total Earned', value: `$${(summary?.total_revenue ?? 0).toFixed(2)}`, icon: 'wallet', color: colors.primaryDim },
-            { label: 'Commission', value: '8%', icon: 'receipt', color: colors.warning },
+            { label: 'Commission', value: '4.5%', icon: 'receipt', color: colors.warning },
           ].map(stat => (
             <View key={stat.label} style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.surfaceMuted, alignItems: 'center' }}>
               <Ionicons name={stat.icon as any} size={20} color={stat.color} style={{ marginBottom: 6 }} />
