@@ -106,6 +106,18 @@ export async function login(payload: LoginPayload): Promise<SessionResponse> {
   return handleResponse<SessionResponse>(res);
 }
 
+/** POST /auth/logout — revoke the session token server-side */
+export async function logout(token: string): Promise<void> {
+  try {
+    await fetch(`${BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    // Best-effort: local sign-out proceeds even if the server is unreachable.
+  }
+}
+
 /** GET /auth/me — fetch the currently authenticated user */
 export async function getMe(token: string): Promise<UserResponse> {
   const res = await fetch(`${BASE_URL}/auth/me`, {

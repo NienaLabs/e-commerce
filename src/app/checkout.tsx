@@ -275,7 +275,7 @@ export default function CheckoutScreen() {
                             street = `${place.streetNumber || ''} ${place.street || ''}`.trim() || 'Selected Location';
                             city = `${place.city || ''}, ${place.region || ''} ${place.postalCode || ''}`.trim();
                           }
-                        } catch (e) {}
+                        } catch (e) { }
                       }
                       const newId = Date.now().toString();
                       const newAddr = { id: newId, name: 'Pinned Location', street, city, lat, lng };
@@ -404,7 +404,7 @@ export default function CheckoutScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: colors.infoGhost, borderRadius: 14, padding: 14, marginBottom: 24 }}>
               <Ionicons name="cash-outline" size={20} color={colors.info} style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.info, lineHeight: 20 }}>
-                You'll pay <Text style={{ fontFamily: 'Inter_700Bold' }}>GH₵{subtotal.toFixed(2)}</Text> directly to the vendor when they deliver your order. No online payment needed.
+                You'll pay <Text style={{ fontFamily: 'Inter_700Bold' }}>GH₵{subtotal.toFixed(2)}</Text> directly to the vendor when they deliver your order.
               </Text>
             </View>
 

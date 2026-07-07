@@ -40,8 +40,8 @@ export default function ChatScreen() {
         setIsLoading(false);
       });
 
-    // Connect WebSocket
-    const socket = new WebSocket(`${WS_URL}/chat/ws/${user.id}`);
+    // Connect WebSocket — the backend authenticates the socket via ?token=
+    const socket = new WebSocket(`${WS_URL}/chat/ws/${user.id}?token=${encodeURIComponent(token)}`);
     ws.current = socket;
 
     socket.onmessage = (e) => {

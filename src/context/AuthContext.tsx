@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { UserResponse, getMe } from '../api/auth';
+import { UserResponse, getMe, logout as apiLogout } from '../api/auth';
 import { VendorDetail, getVendorMe, ApiError } from '../api/vendors';
 import { router, useSegments } from 'expo-router';
 import { useCartStore } from '../store/cartStore';
@@ -174,9 +174,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // during the brief window between setUser() and fetchVendor() resolving.
           await fetchVendor(storedToken);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to load user:', error);
         await removeToken();
+        // A suspended account gets a dedicated screen instead of a silent
+        // bounce back to login with no explanation.
+        if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+          router.replace('/suspended' as any);
+        }
       } finally {
         // Mark the initial load cycle as done, then let the routing guard run
         isInitialLoad.current = false;
@@ -242,6 +247,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Revoke the session server-side so the token can't be replayed later.
+    if (token) {
+      await apiLogout(token);
+    }
     await removeToken();
     // Switch all stores to guest (clears in-memory state)
     useCartStore.getState()._switchUser(null);

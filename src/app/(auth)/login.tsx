@@ -253,6 +253,10 @@ export default function LoginScreen() {
         router.replace('/(tabs)');
       }
     } catch (error: any) {
+      if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+        router.replace('/suspended' as any);
+        return;
+      }
       alert(error.message);
     }
   };
@@ -278,6 +282,10 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       console.error(error);
+      if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+        router.replace('/suspended' as any);
+        return;
+      }
       alert('Google login failed: ' + error.message);
     }
   };
