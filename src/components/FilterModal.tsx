@@ -61,7 +61,7 @@ function FilterChip({
         <Ionicons
           name="checkmark"
           size={12}
-          color={colors.isDark ? '#18181a' : '#ffffff'}
+          color={colors.onPrimary}
           style={{ marginRight: 4 }}
         />
       )}
@@ -141,7 +141,7 @@ function SortRow({
           <Ionicons
             name="checkmark"
             size={12}
-            color={colors.isDark ? '#18181a' : '#ffffff'}
+            color={colors.onPrimary}
           />
         </View>
       )}
@@ -372,7 +372,7 @@ export const FilterModal = ({ visible, onClose, categoryId, onApply }: FilterMod
                       style={{
                         fontFamily: 'Inter_700Bold',
                         fontSize: 10,
-                        color: colors.isDark ? '#18181a' : '#fff',
+                        color: colors.onPrimary,
                       }}
                     >
                       {SORT_OPTIONS.find((o: FilterOption) => o.value === sort)?.label ?? sort}
@@ -467,7 +467,7 @@ export const FilterModal = ({ visible, onClose, categoryId, onApply }: FilterMod
                             style={{
                               fontFamily: 'Inter_700Bold',
                               fontSize: 10,
-                              color: colors.isDark ? '#18181a' : '#fff',
+                              color: colors.onPrimary,
                             }}
                           >
                             {selectedVals.length}
@@ -607,7 +607,7 @@ export const FilterModal = ({ visible, onClose, categoryId, onApply }: FilterMod
                 style={{
                   fontFamily: 'Inter_700Bold',
                   fontSize: 15,
-                  color: colors.isDark ? '#18181a' : '#ffffff',
+                  color: colors.onPrimary,
                   letterSpacing: 0.2,
                 }}
               >

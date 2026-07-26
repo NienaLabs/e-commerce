@@ -316,7 +316,7 @@ export default function AddProductScreen() {
                           <Text style={{
                             fontFamily: 'Inter_600SemiBold',
                             fontSize: 13,
-                            color: isSelected ? (colors.isDark ? '#18181a' : '#ffffff') : colors.inkSoft,
+                            color: isSelected ? colors.onPrimary : colors.inkSoft,
                           }}>
                             {opt.label}
                           </Text>

@@ -29,7 +29,7 @@ export const LocationSearchModal = ({ visible, onClose, onSelectLocation }: Loca
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'ElectricApp/1.0' } }
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'NienaEmporium/1.0' } }
       );
       const data = await res.json();
       setResults(data);

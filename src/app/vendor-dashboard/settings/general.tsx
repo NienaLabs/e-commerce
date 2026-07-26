@@ -222,7 +222,7 @@ export default function GeneralSettingsScreen() {
           <Field label="Store URL Slug" placeholder="your-store" value={form.storeSlug} onChangeText={(v: string) => setForm(f => ({ ...f, storeSlug: v }))} colors={colors} />
           <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 12, padding: 14, marginBottom: 18 }}>
             <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>
-              Your store URL: <Text style={{ color: colors.primaryDim, fontFamily: 'Inter_600SemiBold' }}>electric.app/vendor/{form.storeSlug}</Text>
+              Your store URL: <Text style={{ color: colors.primaryDim, fontFamily: 'Inter_600SemiBold' }}>nienalabs.com/vendor/{form.storeSlug}</Text>
             </Text>
           </View>
           <Field label="Store Bio" placeholder="Tell customers about your store..." value={form.bio} onChangeText={(v: string) => setForm(f => ({ ...f, bio: v }))} colors={colors} multiline />

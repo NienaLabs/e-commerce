@@ -74,7 +74,7 @@ export default function TabLayout() {
           options={{
             title: 'Cart',
             tabBarBadge: totalItems > 0 ? totalItems : undefined,
-            tabBarBadgeStyle: { backgroundColor: colors.primary, color: colors.ink },
+            tabBarBadgeStyle: { backgroundColor: colors.primary, color: colors.onPrimary },
             tabBarIcon: ({ color, focused }) => (
               <Ionicons name={focused ? "cart" : "cart-outline"} size={24} color={color} />
             ),

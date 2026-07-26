@@ -4,11 +4,18 @@ import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
+import { resolveNotificationRoute } from '../api/notifications';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
-  const { notifications, markAsRead, markAllAsRead, isLoading, unreadCount, pushPermissionStatus, requestPushPermission } = useNotifications();
+  const { notifications, markAsRead, markAllAsRead, deleteNotification, clearAll, isLoading, unreadCount, pushPermissionStatus, requestPushPermission } = useNotifications();
+
+  const handleOpen = (notif: { id: string; is_read: boolean; action_url?: string }) => {
+    if (!notif.is_read) markAsRead(notif.id);
+    const route = resolveNotificationRoute(notif.action_url);
+    if (route) router.push(route as any);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top', 'bottom']}>
@@ -24,11 +31,20 @@ export default function NotificationsScreen() {
               <Ionicons name="arrow-back" size={24} color={colors.ink} />
             </Pressable>
           ),
-          headerRight: () => unreadCount > 0 ? (
-            <Pressable onPress={markAllAsRead} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primary }}>Mark all read</Text>
-            </Pressable>
-          ) : null,
+          headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {unreadCount > 0 && (
+                <Pressable onPress={markAllAsRead} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primary }}>Mark all read</Text>
+                </Pressable>
+              )}
+              {notifications.length > 0 && (
+                <Pressable onPress={clearAll} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.error }}>Clear all</Text>
+                </Pressable>
+              )}
+            </View>
+          ),
         }}
       />
 
@@ -50,7 +66,7 @@ export default function NotificationsScreen() {
                 opacity: pressed ? 0.8 : 1
               }]}
             >
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#FFFFFF' }}>Allow</Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.onPrimary }}>Allow</Text>
             </Pressable>
           </View>
         )}
@@ -73,7 +89,7 @@ export default function NotificationsScreen() {
             {notifications.map((notif) => (
               <Pressable
                 key={notif.id}
-                onPress={() => markAsRead(notif.id)}
+                onPress={() => handleOpen(notif)}
                 style={({ pressed }) => [{
                   backgroundColor: notif.is_read ? colors.surfaceSoft : colors.surface,
                   padding: 16,
@@ -106,6 +122,13 @@ export default function NotificationsScreen() {
                 {!notif.is_read && (
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, alignSelf: 'center', marginLeft: 8 }} />
                 )}
+                <Pressable
+                  onPress={() => deleteNotification(notif.id)}
+                  hitSlop={10}
+                  style={{ padding: 6, alignSelf: 'center', marginLeft: 4 }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.inkGhost} />
+                </Pressable>
               </Pressable>
             ))}
           </View>

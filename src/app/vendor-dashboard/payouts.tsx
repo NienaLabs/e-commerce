@@ -42,7 +42,7 @@ export default function VendorPayoutsScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 20, maxWidth: isDesktop ? 720 : undefined, alignSelf: 'center', width: '100%' }}>
 
         {/* Balance Card */}
-        <View style={{ backgroundColor: colors.ink, borderRadius: 24, padding: 28 }}>
+        <View style={{ backgroundColor: colors.heroSurface, borderRadius: 24, padding: 28 }}>
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#ffffff70', marginBottom: 6 }}>Available Balance</Text>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 44, color: colors.primary, lineHeight: 52 }}>
             ${(summary?.total_revenue ?? 0).toFixed(2)}

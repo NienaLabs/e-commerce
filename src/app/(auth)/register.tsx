@@ -311,7 +311,7 @@ export default function RegisterScreen() {
             lineHeight: 22,
           }}
         >
-          Join thousands shopping on Electric.
+          Join thousands shopping on Niena Emporium.
         </Text>
       </View>
 

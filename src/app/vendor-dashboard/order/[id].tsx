@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, Platform, useWindowDimensions,
-  Modal, TextInput, ActivityIndicator
+  Modal, TextInput, ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -137,6 +137,25 @@ export default function VendorOrderDetailScreen() {
     }
   };
 
+  // A vendor may cancel only while the order hasn't shipped. Repeated
+  // cancellations are tracked server-side and flag the admin at 3.
+  const CANCELLABLE = ['pending', 'confirmed', 'processing'];
+
+  const doCancel = () => updateStatus('cancelled');
+
+  const confirmCancel = () => {
+    const msg = 'Cancel this order?';
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-alert
+      if (typeof window !== 'undefined' && window.confirm(msg)) doCancel();
+    } else {
+      Alert.alert('Cancel Order', msg, [
+        { text: 'Keep Order', style: 'cancel' },
+        { text: 'Cancel Order', style: 'destructive', onPress: doCancel },
+      ]);
+    }
+  };
+
   const handleVerifyPin = async () => {
     try {
       const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -148,7 +167,7 @@ export default function VendorOrderDetailScreen() {
         },
         body: JSON.stringify({ pin: pinInput })
       });
-      
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.detail || 'Incorrect delivery PIN');
@@ -225,10 +244,10 @@ export default function VendorOrderDetailScreen() {
               padding: 20,
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                <Ionicons name="shield-checkmark" size={18} color={colors.ink} style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>Delivery Verification Required</Text>
+                <Ionicons name="shield-checkmark" size={18} color={colors.onPrimary} style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.onPrimary }}>Delivery Verification Required</Text>
               </View>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.ink, lineHeight: 20, marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.onPrimary, lineHeight: 20, marginBottom: 16 }}>
                 When you personally deliver the item to the customer and they pay you in cash, ask for their 4-digit code to confirm delivery.
               </Text>
               <Pressable
@@ -273,12 +292,12 @@ export default function VendorOrderDetailScreen() {
             {/* Customer Details */}
             <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 12, padding: 16, marginBottom: 16 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkGhost, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Customer Details</Text>
-              
+
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Ionicons name="person-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{order.shipping_address?.name || 'Customer'}</Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{order.shipping_address?.name || order.customer_name || 'Customer'}</Text>
               </View>
-              
+
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <Ionicons name="call-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8 }} />
                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink }}>
@@ -425,6 +444,22 @@ export default function VendorOrderDetailScreen() {
             >
               <Ionicons name="checkmark-circle" size={20} color={colors.ink} />
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Verify Delivery with PIN</Text>
+            </Pressable>
+          )}
+
+          {CANCELLABLE.includes(currentStatus) && (
+            <Pressable
+              onPress={confirmCancel}
+              disabled={statusSaving}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.errorGhost : colors.surface,
+                borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20,
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                borderWidth: 1.5, borderColor: colors.error, opacity: statusSaving ? 0.5 : 1,
+              })}
+            >
+              <Ionicons name="close-circle-outline" size={20} color={colors.error} />
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.error }}>Cancel Order</Text>
             </Pressable>
           )}
 

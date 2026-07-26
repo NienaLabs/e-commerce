@@ -92,7 +92,7 @@ export default function VendorAnalyticsScreen() {
 
           {/* ── KPI Summary Cards ── */}
           <View style={{ flexDirection: 'row', gap: 14 }}>
-            <View style={{ flex: 1, backgroundColor: colors.ink, borderRadius: 20, padding: 18 }}>
+            <View style={{ flex: 1, backgroundColor: colors.heroSurface, borderRadius: 20, padding: 18 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#ffffff70', marginBottom: 4 }}>Total Revenue</Text>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 26, color: colors.primary }}>
                 ${(summary?.total_revenue ?? 0).toFixed(2)}

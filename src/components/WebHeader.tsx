@@ -47,8 +47,8 @@ export const WebHeader = () => {
           <Ionicons name="menu" size={28} color={colors.ink} />
         </Pressable>
         <Pressable onPress={() => handleNav('/')} style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="cube" size={32} color={colors.primary} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink, marginLeft: 8 }}>Electric</Text>
+          <Ionicons name="storefront" size={28} color={colors.primary} />
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginLeft: 8 }}>Niena Emporium</Text>
         </Pressable>
       </View>
 
@@ -70,7 +70,7 @@ export const WebHeader = () => {
             </Text>
             {badge && (
               <View style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.ink }}>{badge}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.onPrimary }}>{badge}</Text>
               </View>
             )}
           </Pressable>

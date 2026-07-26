@@ -11,6 +11,17 @@ import { useEventStore } from '../store/eventStore';
 const TOKEN_KEY = 'vendor_app_token';
 const VENDOR_ACCOUNT_KEY = 'vendor_has_account';
 
+async function getPersistedHasVendor(): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    try { return localStorage.getItem(VENDOR_ACCOUNT_KEY) === 'true'; } catch { return false; }
+  } else {
+    try {
+      const val = await AsyncStorage.getItem(VENDOR_ACCOUNT_KEY);
+      return val === 'true';
+    } catch { return false; }
+  }
+}
+
 async function setToken(token: string) {
   if (Platform.OS === 'web') {
     try {
@@ -81,14 +92,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [vendor, setVendor] = useState<VendorDetail | null>(null);
 
-  // Initialise hasVendorAccount from localStorage so that on a hard refresh the routing
-  // guard doesn't momentarily see hasVendorAccount=false and redirect to become-vendor.
+  // On native we can't read AsyncStorage synchronously, so we start false
+  // and immediately prime it from storage via useEffect below.
   const persistedHasVendor = Platform.OS === 'web'
     ? (() => { try { return localStorage.getItem(VENDOR_ACCOUNT_KEY) === 'true'; } catch { return false; } })()
     : false;
   const [hasVendorAccount, setHasVendorAccount] = useState(persistedHasVendor);
 
-  // Helper that sets hasVendorAccount AND persists the value to localStorage
+  // Prime native flag from AsyncStorage on mount (avoids false flash)
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      getPersistedHasVendor().then(val => {
+        if (val) setHasVendorAccount(true);
+      });
+    }
+  }, []);
+
   const setHasVendorAccountPersisted = (value: boolean) => {
     setHasVendorAccount(value);
     if (Platform.OS === 'web') {
@@ -99,6 +118,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem(VENDOR_ACCOUNT_KEY);
         }
       } catch { }
+    } else {
+      // Native: persist via AsyncStorage
+      if (value) {
+        AsyncStorage.setItem(VENDOR_ACCOUNT_KEY, 'true').catch(() => {});
+      } else {
+        AsyncStorage.removeItem(VENDOR_ACCOUNT_KEY).catch(() => {});
+      }
     }
   };
 

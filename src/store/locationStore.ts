@@ -19,7 +19,7 @@ async function reverseGeocodeCity(lat: number, lng: number): Promise<string> {
     if (Platform.OS === 'web') {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-        { headers: { 'Accept-Language': 'en', 'User-Agent': 'ElectricApp/1.0' } }
+        { headers: { 'Accept-Language': 'en', 'User-Agent': 'NienaEmporium/1.0' } }
       );
       const data = await res.json();
       const a = data?.address;

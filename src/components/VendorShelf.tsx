@@ -101,7 +101,7 @@ function VendorCard({ vendor, isFollowed, colors }: VendorCardProps) {
             borderColor: colors.surface,
           }}
         >
-          <Ionicons name="checkmark" size={11} color={colors.isDark ? colors.ink : '#222'} />
+          <Ionicons name="checkmark" size={11} color={colors.onPrimary} />
         </View>
       )}
 

@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { WebHeader } from '../../components/WebHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listMyOrders, deleteMyOrder, Order } from '../../api/orders';
+import { listMyOrders, deleteMyOrder, cancelMyOrder, Order } from '../../api/orders';
 import { getLocalOrders, LocalOrder } from '../../api/localOrders';
 import { AuthContext } from '../../context/AuthContext';
 import { useWsEvent } from '../../context/WebSocketContext';
@@ -193,6 +193,32 @@ export default function OrdersScreen() {
       }
     },
   });
+
+  // Cancel mutation — only pending backend orders can be cancelled (restores stock)
+  const cancelMutation = useMutation({
+    mutationFn: (orderId: string) => cancelMyOrder(token!, orderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
+    },
+    onError: (err: any) => {
+      const msg = err?.message ?? 'Could not cancel order.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    },
+  });
+
+  const handleCancel = (order: DisplayOrder) => {
+    const confirm = () => cancelMutation.mutate(order.id);
+    const msg = `Cancel order #${order.ref}? Your items will be released back to stock.`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) confirm();
+    } else {
+      Alert.alert('Cancel Order', msg, [
+        { text: 'Keep Order', style: 'cancel' },
+        { text: 'Cancel Order', style: 'destructive', onPress: confirm },
+      ]);
+    }
+  };
 
   const handleDelete = (order: DisplayOrder) => {
     if (order.isLocal) {
@@ -408,6 +434,21 @@ export default function OrdersScreen() {
                     >
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>Track Order</Text>
                     </Pressable>
+                    {/* Cancel — only while the order is still pending and lives on the backend */}
+                    {order.status === 'pending' && !order.isLocal && (
+                      <Pressable
+                        onPress={() => handleCancel(order)}
+                        disabled={cancelMutation.isPending}
+                        style={({ pressed }) => ({
+                          flex: 1, backgroundColor: pressed ? colors.errorGhost : colors.surfaceSoft,
+                          paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                          borderWidth: 1, borderColor: colors.error,
+                          opacity: cancelMutation.isPending ? 0.5 : 1,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.error }}>Cancel</Text>
+                      </Pressable>
+                    )}
                     <Pressable
                       onPress={() => {
                         if (order.status === 'delivered') {

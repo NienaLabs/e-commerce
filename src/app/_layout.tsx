@@ -9,9 +9,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ThemeProvider } from '../theme/ThemeContext';
 import {
-  useQuery,
-  useMutation,
-  useQueryClient,
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query'
@@ -47,6 +44,11 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    // Start live location tracking globally on app load
+    useLocationStore.getState().startTracking();
+  }, []);
+
+  useEffect(() => {
     if (loaded || error) {
       SplashScreen.hideAsync();
     }
@@ -55,11 +57,6 @@ export default function RootLayout() {
   if (!loaded && !error) {
     return null;
   }
-
-  useEffect(() => {
-    // Start live location tracking globally on app load
-    useLocationStore.getState().startTracking();
-  }, []);
 
 
   return (

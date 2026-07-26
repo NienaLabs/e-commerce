@@ -149,7 +149,7 @@ export default function ProductDetail() {
           <Ionicons name="cart-outline" size={24} color={colors.ink} />
           {totalCartItems > 0 && (
             <View style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.isDark ? colors.ink : '#222022' }}>{totalCartItems}</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.onPrimary }}>{totalCartItems}</Text>
             </View>
           )}
         </Pressable>

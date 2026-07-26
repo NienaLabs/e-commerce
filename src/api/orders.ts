@@ -77,6 +77,15 @@ export async function getMyOrder(token: string, orderId: string): Promise<Order>
   return handleResponse<Order>(res);
 }
 
+/** PATCH /orders/me/{order_id}/cancel — cancel a pending order (restores stock) */
+export async function cancelMyOrder(token: string, orderId: string): Promise<Order> {
+  const res = await fetch(`${BASE_URL}/orders/me/${orderId}/cancel`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return handleResponse<Order>(res);
+}
+
 /** DELETE /orders/me/{order_id} — permanently delete a completed order */
 export async function deleteMyOrder(token: string, orderId: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/orders/me/${orderId}`, {

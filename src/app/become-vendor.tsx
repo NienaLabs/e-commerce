@@ -161,7 +161,7 @@ export default function BecomeVendorScreen() {
               {[['$2.4M', 'Monthly GMV'], ['12K+', 'Orders/Day'], ['0%', 'Listing Fee']].map(([val, lbl], i) => (
                 <View key={i} style={{ flex: 1, alignItems: 'center', borderRightWidth: i < 2 ? 1 : 0, borderRightColor: '#ffffff15' }}>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.primary }}>{val}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: '#ffffff70', marginTop: 2 }}>{lbl}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: `${colors.surface}b3`, marginTop: 2 }}>{lbl}</Text>
                 </View>
               ))}
             </View>

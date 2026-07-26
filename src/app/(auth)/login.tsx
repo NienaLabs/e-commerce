@@ -18,7 +18,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
-import { useMutation } from '@tanstack/react-query';
 import { login, getGoogleLoginUrl } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
@@ -232,16 +231,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const { signIn } = useAuth();
 
-  const loginMutation = useMutation({
-    mutationFn: login,
-    onSuccess: async () => {},
-  });
-
   const handleLogin = async () => {
     if (!email || !password) return;
+    setIsLoggingIn(true);
     try {
       const { getMe } = await import('../../api/auth');
       const session = await login({ username: email, password });
@@ -258,6 +254,8 @@ export default function LoginScreen() {
         return;
       }
       alert(error.message);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -268,7 +266,17 @@ export default function LoginScreen() {
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
       if (result.type === 'success' && result.url) {
         const parsedUrl = Linking.parse(result.url);
-        const token = parsedUrl.queryParams?.token;
+        // The backend delivers the session token in the URL fragment (#token=)
+        // so it never leaks into server logs or Referer headers. Fall back to
+        // the query param for backward compatibility.
+        let token: string | undefined =
+          typeof parsedUrl.queryParams?.token === 'string'
+            ? (parsedUrl.queryParams.token as string)
+            : undefined;
+        if (!token && result.url.includes('#')) {
+          const fragment = result.url.split('#')[1] ?? '';
+          token = new URLSearchParams(fragment).get('token') ?? undefined;
+        }
         if (token && typeof token === 'string') {
           const { getMe } = await import('../../api/auth');
           const user = await getMe(token);
@@ -456,7 +464,7 @@ export default function LoginScreen() {
           onPress={() =>
             Alert.alert(
               'Reset Password',
-              'Please contact support at support@electric.app to reset your password.'
+              'Please contact support at support@nienalabs.com to reset your password.'
             )
           }
         >
@@ -475,7 +483,7 @@ export default function LoginScreen() {
       {/* Sign In Button */}
       <Pressable
         onPress={handleLogin}
-        disabled={loginMutation.isPending}
+        disabled={isLoggingIn}
         style={({ pressed }) => ({
           borderRadius: 14,
           height: 54,
@@ -486,7 +494,7 @@ export default function LoginScreen() {
           shadowOpacity: 0.42,
           shadowRadius: 16,
           elevation: 8,
-          opacity: loginMutation.isPending ? 0.72 : 1,
+          opacity: isLoggingIn ? 0.72 : 1,
           transform: [{ scale: pressed ? 0.978 : 1 }],
         })}
       >
@@ -508,7 +516,7 @@ export default function LoginScreen() {
               letterSpacing: 0.3,
             }}
           >
-            {loginMutation.isPending ? 'Signing in…' : 'Sign In'}
+            {isLoggingIn ? 'Signing in…' : 'Sign In'}
           </Text>
         </LinearGradient>
       </Pressable>

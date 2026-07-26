@@ -33,7 +33,7 @@ export default function SupportSettingsScreen() {
           </Pressable>
 
           <Pressable 
-            onPress={() => Linking.openURL('mailto:vendorsupport@electric.app')}
+            onPress={() => Linking.openURL('mailto:support@nienalabs.com')}
             style={({ pressed }) => ({
               flex: 1, backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
               borderRadius: 20, padding: 20, alignItems: 'center',

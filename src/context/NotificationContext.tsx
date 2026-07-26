@@ -3,7 +3,7 @@ import { View, Text, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './AuthContext';
 import { useWebSocket } from './WebSocketContext';
-import { fetchNotifications, markNotificationRead, markAllNotificationsRead, NotificationResponse } from '../api/notifications';
+import { fetchNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification as apiDeleteNotification, clearAllNotifications as apiClearAll, NotificationResponse } from '../api/notifications';
 import { usePushNotificationsSetup } from '../hooks/useNotifications';
 
 interface NotificationContextType {
@@ -11,6 +11,8 @@ interface NotificationContextType {
   unreadCount: number;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAll: () => Promise<void>;
   isLoading: boolean;
   pushPermissionStatus: string;
   requestPushPermission: () => Promise<boolean>;
@@ -21,6 +23,8 @@ const NotificationContext = createContext<NotificationContextType>({
   unreadCount: 0,
   markAsRead: async () => {},
   markAllAsRead: async () => {},
+  deleteNotification: async () => {},
+  clearAll: async () => {},
   isLoading: true,
   pushPermissionStatus: 'default',
   requestPushPermission: async () => false,
@@ -135,6 +139,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const deleteNotification = async (id: string) => {
+    if (!token) return;
+    const prev = notifications;
+    setNotifications((cur) => cur.filter((n) => n.id !== id));
+    try {
+      await apiDeleteNotification(token, id);
+    } catch (err) {
+      console.warn('Failed to delete notification', err);
+      setNotifications(prev); // revert
+    }
+  };
+
+  const clearAll = async () => {
+    if (!token) return;
+    const prev = notifications;
+    setNotifications([]);
+    try {
+      await apiClearAll(token);
+    } catch (err) {
+      console.warn('Failed to clear notifications', err);
+      setNotifications(prev); // revert
+    }
+  };
+
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   // Show the banner on web only when:
@@ -154,6 +182,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         unreadCount,
         markAsRead,
         markAllAsRead,
+        deleteNotification,
+        clearAll,
         isLoading,
         pushPermissionStatus: permissionStatus,
         requestPushPermission: requestPermission,

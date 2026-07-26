@@ -52,7 +52,7 @@ export default function RewardsScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 20, maxWidth: isDesktop ? 720 : undefined, alignSelf: 'center', width: '100%' }}>
 
         {/* Points Balance Card */}
-        <View style={{ backgroundColor: colors.ink, borderRadius: 24, padding: 28, alignItems: 'center' }}>
+        <View style={{ backgroundColor: colors.heroSurface, borderRadius: 24, padding: 28, alignItems: 'center' }}>
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#ffffff80', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Your Balance</Text>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 52, color: colors.primary, lineHeight: 60 }}>{CURRENT_POINTS}</Text>
           <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#ffffff99', marginBottom: 20 }}>Points</Text>

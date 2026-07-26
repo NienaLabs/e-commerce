@@ -50,7 +50,7 @@ export default function VendorDashboardLayout() {
             Your store application is currently under review by our admin team. Please check back later.
           </Text>
           <Pressable onPress={() => router.replace('/(tabs)' as any)} style={{ padding: 16, backgroundColor: colors.primary, borderRadius: 12, alignItems: 'center', width: '100%', maxWidth: 300 }}>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Back to Shopping</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.onPrimary }}>Back to Shopping</Text>
           </Pressable>
         </View>
       </SafeAreaView>

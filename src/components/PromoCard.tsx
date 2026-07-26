@@ -129,7 +129,7 @@ export const PromoCard = ({ imageUrl, badge, heading, subtext, ctaLabel, onPress
             <Text style={{
               fontFamily: 'Inter_700Bold',
               fontSize: 12,
-              color: colors.isDark ? colors.ink : '#222022',
+              color: colors.onPrimary,
             }}>{ctaLabel}</Text>
           </View>
         )}

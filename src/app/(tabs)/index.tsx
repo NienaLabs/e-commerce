@@ -45,22 +45,22 @@ const CATEGORIES = [
   { id: 'electronics', label: 'Electronics', image: require('@/assets/3d icons/3d-headphones.png') },
   { id: 'fashion', label: 'Fashion', image: require('@/assets/3d icons/3d-clothes.png') },
   { id: 'home', label: 'Home & Living', image: require('@/assets/3d icons/3d-house.png') },
-  { id: 'phones', label: 'Mobile Phones', image: require('@/assets/3d icons/3d-headphones.png') },
+  { id: 'phones', label: 'Mobile Phones', image: require('@/assets/3d icons/3d-watch.png') },
   { id: 'computers', label: 'Computers & Tablets', image: require('@/assets/3d icons/3d-headphones.png') },
   { id: 'wearables', label: 'Wearables', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'cameras', label: 'Cameras', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'gaming', label: 'Gaming', image: require('@/assets/3d icons/3d-headphones.png') },
+  { id: 'cameras', label: 'Cameras', image: require('@/assets/3d icons/3d-watch.png') },
+  { id: 'gaming', label: 'Gaming', image: require('@/assets/3d icons/3d-sports.png') },
   { id: 'beauty', label: 'Accessories', image: require('@/assets/3d icons/3d-watch.png') },
   { id: 'health_beauty', label: 'Health & Beauty', image: require('@/assets/3d icons/3d-watch.png') },
   { id: 'sports', label: 'Sports', image: require('@/assets/3d icons/3d-sports.png') },
   { id: 'outdoor', label: 'Outdoors', image: require('@/assets/3d icons/3d-sports.png') },
   { id: 'home_appliances', label: 'Home Appliances', image: require('@/assets/3d icons/3d-house.png') },
   { id: 'food', label: 'Food', image: require('@/assets/3d icons/3d-food.png') },
-  { id: 'automotive', label: 'Automotive', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'toys', label: 'Toys & Hobbies', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'books', label: 'Books', image: require('@/assets/3d icons/3d-house.png') },
+  { id: 'automotive', label: 'Automotive', image: require('@/assets/3d icons/3d-sports.png') },
+  { id: 'toys', label: 'Toys & Hobbies', image: require('@/assets/3d icons/3d-sports.png') },
+  { id: 'books', label: 'Books', image: require('@/assets/3d icons/3d-clothes.png') },
   { id: 'art_crafts', label: 'Art & Crafts', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'pet_supplies', label: 'Pet Supplies', image: require('@/assets/3d icons/3d-house.png') },
+  { id: 'pet_supplies', label: 'Pet Supplies', image: require('@/assets/3d icons/3d-food.png') },
 ];
 
 const SORT_OPTIONS = ['Recommended', 'Price: Low to High', 'Price: High to Low', 'Newest Arrivals', 'Best Sellers', 'Top Rated'];
@@ -381,7 +381,7 @@ export default function Home() {
                   <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.inkSoft }}>{opt}</Text>
                   {i === 0 && (
                     <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="checkmark" size={12} color={colors.isDark ? colors.ink : '#222022'} />
+                      <Ionicons name="checkmark" size={12} color={colors.onPrimary} />
                     </View>
                   )}
                 </Pressable>
@@ -771,8 +771,7 @@ export default function Home() {
         onClose={() => setShowFilterModal(false)}
         categoryId={selectedCategory ? displayCategories.find(c => c.id === selectedCategory)?.schemaKey : null}
         onApply={(filters) => {
-          console.log('Applied filters:', filters);
-          // In the future, send these filters to the listProducts query
+          // TODO: wire filters into the listProducts query params
         }}
       />
       {/* Location Search Modal */}

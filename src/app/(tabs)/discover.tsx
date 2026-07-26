@@ -133,22 +133,52 @@ export default function DiscoverScreen() {
     const vLat = vendor.latitude !== null && vendor.latitude !== undefined ? vendor.latitude : 5.6037;
     const vLng = vendor.longitude !== null && vendor.longitude !== undefined ? vendor.longitude : -0.1870;
 
+    // Cancels in-flight work if the vendor/location changes or we unmount, so a
+    // slow late response can't overwrite a newer route (or set state after unmount).
+    let cancelled = false;
+
     const fetchRoute = async () => {
-      try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${deliveryLocation.longitude},${deliveryLocation.latitude};${vLng},${vLat}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.routes && data.routes.length > 0) {
-          setRouteGeoJSON({
-            type: 'Feature',
-            geometry: data.routes[0].geometry,
-          });
+      const url = `https://router.project-osrm.org/route/v1/driving/${deliveryLocation.longitude},${deliveryLocation.latitude};${vLng},${vLat}?overview=full&geometries=geojson`;
+
+      // The public OSRM demo server is frequently rate-limited and drops
+      // connections, surfacing as "Failed to fetch". A single attempt often
+      // fails on first load and only recovers when the effect happens to
+      // re-run, so retry a few times with backoff and a per-attempt timeout.
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeout);
+          if (!res.ok) throw new Error(`OSRM responded ${res.status}`);
+          const data = await res.json();
+          if (cancelled) return;
+          if (data.routes && data.routes.length > 0) {
+            setRouteGeoJSON({
+              type: 'Feature',
+              geometry: data.routes[0].geometry,
+            });
+          }
+          return; // success — stop retrying
+        } catch (e) {
+          clearTimeout(timeout);
+          if (cancelled) return;
+          if (attempt === MAX_ATTEMPTS) {
+            console.warn('Route fetch failed after retries:', e);
+            return;
+          }
+          // Exponential-ish backoff before the next attempt.
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
         }
-      } catch (e) {
-        console.error('Error fetching route:', e);
       }
     };
+
     fetchRoute();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedVendor, deliveryLocation, vendors]);
 
   const handleSearchSubmit = async () => {

@@ -611,7 +611,7 @@ export default function OnboardingScreen() {
                   opacity: pressed ? 0.88 : 1,
                 })}
               >
-                <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', fontSize: 16, letterSpacing: 0.2 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.onPrimary, fontSize: 16, letterSpacing: 0.2 }}>
                   Continue
                 </Text>
               </Pressable>
@@ -631,9 +631,9 @@ export default function OnboardingScreen() {
                 })}
               >
                 {isSubmitting ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <ActivityIndicator color={colors.onPrimary} size="small" />
                 ) : (
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', fontSize: 16, letterSpacing: 0.2 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.onPrimary, fontSize: 16, letterSpacing: 0.2 }}>
                     Let's Shop ✦
                   </Text>
                 )}

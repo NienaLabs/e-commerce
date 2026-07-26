@@ -21,6 +21,18 @@ export const lightColors = {
   primaryDim:    '#9faf07',
   primaryGhost:  '#c3d80920',
   primaryBorder: '#c3d80960',
+  // Text/icons placed ON a primary (electric-lime) background. The lime is a
+  // LIGHT colour, so on-primary content must stay dark in BOTH themes —
+  // never use `ink` here (it flips to near-white in dark mode → invisible).
+  onPrimary:     '#222022',
+  onPrimaryMuted:'#22202299',
+  // "Hero" cards (balance/reward banners) are intentionally dark with white
+  // text. Use this FIXED-dark surface instead of `ink` (which inverts to near
+  // white in dark mode and makes the white text disappear). onHero* are the
+  // matching always-light text colours.
+  heroSurface:   '#222022',
+  onHero:        '#ffffff',
+  onHeroMuted:   '#ffffffb3',
   // Feedback
   success:       '#2d9e5f',
   successGhost:  '#2d9e5f18',
@@ -50,6 +62,13 @@ export const darkColors = {
   primaryDim:    '#9faf07',
   primaryGhost:  '#c3d80930',
   primaryBorder: '#c3d80970',
+  // On-primary stays dark in dark mode too — the lime primary is light.
+  onPrimary:     '#222022',
+  onPrimaryMuted:'#22202299',
+  // Hero cards stay dark in both themes (see light palette for rationale).
+  heroSurface:   '#222022',
+  onHero:        '#ffffff',
+  onHeroMuted:   '#ffffffb3',
   // Feedback (unchanged)
   success:       '#2d9e5f',
   successGhost:  '#2d9e5f30',

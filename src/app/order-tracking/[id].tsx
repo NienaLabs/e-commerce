@@ -205,7 +205,7 @@ export default function OrderTracking() {
                         <Ionicons
                           name={step.icon as any}
                           size={16}
-                          color={isDone ? (isActive ? (colors.isDark ? colors.ink : '#222022') : colors.primaryDim) : colors.inkGhost}
+                          color={isDone ? (isActive ? colors.onPrimary : colors.primaryDim) : colors.inkGhost}
                         />
                       </View>
                       {idx < STEPS.length - 1 && (
