@@ -2,25 +2,43 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import type * as ExpoNotifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
 import { registerFcmToken } from '../api/auth';
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
-// Only load expo-notifications on native or client-side web to avoid SSR errors
+// Detect Expo Go — push notifications were removed from Expo Go in SDK 53.
+// executionEnvironment is 'storeClient' in Expo Go, 'bare' in dev builds/standalone.
+const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
+
+// Synchronously load expo-notifications using a guarded require so Metro can
+// tree-shake it and Expo Go's native interceptor won't fire the red-screen error.
 let Notifications: any = null;
-if (Platform.OS !== 'web' || typeof window !== 'undefined') {
-  Notifications = require('expo-notifications');
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+if (Platform.OS !== 'web' && !IS_EXPO_GO) {
+  try {
+    Notifications = require('expo-notifications');
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('[FCM] expo-notifications failed to load:', e);
+  }
+} else if (IS_EXPO_GO) {
+  console.log('[FCM] Running in Expo Go — native push notifications disabled. Use a dev build for full push support.');
 }
+
+function getNativeNotifications(): any | null {
+  return Notifications;
+}
+
+
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -127,10 +145,13 @@ export function usePushNotificationsSetup() {
       console.log('[FCM] Initial browser permission status:', status);
       setPermissionStatus(status);
     } else if (Platform.OS !== 'web' && Device.isDevice) {
-      Notifications?.getPermissionsAsync().then(({ status }: any) => {
-        console.log('[FCM] Initial native permission status:', status);
-        setPermissionStatus(status);
-      });
+      const notifs = getNativeNotifications();
+      if (notifs) {
+        notifs.getPermissionsAsync().then(({ status }: any) => {
+          console.log('[FCM] Initial native permission status:', status);
+          setPermissionStatus(status);
+        });
+      }
     }
   }, []);
 
@@ -161,7 +182,9 @@ export function usePushNotificationsSetup() {
     } else if (Device.isDevice) {
       (async () => {
         try {
-          const tokenData = await Notifications.getDevicePushTokenAsync();
+          const notifs = getNativeNotifications();
+          if (!notifs) return; // Expo Go — gracefully skip
+          const tokenData = await notifs.getDevicePushTokenAsync();
           const fcmToken = tokenData?.data;
           if (fcmToken && sessionToken) {
             const stored = await getStoredFcmToken();
@@ -172,17 +195,17 @@ export function usePushNotificationsSetup() {
             }
           }
           if (Platform.OS === 'android') {
-            await Notifications.setNotificationChannelAsync('default', {
+            await notifs.setNotificationChannelAsync('default', {
               name: 'default',
-              importance: Notifications.AndroidImportance.MAX,
+              importance: notifs.AndroidImportance.MAX,
               vibrationPattern: [0, 250, 250, 250],
               lightColor: '#FF231F7C',
             });
           }
-          notificationListener.current = Notifications.addNotificationReceivedListener((notification: any) => {
+          notificationListener.current = notifs.addNotificationReceivedListener((notification: any) => {
             console.log('[FCM] Foreground Native Push:', notification);
           });
-          responseListener.current = Notifications.addNotificationResponseReceivedListener((response: any) => {
+          responseListener.current = notifs.addNotificationResponseReceivedListener((response: any) => {
             console.log('[FCM] User tapped notification:', response);
           });
         } catch (e) {
@@ -218,7 +241,9 @@ export function usePushNotificationsSetup() {
         setPermissionStatus(result);
         return result === 'granted';
       } else {
-        const { status } = await Notifications.requestPermissionsAsync();
+        const notifs = getNativeNotifications();
+        if (!notifs) return false; // Expo Go — can't request native permissions
+        const { status } = await notifs.requestPermissionsAsync();
         console.log('[FCM] Native permission result:', status);
         setPermissionStatus(status);
         return status === 'granted';

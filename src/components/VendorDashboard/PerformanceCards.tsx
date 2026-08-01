@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../theme/ThemeContext';
+import { View } from 'react-native';
+import { Section, StatGrid, StatCard, Card, Skeleton } from '../vendor/kit';
 
 interface PerformanceData {
   total_revenue: number;
@@ -15,72 +14,53 @@ interface Props {
   loading: boolean;
 }
 
+const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export const PerformanceCards: React.FC<Props> = ({ data, loading }) => {
-  const { colors } = useTheme();
-  
   if (loading || !data) {
-    return <Text style={{ color: colors.inkMuted }}>Loading performance...</Text>;
+    return (
+      <Section title="Your store at a glance" caption="A quick read on how your store is performing right now.">
+        <StatGrid>
+          {[0, 1, 2, 3].map(i => (
+            <Card key={i} style={{ gap: 10 }}>
+              <Skeleton width={38} height={38} radius={11} />
+              <Skeleton width={90} height={22} />
+              <Skeleton width={70} height={12} />
+            </Card>
+          ))}
+        </StatGrid>
+      </Section>
+    );
   }
 
-  const cards = [
-    { title: 'Revenue', value: `$${data.total_revenue.toFixed(2)}`, icon: 'cash-outline', color: '#4ade80' },
-    { title: 'Units Sold', value: data.total_units, icon: 'cube-outline', color: '#60a5fa' },
-    { title: 'Orders', value: data.total_orders, icon: 'cart-outline', color: '#f472b6' },
-    { title: 'AOV', value: `$${data.aov.toFixed(2)}`, icon: 'pricetag-outline', color: '#fbbf24' },
-  ];
-
   return (
-    <View style={styles.container}>
-      {cards.map((card, index) => (
-        <View key={index} style={[styles.card, { backgroundColor: colors.surface }]}>
-          <View style={[styles.iconContainer, { backgroundColor: card.color + '20' }]}>
-            <Ionicons name={card.icon as any} size={24} color={card.color} />
-          </View>
-          <View>
-            <Text style={[styles.title, { color: colors.inkMuted }]}>{card.title}</Text>
-            <Text style={[styles.value, { color: colors.ink }]}>{card.value}</Text>
-          </View>
-        </View>
-      ))}
-    </View>
+    <Section title="Your store at a glance" caption="A quick read on how your store is performing right now.">
+      <StatGrid>
+        <StatCard
+          icon="cash-outline"
+          label="Revenue"
+          value={money(data.total_revenue)}
+          hint="Money earned from all paid orders."
+        />
+        <StatCard
+          icon="cube-outline"
+          label="Units sold"
+          value={data.total_units.toLocaleString()}
+          hint="Individual items customers bought."
+        />
+        <StatCard
+          icon="bag-handle-outline"
+          label="Orders"
+          value={data.total_orders.toLocaleString()}
+          hint="Completed customer orders."
+        />
+        <StatCard
+          icon="pricetag-outline"
+          label="Avg. order value"
+          value={money(data.aov)}
+          hint="What a typical order is worth."
+        />
+      </StatGrid>
+    </Section>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 24,
-  },
-  card: {
-    flex: 1,
-    minWidth: 150,
-    padding: 16,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  value: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-});

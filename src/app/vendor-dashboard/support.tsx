@@ -15,41 +15,27 @@ import {
   getMyTickets, createTicket, replyToTicket,
   type SupportTicket,
 } from '../../api/tickets';
+import { Header, Badge, Btn, font } from '../../components/vendor/kit';
+
+type Tone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status, colors }: { status: string; colors: any }) {
-  const map: Record<string, { bg: string; fg: string; label: string }> = {
-    open:    { bg: colors.errorGhost,   fg: colors.error,   label: 'Open' },
-    pending: { bg: colors.warningGhost, fg: colors.warning, label: 'Pending' },
-    closed:  { bg: colors.successGhost, fg: colors.success,  label: 'Closed' },
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { tone: Tone; label: string }> = {
+    open: { tone: 'error', label: 'Open' },
+    pending: { tone: 'warning', label: 'Pending' },
+    closed: { tone: 'success', label: 'Closed' },
   };
   const s = map[status] ?? map['open'];
-  return (
-    <View style={{ backgroundColor: s.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
-      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: s.fg, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        {s.label}
-      </Text>
-    </View>
-  );
+  return <Badge label={s.label} tone={s.tone} />;
 }
 
 // ─── Priority pill ─────────────────────────────────────────────────────────────
 
-function PriorityPill({ priority, colors }: { priority: string; colors: any }) {
-  const map: Record<string, { bg: string; fg: string }> = {
-    high:   { bg: colors.errorGhost,   fg: colors.error },
-    medium: { bg: colors.warningGhost, fg: colors.warning },
-    low:    { bg: colors.infoGhost,    fg: colors.info },
-  };
-  const s = map[priority] ?? map['medium'];
-  return (
-    <View style={{ backgroundColor: s.bg, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 }}>
-      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: s.fg, textTransform: 'capitalize' }}>
-        {priority}
-      </Text>
-    </View>
-  );
+function PriorityPill({ priority }: { priority: string }) {
+  const map: Record<string, Tone> = { high: 'error', medium: 'warning', low: 'info' };
+  return <Badge label={priority} tone={map[priority] ?? 'warning'} />;
 }
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -161,14 +147,8 @@ export default function SupportScreen() {
         borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
         backgroundColor: colors.surfaceSoft,
       }}>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>My Tickets</Text>
-        <Pressable
-          onPress={() => setShowNewModal(true)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 }}
-        >
-          <Ionicons name="add" size={16} color={colors.surface} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.surface }}>New</Text>
-        </Pressable>
+        <Text style={{ fontFamily: font.h3, fontSize: 15, color: colors.ink }}>My tickets</Text>
+        {isDesktop && <Btn title="New" icon="add" small onPress={() => setShowNewModal(true)} />}
       </View>
 
       {/* List */}
@@ -201,8 +181,8 @@ export default function SupportScreen() {
                 })}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <StatusBadge status={ticket.status} colors={colors} />
-                  <PriorityPill priority={ticket.priority} colors={colors} />
+                  <StatusBadge status={ticket.status} />
+                  <PriorityPill priority={ticket.priority} />
                 </View>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink, marginBottom: 3 }} numberOfLines={1}>
                   {ticket.subject}
@@ -238,7 +218,7 @@ export default function SupportScreen() {
     }
 
     return (
-      <View style={{ flex: 1, backgroundColor: colors.surfaceSoft }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         {/* Chat header */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -256,8 +236,8 @@ export default function SupportScreen() {
               {selected.subject}
             </Text>
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-              <StatusBadge status={selected.status} colors={colors} />
-              <PriorityPill priority={selected.priority} colors={colors} />
+              <StatusBadge status={selected.status} />
+              <PriorityPill priority={selected.priority} />
             </View>
           </View>
         </View>
@@ -384,31 +364,13 @@ export default function SupportScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      {/* Page header */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 20, paddingVertical: 14,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
-      }}>
-        <Ionicons name="headset" size={22} color={colors.primaryDim} style={{ marginRight: 10 }} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Support</Text>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted }}>
-            Get help from our team
-          </Text>
-        </View>
-        {!isDesktop && !selected && (
-          <Pressable
-            onPress={() => setShowNewModal(true)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 }}
-          >
-            <Ionicons name="add" size={16} color={colors.surface} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.surface }}>New Ticket</Text>
-          </Pressable>
-        )}
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top']}>
+      <Header
+        title="Support"
+        subtitle="Get help from the platform team"
+        leadingIcon="headset-outline"
+        right={!isDesktop && !selected ? <Btn title="New" icon="add" small onPress={() => setShowNewModal(true)} /> : undefined}
+      />
 
       {/* Body */}
       <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
@@ -515,24 +477,13 @@ export default function SupportScreen() {
               />
 
               {/* Submit */}
-              <Pressable
+              <Btn
+                title="Submit ticket"
                 onPress={handleCreate}
-                disabled={!newSubject.trim() || !newMessage.trim() || createMutation.isPending}
-                style={({ pressed }) => ({
-                  backgroundColor: (!newSubject.trim() || !newMessage.trim()) ? colors.surfaceMuted : colors.ink,
-                  borderRadius: 16, paddingVertical: 15,
-                  alignItems: 'center',
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                {createMutation.isPending ? (
-                  <ActivityIndicator size="small" color={colors.surface} />
-                ) : (
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.surface }}>
-                    Submit Ticket
-                  </Text>
-                )}
-              </Pressable>
+                loading={createMutation.isPending}
+                disabled={!newSubject.trim() || !newMessage.trim()}
+                fullWidth
+              />
 
               {createMutation.isError && (
                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.error, textAlign: 'center', marginTop: 10 }}>

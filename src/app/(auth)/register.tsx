@@ -21,6 +21,7 @@ import { useMutation } from '@tanstack/react-query';
 import { register, login } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import KonuraLogo from '../../../assets/images/konura.svg';
 
 type AccountType = 'customer' | 'vendor';
 
@@ -292,6 +293,10 @@ export default function RegisterScreen() {
     >
       {/* Header */}
       <View style={{ marginBottom: 24 }}>
+        {/* Konura Logo */}
+        <View style={{ alignItems: 'flex-start', marginBottom: 16 }}>
+          <KonuraLogo width={48} height={54} />
+        </View>
         <Text
           style={{
             fontFamily: 'Inter_700Bold',
@@ -311,7 +316,7 @@ export default function RegisterScreen() {
             lineHeight: 22,
           }}
         >
-          Join thousands shopping on Niena Emporium.
+          Join thousands shopping on Konura.
         </Text>
       </View>
 

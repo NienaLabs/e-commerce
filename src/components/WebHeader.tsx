@@ -6,9 +6,10 @@ import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useSidebar } from '../context/SidebarContext';
+import KonuraLogo from '../../assets/images/konura.svg';
 
 export const WebHeader = () => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const pathname = usePathname();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
@@ -47,8 +48,8 @@ export const WebHeader = () => {
           <Ionicons name="menu" size={28} color={colors.ink} />
         </Pressable>
         <Pressable onPress={() => handleNav('/')} style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="storefront" size={28} color={colors.primary} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginLeft: 8 }}>Niena Emporium</Text>
+          <KonuraLogo width={36} height={40} />
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginLeft: 8 }}>Konura</Text>
         </Pressable>
       </View>
 

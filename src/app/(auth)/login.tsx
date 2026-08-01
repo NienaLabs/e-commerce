@@ -23,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { LinearGradient } from 'expo-linear-gradient';
+import KonuraLogo from '../../../assets/images/konura.svg';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -319,6 +320,10 @@ export default function LoginScreen() {
     >
       {/* Header text */}
       <View style={{ marginBottom: 26 }}>
+        {/* Konura Logo */}
+        <View style={{ alignItems: 'flex-start', marginBottom: 16 }}>
+          <KonuraLogo width={48} height={54} />
+        </View>
         <Text
           style={{
             fontFamily: 'Inter_700Bold',

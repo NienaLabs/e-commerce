@@ -8,6 +8,7 @@ import { OpenSans_400Regular, OpenSans_600SemiBold } from '@expo-google-fonts/op
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ThemeProvider } from '../theme/ThemeContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   QueryClient,
   QueryClientProvider,
@@ -60,6 +61,7 @@ export default function RootLayout() {
 
 
   return (
+    <SafeAreaProvider>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
@@ -82,5 +84,6 @@ export default function RootLayout() {
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }
