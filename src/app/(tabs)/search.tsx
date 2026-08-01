@@ -136,7 +136,7 @@ export default function Search() {
     }
 
     if (vendorResponse && vendorResponse.hits) {
-      setVendorResults(vendorResponse.hits.map((h: any) => h.document));
+      setVendorResults(vendorResponse.hits.map((h: any) => h.document || h));
     } else {
       setVendorResults([]);
     }
@@ -320,16 +320,18 @@ export default function Search() {
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted, marginBottom: 12 }}>
                   Stores
                 </Text>
-                {vendorSuggestions.map((vendor, index) => (
+                {vendorSuggestions.map((vendor, index) => {
+                  const vendorId = vendor.id || vendor.objectID || index;
+                  return (
                   <Pressable
-                    key={`vendor-${vendor.id}`}
+                    key={`vendor-${vendorId}`}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
                       paddingVertical: 12,
                       opacity: pressed ? 0.7 : 1,
                     })}
-                    onPress={() => router.push(`/vendor/${vendor.id}` as any)}
+                    onPress={() => router.push(`/vendor/${vendor.id || vendor.objectID}` as any)}
                   >
                     {vendor.logo_url ? (
                       <Image source={{ uri: vendor.logo_url }} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 16 }} />
@@ -348,7 +350,7 @@ export default function Search() {
                     </View>
                     <Ionicons name="chevron-forward" size={16} color={colors.surfaceMuted} />
                   </Pressable>
-                ))}
+                )})}
               </View>
             )}
 
@@ -390,9 +392,11 @@ export default function Search() {
                       Stores
                     </Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
-                      {vendorResults.map(vendor => (
+                      {vendorResults.map((vendor: any, index: number) => {
+                        const vendorId = vendor.id || vendor.objectID || index;
+                        return (
                         <Pressable
-                          key={vendor.id}
+                          key={vendorId}
                           style={({ pressed }) => ({
                             width: 200,
                             backgroundColor: colors.surfaceSoft,
@@ -402,7 +406,7 @@ export default function Search() {
                             borderWidth: 1,
                             borderColor: colors.surfaceMuted,
                           })}
-                          onPress={() => router.push(`/vendor/${vendor.id}` as any)}
+                          onPress={() => router.push(`/vendor/${vendor.id || vendor.objectID}` as any)}
                         >
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                             {vendor.logo_url ? (
@@ -424,7 +428,7 @@ export default function Search() {
                             </Text>
                           )}
                         </Pressable>
-                      ))}
+                      )})}
                     </ScrollView>
                   </View>
                 )}
@@ -436,18 +440,19 @@ export default function Search() {
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
                       {results.map((hit) => {
-                  const p = hit.document;
+                  const p = hit.document || hit;
+                  const productId = p.id || p.objectID;
                   return (
-                    <View key={p.id} style={{ width: isDesktop ? '31%' : '100%', marginBottom: 16 }}>
+                    <View key={productId} style={{ width: isDesktop ? '31%' : '100%', marginBottom: 16 }}>
                       <ProductCard
-                        id={p.id}
+                        id={productId}
                         name={p.name}
                         price={p.price}
                         salePrice={p.discount_price}
                         imageUrl={p.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'}
                         vendorId={p.vendor_id}
                         vendorName="View Store"
-                        onPress={() => router.push(`/product/${p.id}` as any)}
+                        onPress={() => router.push(`/product/${productId}` as any)}
                       />
                     </View>
                   );
