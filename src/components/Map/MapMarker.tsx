@@ -1,6 +1,13 @@
 import React from 'react';
-import { Marker, Callout } from '@maplibre/maplibre-react-native';
 import { View, Text, StyleSheet } from 'react-native';
+
+// Guard against Expo Go which lacks MapLibre native modules
+let MapLibre: any = null;
+try {
+  MapLibre = require('@maplibre/maplibre-react-native');
+} catch (e) {
+  // silently handled — MapView.tsx already warns
+}
 
 export interface MapMarkerProps {
   id: string;
@@ -19,6 +26,10 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
   children,
   onPress
 }) => {
+  // No-op when MapLibre isn't available (Expo Go)
+  if (!MapLibre) return null;
+
+  const { Marker, Callout } = MapLibre;
   return (
     <Marker id={id} lngLat={coordinate} onPress={onPress}>
       <View>

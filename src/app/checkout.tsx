@@ -22,7 +22,7 @@ async function reverseGeocodeAddress(lat: number, lng: number) {
   if (Platform.OS === 'web') {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-      { headers: { 'Accept-Language': 'en', 'User-Agent': 'NienaEmporium/1.0' } }
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'Konura/1.0' } }
     );
     const data = await res.json();
     const a = data?.address;

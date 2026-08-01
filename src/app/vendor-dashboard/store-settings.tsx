@@ -1,86 +1,40 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
-
-function SettingsRow({ icon, title, onPress }: { icon: any; title: string; onPress: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: 'row', alignItems: 'center',
-        paddingVertical: 16, paddingRight: 16, paddingLeft: 8,
-        borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
-        backgroundColor: pressed ? colors.surfaceSoft : 'transparent',
-      })}
-    >
-      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-        <Ionicons name={icon} size={18} color={colors.primaryDim} />
-      </View>
-      <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{title}</Text>
-      <Ionicons name="chevron-forward" size={18} color={colors.inkGhost} />
-    </Pressable>
-  );
-}
+import { Header, ScreenBody, Section, Card, ListRow } from '../../components/vendor/kit';
 
 export default function StoreSettingsScreen() {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768 && Platform.OS === 'web';
+  const go = (path: string) => router.push(path as any);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surfaceSoft }}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
-        {!isDesktop && (
-          <Pressable onPress={() => router.push('/vendor-dashboard' as any)} style={{ marginRight: 12, padding: 4 }}>
-            <Ionicons name="arrow-back" size={24} color={colors.ink} />
-          </Pressable>
-        )}
-        <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Store Settings</Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: colors.isDark ? '#1a1a1a' : '#f4f7f6' }}>
+      <Header title="Store settings" subtitle="Manage your store and preferences" onBack={() => router.push('/vendor-dashboard' as any)} />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, maxWidth: isDesktop ? 640 : undefined, alignSelf: 'center', width: '100%', gap: 24, paddingBottom: 60 }}>
-        
-        <View>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, marginLeft: 8 }}>
-            Store Configuration
-          </Text>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, paddingLeft: 8, overflow: 'hidden' }}>
-            <SettingsRow icon="storefront" title="General Information" onPress={() => router.push('/vendor-dashboard/settings/general' as any)} />
-            <View style={{ borderBottomWidth: 0 }}>
-              <SettingsRow icon="wallet" title="Payout Settings" onPress={() => router.push('/vendor-dashboard/payouts' as any)} />
-            </View>
-          </View>
-        </View>
+      <ScreenBody maxWidth={720}>
+        <Section title="Your store" caption="The details customers see and how you get paid.">
+          <Card padded={false}>
+            <ListRow icon="storefront-outline" title="General information" subtitle="Store name, logo, banner and location" onPress={() => go('/vendor-dashboard/settings/general')} />
+            <ListRow icon="briefcase-outline" title="Business details" subtitle="Contact info, address and operating hours" onPress={() => go('/vendor-dashboard/settings/business')} />
+            <ListRow icon="wallet-outline" title="Earnings & payouts" subtitle="Balance, payout account and history" onPress={() => go('/vendor-dashboard/payouts')} last />
+          </Card>
+        </Section>
 
-        <View>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, marginLeft: 8 }}>
-            Preferences
-          </Text>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, paddingLeft: 8, overflow: 'hidden' }}>
-            <SettingsRow icon="notifications" title="Notifications" onPress={() => router.push('/vendor-dashboard/settings/notifications' as any)} />
-            <View style={{ borderBottomWidth: 0 }}>
-              <SettingsRow icon="color-palette" title="Appearance" onPress={() => router.push('/vendor-dashboard/settings/appearance' as any)} />
-            </View>
-          </View>
-        </View>
+        <Section title="Preferences">
+          <Card padded={false}>
+            <ListRow icon="notifications-outline" title="Notifications" subtitle="Choose what you're alerted about" onPress={() => go('/vendor-dashboard/settings/notifications')} />
+            <ListRow icon="color-palette-outline" title="Appearance" subtitle="Light, dark or match your device" onPress={() => go('/vendor-dashboard/settings/appearance')} last />
+          </Card>
+        </Section>
 
-        <View>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, marginLeft: 8 }}>
-            Support
-          </Text>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.surfaceMuted, paddingLeft: 8, overflow: 'hidden' }}>
-            <View style={{ borderBottomWidth: 0 }}>
-              <SettingsRow icon="help-buoy" title="Help & Support" onPress={() => router.push('/vendor-dashboard/settings/support' as any)} />
-            </View>
-          </View>
-        </View>
-
-      </ScrollView>
+        <Section title="Help">
+          <Card padded={false}>
+            <ListRow icon="headset-outline" title="Contact support" subtitle="Message the platform team" onPress={() => go('/vendor-dashboard/support')} />
+            <ListRow icon="help-buoy-outline" title="Guides & resources" subtitle="Tips for selling and platform policies" onPress={() => go('/vendor-dashboard/settings/support')} last />
+          </Card>
+        </Section>
+      </ScreenBody>
     </View>
   );
 }

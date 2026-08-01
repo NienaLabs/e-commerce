@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import { View, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
@@ -8,24 +7,27 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getVendorOrders } from '../../api/vendors';
 import { useAuth } from '../../context/AuthContext';
 import { useWsEvent } from '../../context/WebSocketContext';
+import { Header, ScreenBody, Card, Badge, Chip, EmptyState, Divider, Skeleton, font } from '../../components/vendor/kit';
 
-// Match exactly with backend OrderStatusEnum values
-const FILTERS = ['All', 'New Order', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Refunded'];
-
+const FILTERS = ['All', 'New', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Refunded'];
 const FILTER_TO_STATUS: Record<string, string> = {
-  'New Order': 'pending',
-  'Confirmed': 'confirmed',
-  'Processing': 'processing',
-  'Shipped': 'shipped',
-  'Delivered': 'delivered',
-  'Cancelled': 'cancelled',
-  'Refunded': 'refunded',
+  'New': 'pending', 'Confirmed': 'confirmed', 'Processing': 'processing',
+  'Shipped': 'shipped', 'Delivered': 'delivered', 'Cancelled': 'cancelled', 'Refunded': 'refunded',
+};
+
+type Tone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+const STATUS_META: Record<string, { label: string; tone: Tone; icon: keyof typeof Ionicons.glyphMap }> = {
+  pending: { label: 'New', tone: 'info', icon: 'sparkles-outline' },
+  confirmed: { label: 'Confirmed', tone: 'primary', icon: 'checkmark-circle-outline' },
+  processing: { label: 'Processing', tone: 'warning', icon: 'construct-outline' },
+  shipped: { label: 'Shipped', tone: 'info', icon: 'car-outline' },
+  delivered: { label: 'Delivered', tone: 'success', icon: 'checkmark-done-outline' },
+  cancelled: { label: 'Cancelled', tone: 'error', icon: 'close-circle-outline' },
+  refunded: { label: 'Refunded', tone: 'warning', icon: 'return-up-back-outline' },
 };
 
 export default function VendorOrdersScreen() {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768 && Platform.OS === 'web';
   const [filter, setFilter] = useState('All');
   const { token, vendor } = useAuth();
   const queryClient = useQueryClient();
@@ -37,149 +39,87 @@ export default function VendorOrdersScreen() {
     staleTime: 10_000,
   });
 
-  // Live updates via WebSocket — invalidate on new order or status change
-  useWsEvent('new_order', () => {
-    queryClient.invalidateQueries({ queryKey: ['vendor-orders', vendor?.id] });
-  });
-  useWsEvent('order_status_changed', () => {
-    queryClient.invalidateQueries({ queryKey: ['vendor-orders', vendor?.id] });
-  });
+  useWsEvent('new_order', () => queryClient.invalidateQueries({ queryKey: ['vendor-orders', vendor?.id] }));
+  useWsEvent('order_status_changed', () => queryClient.invalidateQueries({ queryKey: ['vendor-orders', vendor?.id] }));
 
-  const STATUS_CFG: Record<string, { label: string; bg: string; text: string; icon: string }> = {
-    pending:    { label: 'New Order',  bg: colors.infoGhost,    text: colors.info,       icon: 'time-outline' },
-    confirmed:  { label: 'Confirmed',  bg: colors.primaryGhost, text: colors.primaryDim, icon: 'checkmark-circle-outline' },
-    processing: { label: 'Processing', bg: colors.warningGhost, text: colors.warning,    icon: 'construct-outline' },
-    shipped:    { label: 'Shipped',    bg: colors.primaryGhost, text: colors.primaryDim, icon: 'car-outline' },
-    delivered:  { label: 'Delivered',  bg: colors.successGhost, text: colors.success,    icon: 'checkmark-circle' },
-    cancelled:  { label: 'Cancelled',  bg: colors.errorGhost,   text: colors.error,      icon: 'close-circle' },
-    refunded:   { label: 'Refunded',   bg: colors.warningGhost, text: colors.warning,    icon: 'return-up-back-outline' },
-  };
-
-  const filtered = filter === 'All'
-    ? orders
-    : orders.filter(o => o.status === FILTER_TO_STATUS[filter]);
+  const filtered = filter === 'All' ? orders : orders.filter(o => o.status === FILTER_TO_STATUS[filter]);
+  const pendingCount = orders.filter(o => o.status === 'pending').length;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surfaceSoft }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
-        {!isDesktop && (
-          <Pressable onPress={() => router.push('/vendor-dashboard' as any)} style={{ marginRight: 12, padding: 4 }}>
-            <Ionicons name="arrow-back" size={24} color={colors.ink} />
-          </Pressable>
-        )}
-        <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Order Management</Text>
-        {/* Live indicator dot */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.successGhost, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success }} />
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: colors.success }}>Live</Text>
-        </View>
-      </View>
+    <View style={{ flex: 1, backgroundColor: colors.isDark ? '#1a1a1a' : '#f4f7f6' }}>
+      <Header
+        title="Orders"
+        subtitle={pendingCount > 0 ? `${pendingCount} new order${pendingCount === 1 ? '' : 's'} to fulfil` : `${orders.length} order${orders.length === 1 ? '' : 's'} total`}
+        onBack={() => router.push('/vendor-dashboard' as any)}
+      />
 
-      {/* Filter Tabs */}
-      <View style={{ borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted, backgroundColor: colors.surfaceSoft }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{
-            paddingHorizontal: isDesktop ? 24 : 16,
-            paddingVertical: 16,
-            gap: 12
-          }}
-        >
+      {/* Filter chips */}
+      <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderBottomWidth: 1, borderBottomColor: colors.isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 12, gap: 8 }}>
           {FILTERS.map(f => (
-            <Pressable
-              key={f}
-              onPress={() => setFilter(f)}
-              style={({ pressed }) => ({
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 24,
-                backgroundColor: filter === f ? colors.ink : (pressed ? colors.surfaceMuted : colors.surface),
-                borderWidth: 1,
-                borderColor: filter === f ? colors.ink : colors.surfaceMuted,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: filter === f ? 4 : 1 },
-                shadowOpacity: filter === f ? (colors.isDark ? 0.3 : 0.15) : 0.05,
-                shadowRadius: filter === f ? 8 : 2,
-                elevation: filter === f ? 4 : 1,
-              })}
-            >
-              <Text style={{
-                fontFamily: filter === f ? 'Inter_700Bold' : 'Inter_600SemiBold',
-                fontSize: 14,
-                color: filter === f ? colors.surface : colors.inkSoft
-              }}>
-                {f}
-              </Text>
-            </Pressable>
+            <Chip key={f} label={f} active={filter === f} onPress={() => setFilter(f)} />
           ))}
         </ScrollView>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 60, gap: 16 }}>
+      <ScreenBody>
         {isLoading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+          [0, 1, 2].map(i => (
+            <Card key={i} style={{ gap: 12 }}>
+              <Skeleton width="45%" height={14} />
+              <Divider />
+              <Skeleton width="70%" height={14} />
+            </Card>
+          ))
         ) : error ? (
-          <View style={{ alignItems: 'center', marginTop: 40, padding: 24, backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.errorGhost, marginHorizontal: 4 }}>
-            <Ionicons name="alert-circle-outline" size={48} color={colors.error} style={{ marginBottom: 12 }} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 6 }}>Couldn't Load Orders</Text>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, textAlign: 'center', marginBottom: 20 }}>
-              {(error as any)?.message ?? 'Something went wrong. Please try again.'}
-            </Text>
-            <Pressable
-              onPress={() => queryClient.invalidateQueries({ queryKey: ['vendor-orders'] })}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.surfaceMuted : colors.ink,
-                paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16,
-              })}
-            >
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.surface }}>Retry</Text>
-            </Pressable>
+          <View style={{ marginTop: 12 }}>
+            <EmptyState
+              icon="alert-circle-outline"
+              tone="error"
+              title="Couldn't load orders"
+              body={(error as any)?.message ?? 'Something went wrong. Please try again.'}
+              cta={{ label: 'Retry', onPress: () => queryClient.invalidateQueries({ queryKey: ['vendor-orders'] }), icon: 'refresh' }}
+            />
           </View>
         ) : filtered.length === 0 ? (
-          <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Ionicons name="cube-outline" size={48} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.inkMuted }}>
-              {filter === 'All' ? 'No orders yet' : `No ${filter.toLowerCase()} orders`}
-            </Text>
+          <View style={{ marginTop: 12 }}>
+            <EmptyState
+              icon="receipt-outline"
+              title={filter === 'All' ? 'No orders yet' : `No ${filter.toLowerCase()} orders`}
+              body={filter === 'All' ? 'When customers place orders, they’ll appear here for you to confirm, pack and deliver.' : 'Try a different filter to see other orders.'}
+            />
           </View>
         ) : (
           filtered.map(order => {
-            const cfg = STATUS_CFG[order.status] || { label: order.status, bg: colors.surfaceMuted, text: colors.ink, icon: 'ellipse-outline' };
-            const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const meta = STATUS_META[order.status] ?? { label: order.status, tone: 'neutral' as Tone, icon: 'ellipse-outline' as const };
+            const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             return (
-              <Pressable
-                key={order.id}
-                onPress={() => router.push(`/vendor-dashboard/order/${order.id}` as any)}
-                style={{ backgroundColor: colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.surfaceMuted, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: colors.isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 2 }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>#{order.id.slice(-8).toUpperCase()}</Text>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, marginTop: 2 }}>{date}</Text>
+              <Card key={order.id} onPress={() => router.push(`/vendor-dashboard/order/${order.id}` as any)} style={{ gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ minWidth: 0, flex: 1 }}>
+                    <Text style={{ fontFamily: font.bold, fontSize: 15, color: colors.ink }}>#{order.id.slice(-8).toUpperCase()}</Text>
+                    <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{date}</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
-                    <Ionicons name={cfg.icon as any} size={12} color={cfg.text} />
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{cfg.label}</Text>
-                  </View>
+                  <Badge label={meta.label} tone={meta.tone} icon={meta.icon} />
                 </View>
-                <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginBottom: 10 }} />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>{order.customer_name}</Text>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{order.items_count} item{order.items_count > 1 ? 's' : ''}</Text>
+                <Divider />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ minWidth: 0, flex: 1 }}>
+                    <Text style={{ fontFamily: font.labelL, fontSize: 14, color: colors.ink }} numberOfLines={1}>{order.customer_name}</Text>
+                    <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>
+                      {order.items_count} item{order.items_count > 1 ? 's' : ''}
+                    </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ fontFamily: font.bold, fontSize: 16, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
                     <Ionicons name="chevron-forward" size={18} color={colors.inkGhost} />
                   </View>
                 </View>
-              </Pressable>
+              </Card>
             );
           })
         )}
-      </ScrollView>
+      </ScreenBody>
     </View>
   );
 }

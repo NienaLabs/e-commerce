@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, ScrollView, Pressable, Platform, useWindowDimensions,
-  Modal, TextInput, ActivityIndicator, Alert
+  View, Text, ScrollView, Pressable, Platform,
+  Modal, TextInput, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,38 +11,30 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../context/AuthContext';
 import { getVendorOrderDetail } from '../../../api/vendors';
 import { useWsEvent } from '../../../context/WebSocketContext';
+import { Header, Card, Badge, Btn, Divider, font, shadow, useResponsive } from '../../../components/vendor/kit';
 
 const STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'New Order',
-  confirmed: 'Confirmed',
-  processing: 'Processing',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
+  pending: 'New Order', confirmed: 'Confirmed', processing: 'Processing',
+  shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded',
 };
-
-// Real PIN verification happens at the backend
+type Tone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+const STATUS_TONE: Record<string, Tone> = {
+  pending: 'info', confirmed: 'primary', processing: 'warning', shipped: 'info',
+  delivered: 'success', cancelled: 'error', refunded: 'warning',
+};
 
 export default function VendorOrderDetailScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { isDesktop } = useResponsive();
   const { token } = useAuth();
   const queryClient = useQueryClient();
 
   const orderId = Array.isArray(id) ? id[0] : id;
 
-  // Track in-flight status update requests so we can abort them on unmount
   const abortControllerRef = useRef<AbortController | null>(null);
-  useEffect(() => {
-    return () => {
-      // Cancel any pending status PATCH when the screen is unmounted (e.g. go back)
-      abortControllerRef.current?.abort();
-    };
-  }, []);
+  useEffect(() => () => { abortControllerRef.current?.abort(); }, []);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['vendor-order', orderId],
@@ -50,7 +42,6 @@ export default function VendorOrderDetailScreen() {
     enabled: !!token && !!orderId,
   });
 
-  // Real-time status updates via WebSocket
   useWsEvent('order_status_changed', (event) => {
     if (event.order_id === orderId) {
       queryClient.invalidateQueries({ queryKey: ['vendor-order', orderId] });
@@ -66,43 +57,28 @@ export default function VendorOrderDetailScreen() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
 
-  useEffect(() => {
-    if (order?.status) setCurrentStatus(order.status);
-  }, [order?.status]);
+  useEffect(() => { if (order?.status) setCurrentStatus(order.status); }, [order?.status]);
 
   if (isLoading || !order) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
         <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
 
-  // No local pin code comparison needed, verify with backend.
-  const STATUS_CFG: Record<string, { bg: string; text: string }> = {
-    pending: { bg: colors.infoGhost, text: colors.info },
-    confirmed: { bg: colors.primaryGhost, text: colors.primaryDim },
-    processing: { bg: colors.warningGhost, text: colors.warning },
-    shipped: { bg: colors.primaryGhost, text: colors.primaryDim },
-    delivered: { bg: colors.successGhost, text: colors.success },
-    cancelled: { bg: colors.errorGhost, text: colors.error },
-    refunded: { bg: colors.errorGhost, text: colors.error },
-  };
-
-  const cfg = STATUS_CFG[currentStatus] || STATUS_CFG.pending;
   const canVerifyDelivery = currentStatus === 'shipped';
 
   const updateStatus = async (newStatus: string) => {
-    if (newStatus === 'delivered') return; // Must go through PIN verification
-    if (newStatus === currentStatus) return; // Already at this status — nothing to do
+    if (newStatus === 'delivered') return;
+    if (newStatus === currentStatus) return;
     if (statusSaving) return;
 
     const previousStatus = currentStatus;
-    setCurrentStatus(newStatus); // optimistic update
+    setCurrentStatus(newStatus);
     setStatusError(null);
     setStatusSaving(true);
 
-    // Create a new AbortController for this request
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -110,26 +86,18 @@ export default function VendorOrderDetailScreen() {
       const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
       const res = await fetch(`${BASE_URL}/orders/${order.id}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus }),
         signal: controller.signal,
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.detail || `Failed to update status (${res.status})`);
       }
-
       queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
-      // Use an exact prefix match so only vendor-orders queries are invalidated
       queryClient.invalidateQueries({ queryKey: ['vendor-orders'], exact: false });
     } catch (e: any) {
-      // Ignore abort errors — they happen on normal navigation
       if (e?.name === 'AbortError') return;
-      // Revert the optimistic update on failure
       setCurrentStatus(previousStatus);
       setStatusError(e.message || 'Failed to update status. Please try again.');
     } finally {
@@ -137,16 +105,11 @@ export default function VendorOrderDetailScreen() {
     }
   };
 
-  // A vendor may cancel only while the order hasn't shipped. Repeated
-  // cancellations are tracked server-side and flag the admin at 3.
   const CANCELLABLE = ['pending', 'confirmed', 'processing'];
-
   const doCancel = () => updateStatus('cancelled');
-
   const confirmCancel = () => {
     const msg = 'Cancel this order?';
     if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-alert
       if (typeof window !== 'undefined' && window.confirm(msg)) doCancel();
     } else {
       Alert.alert('Cancel Order', msg, [
@@ -161,434 +124,264 @@ export default function VendorOrderDetailScreen() {
       const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
       const res = await fetch(`${BASE_URL}/orders/${order.id}/verify-delivery`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ pin: pinInput })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ pin: pinInput }),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.detail || 'Incorrect delivery PIN');
       }
-
       setVerifySuccess(true);
       setPinError('');
       setCurrentStatus('delivered');
       queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
       queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
-
-      setTimeout(() => {
-        setShowVerifyModal(false);
-        setVerifySuccess(false);
-        setPinInput('');
-      }, 2000);
+      setTimeout(() => { setShowVerifyModal(false); setVerifySuccess(false); setPinInput(''); }, 2000);
     } catch (e: any) {
       setPinError(e.message || 'Incorrect delivery PIN');
       setPinInput('');
     }
   };
 
-  const handleCloseModal = () => {
-    setShowVerifyModal(false);
-    setPinInput('');
-    setPinError('');
-    setVerifySuccess(false);
-  };
+  const handleCloseModal = () => { setShowVerifyModal(false); setPinInput(''); setPinError(''); setVerifySuccess(false); };
 
-  // Calculate order subtotal for ONLY the vendor's items in this order
   const vendorTotal = order.items.reduce((acc: number, item: any) => acc + ((item.discount_price ?? item.unit_price) * item.quantity), 0);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      {/* ─── Header ─── */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 20, paddingVertical: 16,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
-      }}>
-        <Pressable
-          onPress={() => router.canGoBack() ? router.back() : router.push('/vendor-dashboard/orders' as any)}
-          style={{ marginRight: 12, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.ink} />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink }}>Order #{order.id.slice(-8).toUpperCase()}</Text>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>{new Date(order.created_at).toLocaleString()}</Text>
-        </View>
-        <View style={{ backgroundColor: cfg.bg, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: cfg.text }}>{STATUS_LABELS[currentStatus] || currentStatus}</Text>
-        </View>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['top']}>
+      <Header
+        title={`Order #${order.id.slice(-8).toUpperCase()}`}
+        subtitle={new Date(order.created_at).toLocaleString()}
+        onBack={() => (router.canGoBack() ? router.back() : router.push('/vendor-dashboard/orders' as any))}
+        hideBackOnDesktop={false}
+        right={<Badge label={STATUS_LABELS[currentStatus] || currentStatus} tone={STATUS_TONE[currentStatus] ?? 'neutral'} />}
+      />
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{
-          padding: 20, gap: 16,
-          flexDirection: isDesktop ? 'row' : 'column',
-          alignItems: 'flex-start',
-        }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 16, paddingBottom: 110, alignItems: 'center' }}
       >
-        {/* ─── Left Column ─── */}
-        <View style={{ flex: 1, gap: 16, width: isDesktop ? undefined : '100%' }}>
-
-          {/* Delivery Code Banner — visible when out for delivery */}
-          {canVerifyDelivery && (
-            <View style={{
-              borderRadius: 20, overflow: 'hidden',
-              backgroundColor: colors.primary,
-              padding: 20,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                <Ionicons name="shield-checkmark" size={18} color={colors.onPrimary} style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.onPrimary }}>Delivery Verification Required</Text>
-              </View>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.onPrimary, lineHeight: 20, marginBottom: 16 }}>
-                When you personally deliver the item to the customer and they pay you in cash, ask for their 4-digit code to confirm delivery.
-              </Text>
-              <Pressable
-                onPress={() => setShowVerifyModal(true)}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
-                  borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                })}
-              >
-                <Ionicons name="keypad" size={20} color={colors.ink} />
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Enter Customer PIN</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Delivered confirmation */}
-          {currentStatus === 'delivered' && (
-            <View style={{
-              borderRadius: 20, backgroundColor: '#dcfce7',
-              padding: 20, flexDirection: 'row', alignItems: 'center', gap: 14,
-            }}>
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="checkmark-circle" size={28} color="#ffffff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#166534' }}>Delivery Confirmed!</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: '#15803d', marginTop: 2 }}>
-                  Customer PIN was verified successfully.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Order Summary / Dispatch Info */}
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <Ionicons name="document-text" size={20} color={colors.primary} style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Order Summary / Dispatch Info</Text>
-            </View>
-
-            {/* Customer Details */}
-            <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 12, padding: 16, marginBottom: 16 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkGhost, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Customer Details</Text>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Ionicons name="person-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>{order.shipping_address?.name || order.customer_name || 'Customer'}</Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Ionicons name="call-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink }}>
-                  {order.shipping_address?.phone || 'No phone number provided'}
-                </Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: order.shipping_address?.landmark ? 8 : 0 }}>
-                <Ionicons name="location-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8, marginTop: 2 }} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink, flex: 1, lineHeight: 22 }}>
-                  {order.shipping_address?.street}{'\n'}{order.shipping_address?.city}
-                </Text>
-              </View>
-
-              {order.shipping_address?.landmark ? (
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                  <Ionicons name="flag-outline" size={16} color={colors.inkMuted} style={{ marginRight: 8, marginTop: 2 }} />
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, flex: 1 }}>
-                    Landmark: {order.shipping_address.landmark}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-
-            {/* Order Items */}
-            <View>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkGhost, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Items Ordered</Text>
-              {order.items.map((item: any) => (
-                <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>
-                      {item.product_name ?? `Product #${(item.product_id ?? '').slice(0, 8).toUpperCase()}`}
-                    </Text>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 2 }}>
-                      Quantity: {item.quantity} {item.color_chosen ? `· Color: ${item.color_chosen}` : ''}
-                    </Text>
-                    {item.selected_attributes && Object.keys(item.selected_attributes).length > 0 && (
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkSoft, marginTop: 4, textTransform: 'capitalize' }}>
-                        {Object.entries(item.selected_attributes).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' | ')}
-                      </Text>
-                    )}
+        <View style={{ width: '100%', maxWidth: 1000, flexDirection: isDesktop ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
+          {/* ── Left column ── */}
+          <View style={{ flex: 1, gap: 16, width: isDesktop ? undefined : '100%' }}>
+            {canVerifyDelivery && (
+              <Card style={{ gap: 12, borderColor: colors.primaryBorder }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color={colors.primaryDim} />
                   </View>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>
-                    ${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}
-                  </Text>
+                  <Text style={{ flex: 1, fontFamily: font.labelL, fontSize: 15, color: colors.ink }}>Confirm the delivery</Text>
                 </View>
-              ))}
-              <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 12 }} />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Total Amount</Text>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.primaryDim }}>${vendorTotal.toFixed(2)}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+                <Text style={{ fontFamily: font.body, fontSize: 13.5, color: colors.inkSoft, lineHeight: 20 }}>
+                  When you hand the item to the customer and they pay you in cash, ask for their 4-digit code and enter it here to mark the order delivered.
+                </Text>
+                <Btn title="Enter customer PIN" icon="keypad-outline" onPress={() => setShowVerifyModal(true)} />
+              </Card>
+            )}
 
-        {/* ─── Right Column: Status Update ─── */}
-        <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '100%', gap: 16 }}>
-          <View style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 16 }}>Update Order Status</Text>
-            <View style={{ gap: 8 }}>
-              {/* Status error banner */}
-              {statusError && (
-                <View style={{
-                  backgroundColor: colors.errorGhost, borderRadius: 12,
-                  padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4,
-                }}>
-                  <Ionicons name="alert-circle" size={16} color={colors.error} />
-                  <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.error }}>
-                    {statusError}
-                  </Text>
-                  <Pressable onPress={() => setStatusError(null)}>
-                    <Ionicons name="close" size={16} color={colors.error} />
-                  </Pressable>
+            {currentStatus === 'delivered' && (
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.successGhost, borderColor: colors.successGhost }}>
+                <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="checkmark" size={26} color="#ffffff" />
                 </View>
-              )}
-              {STATUSES.filter(s => s !== 'delivered').map(status => {
-                const isCurrent = status === currentStatus;
-                const isPast = STATUSES.indexOf(status) < STATUSES.indexOf(currentStatus);
-                // Disable if: already at this status, order is delivered, or a save is in progress
-                const isDisabled = isCurrent || currentStatus === 'delivered' || statusSaving;
-                return (
-                  <Pressable
-                    key={status}
-                    onPress={() => updateStatus(status)}
-                    disabled={isDisabled}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14,
-                      backgroundColor: isCurrent ? colors.ink : colors.surfaceSoft,
-                      borderWidth: 1.5, borderColor: isCurrent ? colors.ink : colors.surfaceMuted,
-                      opacity: isDisabled && !isCurrent ? 0.5 : 1,
-                    }}
-                  >
-                    <View style={{
-                      width: 22, height: 22, borderRadius: 11,
-                      borderWidth: 2,
-                      borderColor: isCurrent ? colors.primary : (isPast ? colors.ink : colors.surfaceMuted),
-                      alignItems: 'center', justifyContent: 'center', marginRight: 12,
-                    }}>
-                      {(isCurrent || isPast) && (
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: isCurrent ? colors.primary : colors.ink }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: font.labelL, fontSize: 15, color: colors.success }}>Delivery confirmed</Text>
+                  <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.inkSoft, marginTop: 2 }}>The customer's PIN was verified successfully.</Text>
+                </View>
+              </Card>
+            )}
+
+            {/* Order summary */}
+            <Card style={{ gap: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="document-text-outline" size={20} color={colors.primaryDim} />
+                <Text style={{ fontFamily: font.h2, fontSize: 16, color: colors.ink }}>Order summary & dispatch</Text>
+              </View>
+
+              <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 14, padding: 16, gap: 10 }}>
+                <Text style={{ fontFamily: font.bold, fontSize: 11, letterSpacing: 0.5, color: colors.inkMuted, textTransform: 'uppercase' }}>Customer details</Text>
+                <Row icon="person-outline" text={order.shipping_address?.name || order.customer_name || 'Customer'} strong colors={colors} />
+                <Row icon="call-outline" text={order.shipping_address?.phone || 'No phone number provided'} colors={colors} />
+                <Row icon="location-outline" text={`${order.shipping_address?.street ?? ''}\n${order.shipping_address?.city ?? ''}`} colors={colors} />
+                {order.shipping_address?.landmark ? (
+                  <Row icon="flag-outline" text={`Landmark: ${order.shipping_address.landmark}`} muted colors={colors} />
+                ) : null}
+              </View>
+
+              <View>
+                <Text style={{ fontFamily: font.bold, fontSize: 11, letterSpacing: 0.5, color: colors.inkMuted, textTransform: 'uppercase', marginBottom: 12 }}>Items ordered</Text>
+                {order.items.map((item: any) => (
+                  <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontFamily: font.labelL, fontSize: 14.5, color: colors.ink }}>
+                        {item.product_name ?? `Product #${(item.product_id ?? '').slice(0, 8).toUpperCase()}`}
+                      </Text>
+                      <Text style={{ fontFamily: font.body, fontSize: 12.5, color: colors.inkMuted, marginTop: 2 }}>
+                        Qty {item.quantity}{item.color_chosen ? ` · ${item.color_chosen}` : ''}
+                      </Text>
+                      {item.selected_attributes && Object.keys(item.selected_attributes).length > 0 && (
+                        <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.inkSoft, marginTop: 3, textTransform: 'capitalize' }}>
+                          {Object.entries(item.selected_attributes).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ')}
+                        </Text>
                       )}
                     </View>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: isCurrent ? colors.surface : (isPast ? colors.ink : colors.inkGhost) }}>
-                      {STATUS_LABELS[status]}
+                    <Text style={{ fontFamily: font.bold, fontSize: 14.5, color: colors.ink }}>
+                      ${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}
                     </Text>
-                  </Pressable>
-                );
-              })}
-
-              {/* Delivered row — only via PIN */}
-              <View style={{
-                flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14,
-                backgroundColor: currentStatus === 'delivered' ? '#dcfce7' : colors.surfaceSoft,
-                borderWidth: 1.5, borderColor: currentStatus === 'delivered' ? '#16a34a' : colors.surfaceMuted,
-              }}>
-                <View style={{
-                  width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-                  borderColor: currentStatus === 'delivered' ? '#16a34a' : colors.surfaceMuted,
-                  alignItems: 'center', justifyContent: 'center', marginRight: 12,
-                }}>
-                  {currentStatus === 'delivered' && (
-                    <Ionicons name="checkmark" size={13} color="#16a34a" />
-                  )}
-                </View>
-                <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14, color: currentStatus === 'delivered' ? '#166534' : colors.inkGhost }}>
-                  Delivered
-                </Text>
-                <View style={{ backgroundColor: colors.warningGhost, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: colors.warning }}>PIN REQUIRED</Text>
+                  </View>
+                ))}
+                <Divider style={{ marginVertical: 12 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: font.h2, fontSize: 16, color: colors.ink }}>Total</Text>
+                  <Text style={{ fontFamily: font.bold, fontSize: 20, color: colors.ink }}>${vendorTotal.toFixed(2)}</Text>
                 </View>
               </View>
-            </View>
+            </Card>
           </View>
 
-          {canVerifyDelivery && (
-            <Pressable
-              onPress={() => setShowVerifyModal(true)}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.primaryDim : colors.primary,
-                borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20,
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-              })}
-            >
-              <Ionicons name="checkmark-circle" size={20} color={colors.ink} />
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>Verify Delivery with PIN</Text>
-            </Pressable>
-          )}
+          {/* ── Right column: status ── */}
+          <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '100%', gap: 16 }}>
+            <Card style={{ gap: 12 }}>
+              <Text style={{ fontFamily: font.h2, fontSize: 16, color: colors.ink }}>Update status</Text>
 
-          {CANCELLABLE.includes(currentStatus) && (
-            <Pressable
-              onPress={confirmCancel}
-              disabled={statusSaving}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.errorGhost : colors.surface,
-                borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20,
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                borderWidth: 1.5, borderColor: colors.error, opacity: statusSaving ? 0.5 : 1,
-              })}
-            >
-              <Ionicons name="close-circle-outline" size={20} color={colors.error} />
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.error }}>Cancel Order</Text>
-            </Pressable>
-          )}
+              {statusError && (
+                <View style={{ backgroundColor: colors.errorGhost, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="alert-circle" size={16} color={colors.error} />
+                  <Text style={{ flex: 1, fontFamily: font.labelM, fontSize: 12.5, color: colors.error }}>{statusError}</Text>
+                  <Pressable onPress={() => setStatusError(null)} hitSlop={8}><Ionicons name="close" size={16} color={colors.error} /></Pressable>
+                </View>
+              )}
 
-          <Pressable
-            onPress={async () => {
-              // Wait for any in-flight status update to finish before navigating away
-              if (router.canGoBack()) router.back();
-              else router.push('/vendor-dashboard/orders' as any);
-            }}
-            style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceMuted }}
-          >
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>
-              {statusSaving ? 'Saving…' : 'Go Back'}
-            </Text>
-          </Pressable>
+              <View style={{ gap: 8 }}>
+                {STATUSES.filter(s => s !== 'delivered').map(status => {
+                  const isCurrent = status === currentStatus;
+                  const isPast = STATUSES.indexOf(status) < STATUSES.indexOf(currentStatus);
+                  const isDisabled = isCurrent || currentStatus === 'delivered' || statusSaving;
+                  return (
+                    <Pressable
+                      key={status}
+                      onPress={() => updateStatus(status)}
+                      disabled={isDisabled}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12,
+                        backgroundColor: isCurrent ? colors.ink : colors.surfaceSoft,
+                        borderWidth: 1.5, borderColor: isCurrent ? colors.ink : colors.surfaceMuted,
+                        opacity: isDisabled && !isCurrent ? 0.55 : 1,
+                      }}
+                    >
+                      <View style={{
+                        width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                        borderColor: isCurrent ? colors.primary : (isPast ? colors.primary : colors.surfaceDeep),
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {(isCurrent || isPast) && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }} />}
+                      </View>
+                      <Text style={{ fontFamily: font.labelL, fontSize: 14, color: isCurrent ? colors.surface : (isPast ? colors.ink : colors.inkMuted) }}>
+                        {STATUS_LABELS[status]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+
+                {/* Delivered row — PIN only */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12,
+                  backgroundColor: currentStatus === 'delivered' ? colors.successGhost : colors.surfaceSoft,
+                  borderWidth: 1.5, borderColor: currentStatus === 'delivered' ? colors.success : colors.surfaceMuted,
+                }}>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                    borderColor: currentStatus === 'delivered' ? colors.success : colors.surfaceDeep,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {currentStatus === 'delivered' && <Ionicons name="checkmark" size={13} color={colors.success} />}
+                  </View>
+                  <Text style={{ flex: 1, fontFamily: font.labelL, fontSize: 14, color: currentStatus === 'delivered' ? colors.success : colors.inkMuted }}>Delivered</Text>
+                  <Badge label="PIN required" tone="warning" />
+                </View>
+              </View>
+            </Card>
+
+            {canVerifyDelivery && (
+              <Btn title="Verify delivery with PIN" icon="checkmark-circle-outline" onPress={() => setShowVerifyModal(true)} fullWidth />
+            )}
+            {CANCELLABLE.includes(currentStatus) && (
+              <Btn title="Cancel order" icon="close-circle-outline" variant="destructive" onPress={confirmCancel} disabled={statusSaving} fullWidth />
+            )}
+            <Btn title={statusSaving ? 'Saving…' : 'Go back'} variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.push('/vendor-dashboard/orders' as any))} fullWidth />
+          </View>
         </View>
       </ScrollView>
 
-      {/* ─── PIN Verify Modal ─── */}
-      <Modal
-        visible={showVerifyModal}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseModal}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-          onPress={handleCloseModal}
-        >
-          <Pressable
-            onPress={e => e.stopPropagation()}
-            style={{
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: 28, borderTopRightRadius: 28,
-              padding: 28,
-              paddingBottom: 40,
-            }}
-          >
+      {/* ── PIN modal ── */}
+      <Modal visible={showVerifyModal} transparent animationType="slide" onRequestClose={handleCloseModal}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(34,32,34,0.5)', justifyContent: 'flex-end' }} onPress={handleCloseModal}>
+          <Pressable onPress={e => e.stopPropagation()} style={[{ backgroundColor: colors.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 26, paddingBottom: 40 }, shadow(4)]}>
             {verifySuccess ? (
               <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <Ionicons name="checkmark-circle" size={48} color="#16a34a" />
+                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.successGhost, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <Ionicons name="checkmark-circle" size={48} color={colors.success} />
                 </View>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, marginBottom: 8 }}>Delivery Confirmed!</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center' }}>
-                  The order has been marked as delivered.
-                </Text>
+                <Text style={{ fontFamily: font.h1, fontSize: 22, color: colors.ink, marginBottom: 6 }}>Delivery confirmed!</Text>
+                <Text style={{ fontFamily: font.body, fontSize: 14, color: colors.inkMuted, textAlign: 'center' }}>This order is now marked as delivered.</Text>
               </View>
             ) : (
               <>
-                {/* Handle */}
-                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.surfaceMuted, alignSelf: 'center', marginBottom: 24 }} />
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
-                    <Ionicons name="shield-checkmark" size={22} color={colors.primaryDim} />
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.surfaceDeep, alignSelf: 'center', marginBottom: 22 }} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="shield-checkmark-outline" size={22} color={colors.primaryDim} />
                   </View>
                   <View>
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Enter Delivery PIN</Text>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted }}>Ask the customer for their code</Text>
+                    <Text style={{ fontFamily: font.h2, fontSize: 19, color: colors.ink }}>Enter delivery PIN</Text>
+                    <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.inkMuted }}>Ask the customer for their code</Text>
                   </View>
                 </View>
-
-                <View style={{ height: 1, backgroundColor: colors.surfaceMuted, marginVertical: 20 }} />
-
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 12 }}>
-                  4-Digit Delivery Code
-                </Text>
-
-                {/* PIN Input */}
+                <Divider style={{ marginVertical: 18 }} />
                 <TextInput
                   value={pinInput}
-                  onChangeText={text => {
-                    setPinError('');
-                    if (text.length <= 4 && /^\d*$/.test(text)) setPinInput(text);
-                  }}
+                  onChangeText={text => { setPinError(''); if (text.length <= 4 && /^\d*$/.test(text)) setPinInput(text); }}
                   placeholder="· · · ·"
                   placeholderTextColor={colors.inkGhost}
                   keyboardType="number-pad"
                   maxLength={4}
-                  secureTextEntry={false}
                   style={{
-                    backgroundColor: colors.surfaceSoft,
-                    borderRadius: 16, borderWidth: 2,
+                    backgroundColor: colors.surfaceSoft, borderRadius: 16, borderWidth: 2,
                     borderColor: pinError ? colors.error : pinInput.length === 4 ? colors.primary : colors.surfaceMuted,
-                    paddingHorizontal: 24, paddingVertical: 20,
-                    fontFamily: 'Inter_700Bold', fontSize: 36,
-                    color: colors.ink, textAlign: 'center',
-                    letterSpacing: 16,
-                    marginBottom: 8,
+                    paddingVertical: 20, fontFamily: font.bold, fontSize: 34, color: colors.ink, textAlign: 'center', letterSpacing: 16,
                     ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
                   }}
                 />
-
                 {pinError ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 }}>
-                    <Ionicons name="alert-circle" size={16} color="#dc2626" />
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#dc2626', flex: 1 }}>{pinError}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                    <Ionicons name="alert-circle" size={16} color={colors.error} />
+                    <Text style={{ fontFamily: font.labelM, fontSize: 12.5, color: colors.error, flex: 1 }}>{pinError}</Text>
                   </View>
                 ) : (
-                  <View style={{ height: 16 }} />
-                )}
-
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost, textAlign: 'center', marginBottom: 20 }}>
-                  The customer receives this code when they place the order. Enter it here after they have paid you in cash.
-                </Text>
-
-                <Pressable
-                  onPress={handleVerifyPin}
-                  disabled={pinInput.length < 4}
-                  style={({ pressed }) => ({
-                    backgroundColor: pinInput.length < 4 ? colors.surfaceMuted : (pressed ? colors.primaryDim : colors.primary),
-                    borderRadius: 16, paddingVertical: 16,
-                    alignItems: 'center',
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: pinInput.length < 4 ? colors.inkGhost : colors.ink }}>
-                    Confirm Delivery
+                  <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.inkGhost, textAlign: 'center', marginTop: 12, lineHeight: 17 }}>
+                    The customer received this code when they placed the order. Enter it after they've paid you in cash.
                   </Text>
-                </Pressable>
-
-                <Pressable onPress={handleCloseModal} style={{ paddingVertical: 14, alignItems: 'center', marginTop: 8 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>Cancel</Text>
-                </Pressable>
+                )}
+                <View style={{ height: 20 }} />
+                <Btn title="Confirm delivery" onPress={handleVerifyPin} disabled={pinInput.length < 4} fullWidth />
+                <Btn title="Cancel" variant="ghost" onPress={handleCloseModal} fullWidth />
               </>
             )}
           </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+function Row({ icon, text, strong, muted, colors }: { icon: keyof typeof Ionicons.glyphMap; text: string; strong?: boolean; muted?: boolean; colors: any }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+      <Ionicons name={icon} size={16} color={colors.inkMuted} style={{ marginTop: 2 }} />
+      <Text style={{ flex: 1, fontFamily: strong ? font.labelL : font.body, fontSize: strong ? 15 : 14, color: muted ? colors.inkMuted : colors.ink, lineHeight: 21 }}>
+        {text}
+      </Text>
+    </View>
   );
 }

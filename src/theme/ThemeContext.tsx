@@ -17,15 +17,14 @@ export const lightColors = {
   inkMuted:      '#6b696b',
   inkGhost:      '#9e9c9e',
   // Brand
-  primary:       '#c3d809',
-  primaryDim:    '#9faf07',
-  primaryGhost:  '#c3d80920',
-  primaryBorder: '#c3d80960',
-  // Text/icons placed ON a primary (electric-lime) background. The lime is a
-  // LIGHT colour, so on-primary content must stay dark in BOTH themes —
-  // never use `ink` here (it flips to near-white in dark mode → invisible).
-  onPrimary:     '#222022',
-  onPrimaryMuted:'#22202299',
+  primary:       '#28b463',
+  primaryDim:    '#1e8449',
+  primaryGhost:  '#28b46318',
+  primaryBorder: '#28b46350',
+  // Text/icons placed ON a primary (emerald-green) background. The green is a
+  // DARK colour, so on-primary content must stay white in BOTH themes.
+  onPrimary:     '#ffffff',
+  onPrimaryMuted:'#ffffffb3',
   // "Hero" cards (balance/reward banners) are intentionally dark with white
   // text. Use this FIXED-dark surface instead of `ink` (which inverts to near
   // white in dark mode and makes the white text disappear). onHero* are the
@@ -34,8 +33,8 @@ export const lightColors = {
   onHero:        '#ffffff',
   onHeroMuted:   '#ffffffb3',
   // Feedback
-  success:       '#2d9e5f',
-  successGhost:  '#2d9e5f18',
+  success:       '#28b463',
+  successGhost:  '#28b46318',
   warning:       '#d4820a',
   warningGhost:  '#d4820a18',
   error:         '#d93651',
@@ -57,21 +56,21 @@ export const darkColors = {
   inkSoft:       '#c8c6c8',
   inkMuted:      '#9e9c9e',
   inkGhost:      '#6b696b',
-  // Brand (unchanged — primary stays electric)
-  primary:       '#c3d809',
-  primaryDim:    '#9faf07',
-  primaryGhost:  '#c3d80930',
-  primaryBorder: '#c3d80970',
-  // On-primary stays dark in dark mode too — the lime primary is light.
-  onPrimary:     '#222022',
-  onPrimaryMuted:'#22202299',
+  // Brand (unchanged — primary stays emerald)
+  primary:       '#28b463',
+  primaryDim:    '#1e8449',
+  primaryGhost:  '#28b46328',
+  primaryBorder: '#28b46360',
+  // On-primary stays white in dark mode too — the green primary is dark.
+  onPrimary:     '#ffffff',
+  onPrimaryMuted:'#ffffffb3',
   // Hero cards stay dark in both themes (see light palette for rationale).
   heroSurface:   '#222022',
   onHero:        '#ffffff',
   onHeroMuted:   '#ffffffb3',
   // Feedback (unchanged)
-  success:       '#2d9e5f',
-  successGhost:  '#2d9e5f30',
+  success:       '#28b463',
+  successGhost:  '#28b46328',
   warning:       '#d4820a',
   warningGhost:  '#d4820a30',
   error:         '#d93651',
