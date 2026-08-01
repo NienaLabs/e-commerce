@@ -70,6 +70,7 @@ interface AuthContextType {
   signIn: (token: string, user: UserResponse) => Promise<void>;
   signOut: () => Promise<void>;
   refreshVendor: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   updateUserName: (name: string) => Promise<void>;
   markOnboardingComplete: () => void;
 }
@@ -83,6 +84,7 @@ export const AuthContext = createContext<AuthContextType>({
   signIn: async () => { },
   signOut: async () => { },
   refreshVendor: async () => { },
+  refreshUser: async () => { },
   updateUserName: async () => { },
   markOnboardingComplete: () => { },
 });
@@ -171,6 +173,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshVendor = async () => {
     if (token) {
       await fetchVendor(token);
+    }
+  };
+
+  /**
+   * Re-pull the user record so a role change made server-side (e.g. an admin
+   * approving a vendor application) lands without a full app reload.
+   * Preserves the locally-overridden display name.
+   */
+  const refreshUser = async () => {
+    if (!token) return;
+    try {
+      const userData = await getMe(token);
+      try {
+        const localName = await AsyncStorage.getItem('@local_user_name');
+        if (localName) userData.name = localName;
+      } catch { }
+      setUser(userData);
+    } catch (e) {
+      // Transient failure — keep the user we already have rather than
+      // bouncing them out of the app.
+      console.warn('Failed to refresh user', e);
     }
   };
 
@@ -319,6 +342,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signOut,
         refreshVendor,
+        refreshUser,
         updateUserName,
         markOnboardingComplete,
       }}

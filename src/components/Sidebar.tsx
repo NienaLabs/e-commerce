@@ -54,7 +54,10 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, title, onPress, color }
 
 export const Sidebar: React.FC = () => {
   const { colors } = useTheme();
-  const { user, signOut, hasVendorAccount } = useAuth();
+  const { user, signOut, hasVendorAccount, vendor } = useAuth();
+  // A vendor profile exists from the moment they apply — only call it a
+  // dashboard once an admin has actually approved it.
+  const isPendingVendor = !!vendor && vendor.is_verified === false && user?.role !== 'admin';
   const { isOpen, close } = useSidebar();
 
   const translateX = useSharedValue(-DRAWER_WIDTH);
@@ -184,8 +187,8 @@ export const Sidebar: React.FC = () => {
           {hasVendorAccount ? (
             <View style={[styles.group, { borderColor: colors.surfaceMuted, marginTop: 12 }]}>
               <SidebarItem
-                icon="storefront-outline"
-                title="Vendor Dashboard"
+                icon={isPendingVendor ? 'time-outline' : 'storefront-outline'}
+                title={isPendingVendor ? 'Application Pending' : 'Vendor Dashboard'}
                 onPress={() => handleNavigate('/vendor-dashboard')}
               />
             </View>

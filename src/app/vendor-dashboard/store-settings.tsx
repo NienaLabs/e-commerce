@@ -13,11 +13,11 @@ export default function StoreSettingsScreen() {
       <Header title="Store settings" subtitle="Manage your store and preferences" onBack={() => router.push('/vendor-dashboard' as any)} />
 
       <ScreenBody maxWidth={720}>
-        <Section title="Your store" caption="The details customers see and how you get paid.">
+        <Section title="Your store" caption="The details customers see and what you owe the platform.">
           <Card padded={false}>
             <ListRow icon="storefront-outline" title="General information" subtitle="Store name, logo, banner and location" onPress={() => go('/vendor-dashboard/settings/general')} />
             <ListRow icon="briefcase-outline" title="Business details" subtitle="Contact info, address and operating hours" onPress={() => go('/vendor-dashboard/settings/business')} />
-            <ListRow icon="wallet-outline" title="Earnings & payouts" subtitle="Balance, payout account and history" onPress={() => go('/vendor-dashboard/payouts')} last />
+            <ListRow icon="receipt-outline" title="Commissions" subtitle="What you owe on your sales, and payment history" onPress={() => go('/vendor-dashboard/commissions')} last />
           </Card>
         </Section>
 

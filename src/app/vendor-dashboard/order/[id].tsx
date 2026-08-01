@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, Pressable, Platform,
   Modal, TextInput, ActivityIndicator, Alert,
@@ -18,6 +18,21 @@ const STATUS_LABELS: Record<string, string> = {
   pending: 'New Order', confirmed: 'Confirmed', processing: 'Processing',
   shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled', refunded: 'Refunded',
 };
+
+/**
+ * Mirrors VALID_TRANSITIONS in the backend (app/routers/orders.py). Without
+ * this the UI happily offers moves the server rejects with a 400 — the status
+ * appeared to change, then snapped back a moment later.
+ */
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  pending: ['confirmed', 'processing', 'shipped', 'cancelled'],
+  confirmed: ['pending', 'processing', 'shipped', 'cancelled'],
+  processing: ['pending', 'confirmed', 'shipped', 'cancelled'],
+  shipped: ['pending', 'confirmed', 'processing', 'delivered'],
+  delivered: ['refunded'],
+  cancelled: ['pending', 'confirmed'],
+  refunded: [],
+};
 type Tone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 const STATUS_TONE: Record<string, Tone> = {
   pending: 'info', confirmed: 'primary', processing: 'warning', shipped: 'info',
@@ -33,9 +48,6 @@ export default function VendorOrderDetailScreen() {
 
   const orderId = Array.isArray(id) ? id[0] : id;
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-  useEffect(() => () => { abortControllerRef.current?.abort(); }, []);
-
   const { data: order, isLoading } = useQuery({
     queryKey: ['vendor-order', orderId],
     queryFn: () => getVendorOrderDetail(token!, orderId!),
@@ -49,15 +61,67 @@ export default function VendorOrderDetailScreen() {
     }
   });
 
-  const [currentStatus, setCurrentStatus] = useState<string>('pending');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [verifySuccess, setVerifySuccess] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [statusSaving, setStatusSaving] = useState(false);
 
-  useEffect(() => { if (order?.status) setCurrentStatus(order.status); }, [order?.status]);
+  /**
+   * Writes the new status into the React Query cache — both this order's detail
+   * and every cached orders list — and hands back a rollback closure.
+   *
+   * Updating the list cache too is what makes the change survive navigating
+   * back: the list renders from cache and only refetches afterwards.
+   */
+  const applyStatusToCaches = (newStatus: string) => {
+    const previousDetail = queryClient.getQueryData(['vendor-order', orderId]);
+    const previousLists = queryClient.getQueriesData({ queryKey: ['vendor-orders'] });
+
+    queryClient.setQueryData(['vendor-order', orderId], (old: any) =>
+      old ? { ...old, status: newStatus } : old,
+    );
+    queryClient.setQueriesData({ queryKey: ['vendor-orders'] }, (old: any) =>
+      Array.isArray(old) ? old.map((o: any) => (o.id === orderId ? { ...o, status: newStatus } : o)) : old,
+    );
+
+    return () => {
+      queryClient.setQueryData(['vendor-order', orderId], previousDetail);
+      previousLists.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    };
+  };
+
+  const statusMutation = useMutation({
+    mutationFn: async (newStatus: string) => {
+      const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+      const res = await fetch(`${BASE_URL}/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.detail || `Failed to update status (${res.status})`);
+      }
+      return res.json();
+    },
+    onMutate: async (newStatus: string) => {
+      // Stop an in-flight refetch from overwriting the optimistic value.
+      await queryClient.cancelQueries({ queryKey: ['vendor-order', orderId] });
+      setStatusError(null);
+      return { rollback: applyStatusToCaches(newStatus) };
+    },
+    onError: (e: any, _newStatus, context) => {
+      context?.rollback();
+      setStatusError(e?.message || 'Failed to update status. Please try again.');
+    },
+    onSettled: () => {
+      // Reconcile with the server regardless of outcome. The mutation is owned
+      // by React Query, so this still runs if the screen has been closed.
+      queryClient.invalidateQueries({ queryKey: ['vendor-order', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
+    },
+  });
 
   if (isLoading || !order) {
     return (
@@ -67,42 +131,17 @@ export default function VendorOrderDetailScreen() {
     );
   }
 
+  // Single source of truth: the cached order. No mirrored useState to drift.
+  const currentStatus: string = order.status;
+  const statusSaving = statusMutation.isPending;
   const canVerifyDelivery = currentStatus === 'shipped';
 
-  const updateStatus = async (newStatus: string) => {
-    if (newStatus === 'delivered') return;
+  const updateStatus = (newStatus: string) => {
+    if (newStatus === 'delivered') return; // PIN-only path
     if (newStatus === currentStatus) return;
     if (statusSaving) return;
-
-    const previousStatus = currentStatus;
-    setCurrentStatus(newStatus);
-    setStatusError(null);
-    setStatusSaving(true);
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
-      const res = await fetch(`${BASE_URL}/orders/${order.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: newStatus }),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.detail || `Failed to update status (${res.status})`);
-      }
-      queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-orders'], exact: false });
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return;
-      setCurrentStatus(previousStatus);
-      setStatusError(e.message || 'Failed to update status. Please try again.');
-    } finally {
-      setStatusSaving(false);
-    }
+    if (!(VALID_TRANSITIONS[currentStatus] ?? []).includes(newStatus)) return;
+    statusMutation.mutate(newStatus);
   };
 
   const CANCELLABLE = ['pending', 'confirmed', 'processing'];
@@ -133,9 +172,12 @@ export default function VendorOrderDetailScreen() {
       }
       setVerifySuccess(true);
       setPinError('');
-      setCurrentStatus('delivered');
+      // Same cache-first update as a status change, so the orders list is
+      // already correct when the vendor navigates back.
+      applyStatusToCaches('delivered');
       queryClient.invalidateQueries({ queryKey: ['vendor-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-order', order.id] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-order', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-commissions'] });
       setTimeout(() => { setShowVerifyModal(false); setVerifySuccess(false); setPinInput(''); }, 2000);
     } catch (e: any) {
       setPinError(e.message || 'Incorrect delivery PIN');
@@ -187,7 +229,7 @@ export default function VendorOrderDetailScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: font.labelL, fontSize: 15, color: colors.success }}>Delivery confirmed</Text>
-                  <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.inkSoft, marginTop: 2 }}>The customer's PIN was verified successfully.</Text>
+                  <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.inkSoft, marginTop: 2 }}>The customer&apos;s PIN was verified successfully.</Text>
                 </View>
               </Card>
             )}
@@ -257,12 +299,18 @@ export default function VendorOrderDetailScreen() {
                 {STATUSES.filter(s => s !== 'delivered').map(status => {
                   const isCurrent = status === currentStatus;
                   const isPast = STATUSES.indexOf(status) < STATUSES.indexOf(currentStatus);
-                  const isDisabled = isCurrent || currentStatus === 'delivered' || statusSaving;
+                  // Only offer moves the server will accept — anything else
+                  // would flash the new status then bounce back on the 400.
+                  const isAllowed = (VALID_TRANSITIONS[currentStatus] ?? []).includes(status);
+                  const isDisabled = isCurrent || !isAllowed || statusSaving;
+                  const isSavingThis = statusSaving && statusMutation.variables === status;
                   return (
                     <Pressable
                       key={status}
                       onPress={() => updateStatus(status)}
                       disabled={isDisabled}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isCurrent, disabled: isDisabled }}
                       style={{
                         flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12,
                         backgroundColor: isCurrent ? colors.ink : colors.surfaceSoft,
@@ -277,9 +325,10 @@ export default function VendorOrderDetailScreen() {
                       }}>
                         {(isCurrent || isPast) && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }} />}
                       </View>
-                      <Text style={{ fontFamily: font.labelL, fontSize: 14, color: isCurrent ? colors.surface : (isPast ? colors.ink : colors.inkMuted) }}>
+                      <Text style={{ flex: 1, fontFamily: font.labelL, fontSize: 14, color: isCurrent ? colors.surface : (isPast ? colors.ink : colors.inkMuted) }}>
                         {STATUS_LABELS[status]}
                       </Text>
+                      {isSavingThis && <ActivityIndicator size="small" color={colors.primary} />}
                     </Pressable>
                   );
                 })}
@@ -360,7 +409,7 @@ export default function VendorOrderDetailScreen() {
                   </View>
                 ) : (
                   <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.inkGhost, textAlign: 'center', marginTop: 12, lineHeight: 17 }}>
-                    The customer received this code when they placed the order. Enter it after they've paid you in cash.
+                    The customer received this code when they placed the order. Enter it after they&apos;ve paid you in cash.
                   </Text>
                 )}
                 <View style={{ height: 20 }} />

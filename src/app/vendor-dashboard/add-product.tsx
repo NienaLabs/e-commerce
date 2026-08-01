@@ -12,7 +12,11 @@ import { Header, Section, Card, Field, Btn, Chip, EmptyState, useResponsive, fon
 
 export default function AddProductScreen() {
   const { colors } = useTheme();
-  const { isDesktop } = useResponsive();
+  const { isDesktop, width } = useResponsive();
+  // Two side-by-side text fields plus a delete button need real estate that a
+  // phone doesn't have — below this the custom-spec rows stack instead.
+  const stackSpecFields = width < 620;
+  const cardPadding = width < 400 ? 16 : 24;
   const { token } = useContext(AuthContext);
   const queryClient = useQueryClient();
   const { id: queryId } = useLocalSearchParams<{ id?: string }>();
@@ -223,7 +227,7 @@ export default function AddProductScreen() {
       />
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 24, paddingBottom: 80, maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
+        contentContainerStyle={{ padding: cardPadding, paddingBottom: 80, maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
 
         <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 24, alignItems: 'flex-start' }}>
 
@@ -293,7 +297,7 @@ export default function AddProductScreen() {
           <View style={{ flex: 1, gap: 20, minWidth: 0 }}>
 
             {/* Product basics */}
-            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
+            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: cardPadding, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }}>Product details</Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 20, lineHeight: 18 }}>
                 Enter the core information shoppers see when they view your listing.
@@ -316,7 +320,7 @@ export default function AddProductScreen() {
             </View>
 
             {/* Pricing & stock */}
-            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
+            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: cardPadding, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }}>Pricing & inventory</Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 20, lineHeight: 18 }}>
                 Set your price and how many units you have ready to sell. A sale price is optional.
@@ -341,7 +345,7 @@ export default function AddProductScreen() {
 
             {/* Schema-driven specs */}
             {activeSchema && (
-              <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
+              <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: cardPadding, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }}>Specifications</Text>
                 <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 20, lineHeight: 18 }}>
                   Fill in what applies — these become filters customers can use when searching for products like yours.
@@ -380,10 +384,10 @@ export default function AddProductScreen() {
             )}
 
             {/* Custom specifications */}
-            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
+            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: cardPadding, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }}>Custom specifications</Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 20, lineHeight: 18 }}>
-                Add any extra details not covered above — e.g. "Battery life: 30 hours" or "Material: Aluminium".
+                Add any extra details not covered above — e.g. &quot;Battery life: 30 hours&quot; or &quot;Material: Aluminium&quot;.
               </Text>
               {customSpecs.length === 0 && (
                 <View style={{ alignItems: 'center', paddingVertical: 16 }}>
@@ -391,34 +395,91 @@ export default function AddProductScreen() {
                   <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.inkMuted, marginTop: 8 }}>No custom details yet.</Text>
                 </View>
               )}
-              <View style={{ gap: 10 }}>
-                {customSpecs.map((spec, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <View style={{ gap: stackSpecFields ? 14 : 10 }}>
+                {customSpecs.map((spec, idx) => {
+                  const inputStyle = {
+                    backgroundColor: colors.isDark ? '#1e1e1e' : '#f9fafb',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    height: 48,
+                    fontFamily: font.body,
+                    fontSize: 14,
+                    color: colors.ink,
+                    borderWidth: 1.5,
+                    borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb',
+                    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+                  };
+
+                  const labelInput = (
                     <TextInput
                       value={spec.key}
                       onChangeText={v => setCustomSpecs(prev => prev.map((s, i) => (i === idx ? { ...s, key: v } : s)))}
-                      placeholder="Label (e.g. Battery life)"
+                      placeholder={stackSpecFields ? 'Label — e.g. Battery life' : 'Label (e.g. Battery life)'}
                       placeholderTextColor={colors.inkGhost}
-                      style={{ flex: 1, backgroundColor: colors.isDark ? '#1e1e1e' : '#f9fafb', borderRadius: 12, paddingHorizontal: 14, height: 48, fontFamily: font.body, fontSize: 14, color: colors.ink, borderWidth: 1.5, borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb', ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}) }}
+                      style={[inputStyle, { flex: stackSpecFields ? undefined : 1, width: stackSpecFields ? '100%' : undefined }]}
                     />
+                  );
+
+                  const valueInput = (
                     <TextInput
                       value={spec.value}
                       onChangeText={v => setCustomSpecs(prev => prev.map((s, i) => (i === idx ? { ...s, value: v } : s)))}
-                      placeholder="Value (e.g. 30 hours)"
+                      placeholder={stackSpecFields ? 'Value — e.g. 30 hours' : 'Value (e.g. 30 hours)'}
                       placeholderTextColor={colors.inkGhost}
-                      style={{ flex: 1, backgroundColor: colors.isDark ? '#1e1e1e' : '#f9fafb', borderRadius: 12, paddingHorizontal: 14, height: 48, fontFamily: font.body, fontSize: 14, color: colors.ink, borderWidth: 1.5, borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb', ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}) }}
+                      style={[inputStyle, { flex: stackSpecFields ? undefined : 1, width: stackSpecFields ? '100%' : undefined }]}
                     />
+                  );
+
+                  const removeButton = (
                     <Pressable
                       onPress={() => setCustomSpecs(prev => prev.filter((_, i) => i !== idx))}
-                      style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.errorGhost, alignItems: 'center', justifyContent: 'center' }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove detail ${idx + 1}`}
+                      style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: colors.errorGhost, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                     >
                       <Ionicons name="close" size={18} color={colors.error} />
                     </Pressable>
-                  </View>
-                ))}
+                  );
+
+                  // Narrow screens: one field per line inside a grouped card, so
+                  // both placeholders stay legible and the tap targets stay 44px.
+                  if (stackSpecFields) {
+                    return (
+                      <View
+                        key={idx}
+                        style={{
+                          gap: 10,
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: colors.isDark ? 'rgba(255,255,255,0.08)' : '#eceae6',
+                          backgroundColor: colors.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(34,32,34,0.015)',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, letterSpacing: 0.5, color: colors.inkMuted, textTransform: 'uppercase' }}>
+                            Detail {idx + 1}
+                          </Text>
+                          {removeButton}
+                        </View>
+                        {labelInput}
+                        {valueInput}
+                      </View>
+                    );
+                  }
+
+                  return (
+                    <View key={idx} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      {labelInput}
+                      {valueInput}
+                      {removeButton}
+                    </View>
+                  );
+                })}
               </View>
               <Pressable
                 onPress={() => setCustomSpecs(prev => [...prev, { key: '', value: '' }])}
+                accessibilityRole="button"
                 style={({ pressed }) => ({
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                   paddingVertical: 14, borderRadius: 12, marginTop: customSpecs.length > 0 ? 12 : 0,
@@ -433,7 +494,7 @@ export default function AddProductScreen() {
             </View>
 
             {/* Save button */}
-            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4, gap: 12 }}>
+            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: cardPadding, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4, gap: 12 }}>
               <Btn
                 title={mutation.isPending ? 'Saving…' : isEditMode ? 'Update product' : 'Save & publish product'}
                 icon={mutation.isPending ? undefined : isEditMode ? 'checkmark-circle-outline' : 'cloud-upload-outline'}

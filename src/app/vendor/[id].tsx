@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,10 +24,64 @@ import { setFollowState } from '../../api/localFollows';
 const FALLBACK_BANNER = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=1200';
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200';
 
+/** Widest the storefront ever gets on a large monitor — beyond this it centres. */
+const MAX_CONTENT_WIDTH = 1200;
+
+/**
+ * Layout that adapts to the actual viewport rather than a single web-only
+ * `isDesktop` flag. Phones get a real two-column product grid (one column only
+ * on very narrow devices, where two cards would be unreadable), tablets three,
+ * wide desktops four.
+ */
+function useStorefrontLayout() {
+  const { width } = useWindowDimensions();
+
+  const gutter = width < 400 ? 16 : width < 768 ? 20 : 24;
+  const gap = width < 400 ? 12 : width < 768 ? 14 : 20;
+
+  const columns =
+    width >= 1280 ? 4 :
+    width >= 1024 ? 3 :
+    width >= 700 ? 3 :
+    width >= 360 ? 2 :
+    1;
+
+  // Compute the card width in points instead of percentages: percentages plus a
+  // flex gap overflow by a fraction of a pixel per column, which is what makes
+  // the right-hand card clip on a narrow screen.
+  const frameWidth = Math.min(width, MAX_CONTENT_WIDTH);
+  const contentWidth = frameWidth - gutter * 2;
+  const cardWidth = Math.floor((contentWidth - gap * (columns - 1)) / columns);
+
+  return {
+    width,
+    gutter,
+    gap,
+    columns,
+    cardWidth,
+    contentWidth,
+    isCompact: width < 768,
+    isNarrow: width < 400,
+    bannerHeight: width < 400 ? 150 : width < 768 ? 180 : 240,
+    avatarSize: width < 400 ? 68 : 84,
+  };
+}
+
 const StatBox = ({ value, label, colors }: { value: string; label: string; colors: any }) => (
-  <View style={{ alignItems: 'center', flex: 1 }}>
-    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>{value}</Text>
-    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>{label}</Text>
+  <View style={{ alignItems: 'center', flex: 1, minWidth: 0, paddingHorizontal: 4 }}>
+    <Text
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}
+    >
+      {value}
+    </Text>
+    <Text
+      numberOfLines={1}
+      style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}
+    >
+      {label}
+    </Text>
   </View>
 );
 
@@ -37,8 +91,10 @@ export default function VendorStorefront() {
   const vendorId = Array.isArray(id) ? id[0] : id as string;
   const { token, user } = useAuth();
   const queryClient = useQueryClient();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 768 && Platform.OS === 'web';
+  const insets = useSafeAreaInsets();
+  const {
+    gutter, gap, cardWidth, isCompact, isNarrow, bannerHeight, avatarSize,
+  } = useStorefrontLayout();
 
   const formatNumber = (n: number) =>
     n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -162,14 +218,17 @@ export default function VendorStorefront() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
-      {/* Back Button (absolute over banner) */}
-      <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 56 : 16, left: 16, zIndex: 20 }}>
+      {/* Back Button (absolute over banner) — anchored to the real safe area
+          rather than a hardcoded per-OS offset, so it clears every notch. */}
+      <View style={{ position: 'absolute', top: insets.top + 12, left: gutter, zIndex: 20 }}>
         <Pressable
           onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
           style={({ pressed }) => ({
-            width: 42,
-            height: 42,
-            borderRadius: 21,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
             backgroundColor: pressed ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.25)',
             alignItems: 'center',
             justifyContent: 'center',
@@ -180,9 +239,11 @@ export default function VendorStorefront() {
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Centres the storefront on wide monitors instead of stretching it. */}
+        <View style={{ width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
 
         {/* ─── Banner ─── */}
-        <View style={{ height: 200, width: '100%', backgroundColor: colors.surfaceMuted }}>
+        <View style={{ height: bannerHeight, width: '100%', backgroundColor: colors.surfaceMuted }}>
           <Image
             source={{ uri: vendor.banner_url ?? FALLBACK_BANNER }}
             style={{ width: '100%', height: '100%' }}
@@ -197,7 +258,7 @@ export default function VendorStorefront() {
         {/* ─── Profile Section ─── */}
         <View style={{
           backgroundColor: colors.surface,
-          paddingHorizontal: 24,
+          paddingHorizontal: gutter,
           paddingBottom: 24,
           borderBottomLeftRadius: 28,
           borderBottomRightRadius: 28,
@@ -207,13 +268,25 @@ export default function VendorStorefront() {
           shadowRadius: 24,
           elevation: 4,
         }}>
-          {/* Avatar + Action Buttons Row */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -36 }}>
+          {/* Avatar + Action Buttons.
+              On phones the avatar and the two pill buttons together are wider
+              than the screen, so the actions drop onto their own full-width row
+              instead of being squeezed off the edge. */}
+          <View
+            style={{
+              flexDirection: isCompact ? 'column' : 'row',
+              alignItems: isCompact ? 'stretch' : 'flex-end',
+              justifyContent: 'space-between',
+              marginTop: -(avatarSize / 2),
+              gap: isCompact ? 14 : 0,
+            }}
+          >
             {/* Avatar */}
             <View style={{
-              width: 80, height: 80, borderRadius: 40,
+              width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2,
               borderWidth: 3, borderColor: colors.surface,
               overflow: 'hidden',
+              flexShrink: 0,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.15,
@@ -223,80 +296,91 @@ export default function VendorStorefront() {
               <Image source={{ uri: vendor.logo_url ?? FALLBACK_AVATAR }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
-              {!isOwnStore && (
-                <>
-                  {/* Message Button */}
-                  <Pressable
-                    onPress={() => {
-                      if (!token) {
-                        if (Platform.OS === 'web') alert('Please log in to message this vendor');
-                        else ToastAndroid.show('Please log in to message this vendor', ToastAndroid.SHORT);
-                        router.push('/(auth)/login');
-                        return;
-                      }
-                      router.push(`/chat/${vendor.id}` as any);
-                    }}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: 18,
-                      paddingVertical: 11,
-                      borderRadius: 24,
-                      backgroundColor: colors.surfaceSoft,
-                      borderWidth: 1.5,
-                      borderColor: colors.surfaceMuted,
-                      opacity: pressed ? 0.85 : 1,
-                      marginRight: 10,
-                    })}
-                  >
-                    <Ionicons name="chatbubble-ellipses" size={16} color={colors.inkMuted} style={{ marginRight: 6 }} />
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Message</Text>
-                  </Pressable>
+            {!isOwnStore && (
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: isCompact ? 'space-between' : 'flex-end',
+                alignItems: 'center',
+                gap: 10,
+              }}>
+                {/* Message Button */}
+                <Pressable
+                  onPress={() => {
+                    if (!token) {
+                      if (Platform.OS === 'web') alert('Please log in to message this vendor');
+                      else ToastAndroid.show('Please log in to message this vendor', ToastAndroid.SHORT);
+                      router.push('/(auth)/login');
+                      return;
+                    }
+                    router.push(`/chat/${vendor.id}` as any);
+                  }}
+                  style={({ pressed }) => ({
+                    flex: isCompact ? 1 : undefined,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: isNarrow ? 12 : 18,
+                    minHeight: 44,
+                    borderRadius: 24,
+                    backgroundColor: colors.surfaceSoft,
+                    borderWidth: 1.5,
+                    borderColor: colors.surfaceMuted,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={16} color={colors.inkMuted} style={{ marginRight: 6 }} />
+                  <Text numberOfLines={1} style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Message</Text>
+                </Pressable>
 
-                  {/* Follow Button */}
-                  <Pressable
-                    onPress={() => {
-                      if (!token) {
-                        if (Platform.OS === 'web') alert('Please log in to follow this store');
-                        else ToastAndroid.show('Please log in to follow this store', ToastAndroid.SHORT);
-                        router.push('/(auth)/login');
-                        return;
-                      }
-                      followMutation.mutate();
-                    }}
-                    disabled={(!!token && followLoading) || followMutation.isPending}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: 22,
-                      paddingVertical: 11,
-                      borderRadius: 24,
-                      backgroundColor: following ? colors.surfaceSoft : colors.ink,
-                      borderWidth: following ? 1.5 : 0,
-                      borderColor: colors.surfaceMuted,
-                      opacity: pressed || (!!token && followLoading) || followMutation.isPending ? 0.7 : 1,
-                    })}
-                  >
-                    <Ionicons
-                      name={following ? 'checkmark' : 'add'}
-                      size={16}
-                      color={following ? colors.inkMuted : colors.surface}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: following ? colors.inkMuted : colors.surface }}>
-                      {following ? 'Following' : 'Follow'}
-                    </Text>
-                  </Pressable>
-                </>
-              )}
-            </View>
+                {/* Follow Button */}
+                <Pressable
+                  onPress={() => {
+                    if (!token) {
+                      if (Platform.OS === 'web') alert('Please log in to follow this store');
+                      else ToastAndroid.show('Please log in to follow this store', ToastAndroid.SHORT);
+                      router.push('/(auth)/login');
+                      return;
+                    }
+                    followMutation.mutate();
+                  }}
+                  disabled={(!!token && followLoading) || followMutation.isPending}
+                  style={({ pressed }) => ({
+                    flex: isCompact ? 1 : undefined,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: isNarrow ? 12 : 22,
+                    minHeight: 44,
+                    borderRadius: 24,
+                    backgroundColor: following ? colors.surfaceSoft : colors.ink,
+                    borderWidth: following ? 1.5 : 0,
+                    borderColor: colors.surfaceMuted,
+                    opacity: pressed || (!!token && followLoading) || followMutation.isPending ? 0.7 : 1,
+                  })}
+                >
+                  <Ionicons
+                    name={following ? 'checkmark' : 'add'}
+                    size={16}
+                    color={following ? colors.inkMuted : colors.surface}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text numberOfLines={1} style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: following ? colors.inkMuted : colors.surface }}>
+                    {following ? 'Following' : 'Follow'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </View>
 
           {/* Name + Slug */}
           <View style={{ marginTop: 14, marginBottom: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, marginRight: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {/* flexShrink lets a long store name truncate instead of pushing
+                  the verified tick off the screen. */}
+              <Text
+                numberOfLines={2}
+                style={{ flexShrink: 1, fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 19 : 22, color: colors.ink }}
+              >
                 {vendor.store_name}
               </Text>
               {vendor.is_verified && (
@@ -304,12 +388,13 @@ export default function VendorStorefront() {
                   width: 22, height: 22, borderRadius: 11,
                   backgroundColor: colors.info,
                   alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
                 }}>
                   <Ionicons name="checkmark" size={13} color="#ffffff" />
                 </View>
               )}
             </View>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 2 }}>
+            <Text numberOfLines={1} style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 2 }}>
               @{vendor.store_slug}
             </Text>
           </View>
@@ -338,20 +423,23 @@ export default function VendorStorefront() {
           {/* Joined date */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="calendar-outline" size={14} color={colors.inkGhost} style={{ marginRight: 5 }} />
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>
+            <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkGhost }}>
               Member since {joinedYear}
             </Text>
           </View>
         </View>
 
         {/* ─── Products Grid ─── */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 32 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, letterSpacing: -0.3 }}>
+        <View style={{ paddingHorizontal: gutter, paddingTop: isCompact ? 24 : 32 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+            <Text
+              numberOfLines={1}
+              style={{ flexShrink: 1, fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 18 : 20, color: colors.ink, letterSpacing: -0.3 }}
+            >
               All Products
             </Text>
             {!productsLoading && (
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost }}>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, flexShrink: 0 }}>
                 {productList.length} items
               </Text>
             )}
@@ -372,12 +460,9 @@ export default function VendorStorefront() {
               </Text>
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
               {productList.map(product => (
-                <View
-                  key={product.id}
-                  style={{ width: isDesktop ? '48%' : '100%' }}
-                >
+                <View key={product.id} style={{ width: cardWidth }}>
                   <ProductCard
                     id={product.id}
                     name={product.name}
@@ -393,6 +478,7 @@ export default function VendorStorefront() {
           )}
         </View>
 
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

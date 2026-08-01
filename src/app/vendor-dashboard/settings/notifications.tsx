@@ -8,7 +8,7 @@ export default function NotificationsSettingsScreen() {
   const { colors } = useTheme();
   const [settings, setSettings] = useState({
     newOrdersApp: true, newOrdersEmail: true, newOrdersSms: false,
-    payoutApp: true, payoutEmail: true,
+    commissionApp: true, commissionEmail: true,
     messagesApp: true, messagesEmail: false,
   });
   const toggle = (key: keyof typeof settings) => setSettings(s => ({ ...s, [key]: !s[key] }));
@@ -26,10 +26,10 @@ export default function NotificationsSettingsScreen() {
           </Card>
         </Section>
 
-        <Section title="Payouts">
+        <Section title="Commissions" caption="Alerts about what you owe the platform.">
           <Card padded={false}>
-            <ToggleRow icon="phone-portrait-outline" title="Push notifications" description="When a payout is sent to your bank." value={settings.payoutApp} onValueChange={() => toggle('payoutApp')} />
-            <ToggleRow icon="mail-outline" title="Monthly email summary" description="A monthly recap of your payouts." value={settings.payoutEmail} onValueChange={() => toggle('payoutEmail')} last />
+            <ToggleRow icon="phone-portrait-outline" title="Push notifications" description="When a commission invoice is raised or falls due." value={settings.commissionApp} onValueChange={() => toggle('commissionApp')} />
+            <ToggleRow icon="mail-outline" title="Monthly email summary" description="A monthly recap of the commission you've paid." value={settings.commissionEmail} onValueChange={() => toggle('commissionEmail')} last />
           </Card>
         </Section>
 
