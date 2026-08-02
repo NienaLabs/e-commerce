@@ -17,6 +17,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import { WebSocketProvider } from '../context/WebSocketContext';
 import { EventTracker } from '../components/EventTracker';
+import { VendorStatusSync } from '../components/VendorStatusSync';
 import { useLocationStore } from '../store/locationStore';
 import { NotificationProvider } from '../context/NotificationContext';
 
@@ -68,6 +69,7 @@ export default function RootLayout() {
           <WebSocketProvider>
             <ToastProvider>
               <EventTracker />
+              <VendorStatusSync />
               <NotificationProvider>
                 <SidebarProvider>
                   <Stack screenOptions={{ headerShown: false }}>

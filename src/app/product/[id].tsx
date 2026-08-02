@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../components/Button';
 import { useTheme } from '../../theme/ThemeContext';
 import { useCartStore } from '../../store/cartStore';
@@ -92,7 +92,12 @@ export default function ProductDetail() {
   const addCartItem = useCartStore((state) => state.addItem);
   const totalCartItems = useCartStore((state) => state.items.reduce((sum, item) => sum + item.quantity, 0));
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 768 && Platform.OS === 'web';
+  const insets = useSafeAreaInsets();
+  const isDesktop = width >= 768;
+  const isNarrow = width < 400;
+  // Screen gutter: 24px is too tight once you're on a 360px phone.
+  const gutter = isNarrow ? 16 : isDesktop ? 24 : 20;
+  const MAX_CONTENT_WIDTH = 1200;
 
   if (isLoading) {
     return (
@@ -136,17 +141,21 @@ export default function ProductDetail() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.surface, zIndex: 10 }}>
-        <Pressable 
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: gutter, paddingVertical: 16, backgroundColor: colors.surface, zIndex: 10 }}>
+        <Pressable
           onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
         >
           <Ionicons name="chevron-back" size={24} color={colors.ink} />
         </Pressable>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, flex: 1, textAlign: 'center' }}>Details</Text>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, flex: 1, textAlign: 'center' }}>Details</Text>
         <Pressable 
           onPress={() => router.push('/cart')}
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityRole="button"
+          accessibilityLabel="Open cart"
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
         >
           <Ionicons name="cart-outline" size={24} color={colors.ink} />
           {totalCartItems > 0 && (
@@ -158,10 +167,17 @@ export default function ProductDetail() {
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: isDesktop ? 'row' : 'column', padding: 24, gap: 32 }}>
-          
+        <View style={{
+          flexDirection: isDesktop ? 'row' : 'column',
+          padding: gutter,
+          gap: isDesktop ? 32 : 24,
+          width: '100%',
+          maxWidth: MAX_CONTENT_WIDTH,
+          alignSelf: 'center',
+        }}>
+
           {/* Image Gallery */}
-          <View style={{ flex: isDesktop ? 1 : undefined }}>
+          <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
             <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceSoft, borderRadius: 24, overflow: 'hidden', marginBottom: 16 }}>
               <Image source={{ uri: displayImage }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
               {product.discount_price && (
@@ -170,6 +186,21 @@ export default function ProductDetail() {
                 </View>
               )}
             </View>
+            {/* Four 72px thumbs plus gaps are wider than a 360px screen, so the
+                strip scrolls horizontally rather than clipping the last one. */}
+            {productImages.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ flexDirection: 'row', gap: 12, paddingRight: 4 }}
+              >
+                {productImages.map((img, idx) => (
+                  <View key={idx} style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === 0 ? 2 : 1, borderColor: idx === 0 ? colors.primary : colors.surfaceMuted, overflow: 'hidden', flexShrink: 0 }}>
+                    <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
+                  </View>
+                ))}
+              </ScrollView>
+            )}
             <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
               {productImages.map((img, idx) => (
                 <Pressable 
@@ -184,9 +215,9 @@ export default function ProductDetail() {
           </View>
 
           {/* Product Info */}
-          <View style={{ flex: isDesktop ? 1 : undefined }}>
+          <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 26, color: colors.ink, lineHeight: 32, marginRight: 16 }}>
+              <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 22 : 26, color: colors.ink, lineHeight: isNarrow ? 28 : 32, marginRight: 16 }}>
                 {product.name}
               </Text>
               <Pressable 
@@ -204,7 +235,7 @@ export default function ProductDetail() {
                     isWishlisted ? 'info' : 'success'
                   );
                 }}
-                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
               >
                 <Ionicons name={isWishlisted ? "heart" : "heart-outline"} size={24} color={isWishlisted ? colors.primary : colors.ink} />
               </Pressable>
@@ -216,14 +247,16 @@ export default function ProductDetail() {
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted }}>({totalReviewsCount} reviews)</Text>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 24 }}>
+            {/* Wraps so a long discounted price and its struck-through original
+                don't run off the edge of a narrow screen. */}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
               {product.discount_price ? (
                 <>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 32, color: '#d93651', marginRight: 12 }}>${product.discount_price}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 18, color: colors.inkGhost, textDecorationLine: 'line-through', paddingBottom: 4 }}>${product.actual_price}</Text>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 27 : 32, color: '#d93651' }}>${product.discount_price}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: isNarrow ? 16 : 18, color: colors.inkGhost, textDecorationLine: 'line-through', paddingBottom: 4 }}>${product.actual_price}</Text>
                 </>
               ) : (
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 32, color: colors.ink }}>${product.actual_price}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 27 : 32, color: colors.ink }}>${product.actual_price}</Text>
               )}
             </View>
 
@@ -413,7 +446,7 @@ export default function ProductDetail() {
 
             {/* Complete Your Cart / Cross-Sell */}
             {(hydratedCrossSell.length > 0 || crossSellLoading) && (
-              <View style={{ marginBottom: 40, marginHorizontal: -24 }}>
+              <View style={{ marginBottom: 40, marginHorizontal: -gutter }}>
                 <RecommendationShelfRow
                   slot={crossSellShelf?.slot || 'product_cross_sell'}
                   label={crossSellShelf?.label || 'Frequently bought together'}
@@ -427,19 +460,22 @@ export default function ProductDetail() {
         </View>
       </ScrollView>
 
-      {/* Sticky Bottom Bar */}
-      <View style={{ 
-        flexDirection: 'row', alignItems: 'center', padding: 20, 
+      {/* Sticky Bottom Bar — padded to the device's real bottom inset so the
+          CTA never sits under the home indicator or gesture pill. */}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center', gap: 16,
+        paddingHorizontal: gutter, paddingTop: 16,
+        paddingBottom: Math.max(insets.bottom, 16),
         backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.surfaceMuted,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20
+        width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center',
       }}>
-        <View style={{ flex: 1, marginRight: 20 }}>
-          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 2 }}>Total Price</Text>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 2 }}>Total Price</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 19 : 22, color: colors.ink }}>
             ${product.discount_price ?? product.actual_price}
           </Text>
         </View>
-        <View style={{ flex: 2 }}>
+        <View style={{ flex: 2, minWidth: 0 }}>
           <Button
             title={inStock ? 'Add to Cart' : 'Out of Stock'}
             onPress={() => {

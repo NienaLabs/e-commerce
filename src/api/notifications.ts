@@ -69,8 +69,10 @@ export function resolveNotificationRoute(actionUrl?: string): string | null {
   const orderMatch = actionUrl.match(/\/profile\/orders?\/([\w-]+)/);
   if (orderMatch) return `/order-tracking/${orderMatch[1]}`;
 
-  // List-page fallbacks
-  if (actionUrl.startsWith('/vendor-dashboard')) return '/vendor-dashboard/orders';
+  // List-page fallback. Note: only /profile/orders needs rewriting — every
+  // /vendor-dashboard/* link the backend emits (dashboard root, commissions,
+  // orders list) is already a real route, so blanket-redirecting them to the
+  // orders list would send an approval or invoice notification to the wrong screen.
   if (actionUrl.startsWith('/profile/orders')) return '/profile/orders';
 
   return actionUrl;

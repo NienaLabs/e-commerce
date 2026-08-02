@@ -25,6 +25,7 @@ import { useAuth } from './AuthContext';
 export type WsEventType =
   | 'new_order'
   | 'order_status_changed'
+  | 'commission_rate_changed'
   | 'notification';
 
 export interface WsEvent {

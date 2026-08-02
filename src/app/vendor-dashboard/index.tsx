@@ -8,12 +8,15 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { getVendorMe, getVendorDashboardOverview, getVendorDashboardAlerts, getVendorDashboardBenchmark, getVendorOrders } from '../../api/vendors';
 import { getVendorSummary, getVendorRevenue } from '../../api/analytics';
+import { getVendorCommissions } from '../../api/commissions';
 import { AuthContext } from '../../context/AuthContext';
 import { Header, Section, Card, ScreenBody, EmptyState, Badge, Skeleton, useResponsive, font, glass } from '../../components/vendor/kit';
 import { useVendorDrawer } from '../../context/VendorDrawerContext';
 
 const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${(n ?? 0).toFixed(0)}`);
+// Commission figures come from the backend in cedis — keep them in cedis.
+const cedis = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function VendorDashboard() {
   const { colors } = useTheme();
@@ -27,6 +30,7 @@ export default function VendorDashboard() {
   const { data: revenueData = [] } = useQuery({ queryKey: ['vendor-revenue'], queryFn: () => getVendorRevenue(token!, { granularity: 'monthly', days: 240 }), enabled: !!token });
   const { data: orders = [] } = useQuery({ queryKey: ['vendor-orders', vendor?.id], queryFn: () => getVendorOrders(token!, vendor!.id), enabled: !!token && !!vendor?.id });
   const { data: overview } = useQuery({ queryKey: ['vendor-overview', vendor?.id], queryFn: () => getVendorDashboardOverview(token!, vendor!.id), enabled: !!token && !!vendor?.id });
+  const { data: commissions } = useQuery({ queryKey: ['vendor-commissions'], queryFn: () => getVendorCommissions(token!), enabled: !!token });
 
   if (authLoading || (analyticsLoading && !!vendor) || (vendorLoading && !isError)) {
     return (
@@ -119,44 +123,34 @@ export default function VendorDashboard() {
           <View style={{ flex: 1, minWidth: 280, gap: 24 }}>
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Summary</Text>
 
-            {/* Your Balance */}
-            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 6, position: 'relative', overflow: 'hidden' }}>
-              <Image 
-                source={require('../../../assets/3d icons/piggy-bank.png')} 
-                style={{ 
-                  position: 'absolute', 
-                  right: -20, 
-                  bottom: -20, 
-                  width: 140, 
-                  height: 140, 
-                  resizeMode: 'contain', 
-                  transform: [{ rotate: '-10deg' }],
-                  opacity: 0.9,
-                }} 
-              />
+            {/* Commission owed — vendors collect from customers directly, so
+                there is no balance to pay out; what matters is what they owe us. */}
+            <Pressable
+              onPress={() => router.push('/vendor-dashboard/commissions' as any)}
+              style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 6 }}
+            >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 14, color: colors.inkMuted, textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>Your Balance</Text>
-                <Ionicons name="ellipsis-vertical" size={16} color={colors.inkMuted} style={{ textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }} />
+                <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Commission on today&apos;s sales</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.inkMuted} />
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.ink, letterSpacing: -0.5, textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>{money(revTotal)}</Text>
-                <Pressable onPress={() => router.push('/vendor-dashboard/payouts' as any)} style={({ pressed }) => ({ width: 32, height: 32, borderRadius: 16, backgroundColor: pressed ? '#1e8449' : '#28b463', alignItems: 'center', justifyContent: 'center', shadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', shadowOffset: { width: 0, height: 0 }, shadowRadius: 10, shadowOpacity: 1, elevation: 5 })}>
-                  <Ionicons name="add" size={20} color="#fff" />
-                </Pressable>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.ink, letterSpacing: -0.5 }}>
+                {cedis(commissions?.today.commission_due ?? 0)}
+              </Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16 }}>
+                {commissions?.commission_rate ?? 0}% of {cedis(commissions?.today.gross_sales ?? 0)} sold today
+              </Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons
+                  name={commissions?.is_overdue ? 'alert-circle' : 'wallet-outline'}
+                  size={13}
+                  color={commissions?.is_overdue ? colors.error : colors.inkMuted}
+                />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: commissions?.is_overdue ? colors.error : colors.inkSoft }}>
+                  {cedis(commissions?.outstanding ?? 0)} outstanding{commissions?.is_overdue ? ' · overdue' : ''}
+                </Text>
               </View>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16, textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>Current balance ready for payout</Text>
-              
-              <View style={{ flexDirection: 'row', gap: 16 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="caret-up" size={12} color="#28b463" style={{ textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }} />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#28b463', textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>+$3,250.07</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="caret-down" size={12} color="#ff4d4d" style={{ textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }} />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#ff4d4d', textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>-$1,062.90</Text>
-                </View>
-              </View>
-            </View>
+            </Pressable>
 
             {/* Recent Activity / Alerts */}
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginTop: 8 }}>Recent Activity</Text>
