@@ -8,21 +8,23 @@
  */
 
 import React, { useContext, useMemo } from 'react';
-import { View, Text, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../../theme/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { getVendorCommissions, type CommissionEntry } from '../../api/commissions';
+import { getVendorCommissions, CommissionApiError, type CommissionEntry } from '../../api/commissions';
 import {
   Header, ScreenBody, Section, Card, StatGrid, StatCard, Divider, Badge,
   EmptyState, shadow, font,
 } from '../../components/vendor/kit';
 
+// Non-breaking space: when a value wraps onto a second line, "GH₵" must not be
+// left stranded on the line above its amount.
 const money = (n: number) =>
-  `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const shortDate = (iso: string | null) => {
   if (!iso) return '—';
@@ -38,17 +40,75 @@ const STATUS_META: Record<CommissionEntry['status'], { label: string; tone: 'war
   paid: { label: 'Settled', tone: 'success', icon: 'checkmark-circle-outline' },
 };
 
+/** Returns a human-friendly error title and body based on what went wrong. */
+function classifyError(err: unknown): { icon: keyof typeof Ionicons.glyphMap; title: string; body: string; tone: 'error' | 'warning' } {
+  if (err instanceof CommissionApiError) {
+    if (err.status === 401 || err.status === 403) {
+      return {
+        icon: 'lock-closed-outline',
+        title: 'Session expired',
+        body: 'Your login session has expired. Sign out and sign back in to see your commissions.',
+        tone: 'warning',
+      };
+    }
+    if (err.status === 404) {
+      return {
+        icon: 'storefront-outline',
+        title: 'No vendor profile found',
+        body: 'We couldn\'t find a vendor account linked to your login. Contact support if this is unexpected.',
+        tone: 'warning',
+      };
+    }
+    if (err.status === 0) {
+      return {
+        icon: 'wifi-outline',
+        title: 'No connection',
+        body: 'We couldn\'t reach the server. Check your internet connection and tap Retry.',
+        tone: 'error',
+      };
+    }
+    if (err.status >= 500) {
+      return {
+        icon: 'cloud-offline-outline',
+        title: 'Server error',
+        body: `The server returned an error (${err.status}). This does not mean your balance is zero — please try again shortly.`,
+        tone: 'error',
+      };
+    }
+    return {
+      icon: 'alert-circle-outline',
+      title: 'Something went wrong',
+      body: err.message || 'An unexpected error occurred. This does not mean your balance is zero — please try again.',
+      tone: 'error',
+    };
+  }
+  return {
+    icon: 'cloud-offline-outline',
+    title: 'Couldn\'t load commissions',
+    body: 'We couldn\'t reach the server. This does not mean your balance is zero — please try again.',
+    tone: 'error',
+  };
+}
+
 export default function VendorCommissionsScreen() {
   const { colors } = useTheme();
   const { token } = useContext(AuthContext);
 
-  const { data, isLoading, isRefetching, refetch } = useQuery({
+  const { data, isLoading, isError, error, isRefetching, refetch } = useQuery({
     queryKey: ['vendor-commissions'],
     queryFn: () => getVendorCommissions(token!),
     enabled: !!token,
     // Today's figure moves as orders get delivered, so don't serve it stale.
     refetchInterval: 60_000,
     staleTime: 30_000,
+    // Don't retry auth errors — they won't succeed without a new token.
+    retry: (failureCount, err) => {
+      if (err instanceof CommissionApiError && (err.status === 401 || err.status === 403 || err.status === 404)) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
 
   const owed = data?.outstanding ?? 0;
@@ -60,12 +120,100 @@ export default function VendorCommissionsScreen() {
     return colors.primary;
   }, [isOverdue, owed, colors]);
 
+  // The dashboard is reachable without signing in, which leaves this query
+  // disabled — never `isLoading`, never `isError`, just no data. Without this
+  // branch a signed-out visitor is told the server is unreachable, which is
+  // both wrong and alarming.
+  if (!token) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.isDark ? '#1a1a1a' : '#f4f7f6' }} edges={['top']}>
+        <Header title="Commissions" subtitle="What you owe the platform" onBack={() => router.push('/vendor-dashboard' as any)} />
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Sign in to see your commissions"
+            body="Your commission balance is tied to your vendor account, so we need you signed in before we can show it."
+            tone="warning"
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (isLoading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.isDark ? '#1a1a1a' : '#f4f7f6' }} edges={['top']}>
         <Header title="Commissions" subtitle="What you owe the platform" onBack={() => router.push('/vendor-dashboard' as any)} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 }}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ fontFamily: font.body, fontSize: 14, color: colors.inkMuted }}>
+            Loading your commission data…
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Without this the screen renders a full set of zeros on a failed request —
+  // indistinguishable from genuinely owing nothing, which is the worst possible
+  // way to be wrong about money.
+  if (isError || !data) {
+    const { icon, title, body, tone } = classifyError(error);
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.isDark ? '#1a1a1a' : '#f4f7f6' }} edges={['top']}>
+        <Header title="Commissions" subtitle="What you owe the platform" onBack={() => router.push('/vendor-dashboard' as any)} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 24 }}>
+          {/* Icon */}
+          <View style={{
+            width: 80, height: 80, borderRadius: 40,
+            backgroundColor: tone === 'error' ? colors.errorGhost : colors.warningGhost,
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Ionicons name={icon} size={38} color={tone === 'error' ? colors.error : colors.warning} />
+          </View>
+
+          {/* Message */}
+          <View style={{ alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontFamily: font.bold, fontSize: 20, color: colors.ink, textAlign: 'center' }}>
+              {title}
+            </Text>
+            <Text style={{ fontFamily: font.body, fontSize: 14, color: colors.inkMuted, textAlign: 'center', lineHeight: 22, maxWidth: 320 }}>
+              {body}
+            </Text>
+          </View>
+
+          {/* Retry button */}
+          <TouchableOpacity
+            onPress={() => refetch()}
+            disabled={isRefetching}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 8,
+              backgroundColor: colors.primary, borderRadius: 14,
+              paddingHorizontal: 28, paddingVertical: 14,
+              opacity: isRefetching ? 0.6 : 1,
+            }}
+          >
+            {isRefetching ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="refresh" size={18} color="#fff" />
+            )}
+            <Text style={{ fontFamily: font.bold, fontSize: 15, color: '#fff' }}>
+              {isRefetching ? 'Retrying…' : 'Try again'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Disclaimer */}
+          <View style={{
+            flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+            backgroundColor: colors.warningGhost, borderRadius: 12,
+            padding: 14, maxWidth: 340,
+          }}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.warning} style={{ marginTop: 1 }} />
+            <Text style={{ fontFamily: font.body, fontSize: 12, color: colors.inkMuted, flex: 1, lineHeight: 18 }}>
+              A loading error does not mean your balance is zero. Your commission history is safe on the server.
+            </Text>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -79,37 +227,38 @@ export default function VendorCommissionsScreen() {
         maxWidth={720}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />}
       >
-        {/* ── Today's commission — the headline number ── */}
+        {/* ── What you owe — the headline number ── */}
         <View style={[{ backgroundColor: colors.heroSurface, borderRadius: 24, padding: 24 }, shadow(3)]}>
           <Text style={{ fontFamily: font.bold, fontSize: 11, letterSpacing: 1, color: colors.onHeroMuted, textTransform: 'uppercase' }}>
-            Commission on today&apos;s sales
+            You owe the platform
           </Text>
-          <Text style={{ fontFamily: font.bold, fontSize: 42, color: colors.primary, letterSpacing: -1, marginTop: 6 }}>
-            {money(data?.today.commission_due ?? 0)}
-          </Text>
-          <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.onHeroMuted, marginTop: 4 }}>
-            {data?.commission_rate ?? 0}% of {money(data?.today.gross_sales ?? 0)} across{' '}
-            {data?.today.orders ?? 0} delivered order{(data?.today.orders ?? 0) === 1 ? '' : 's'} today.
-          </Text>
-
-          <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 18 }} />
-
-          <Text style={{ fontFamily: font.bold, fontSize: 11, letterSpacing: 1, color: colors.onHeroMuted, textTransform: 'uppercase' }}>
-            Total outstanding
-          </Text>
-          <Text style={{ fontFamily: font.bold, fontSize: 26, color: heroTone, letterSpacing: -0.5, marginTop: 4 }}>
+          <Text style={{ fontFamily: font.bold, fontSize: 42, color: heroTone, letterSpacing: -1, marginTop: 6 }}>
             {money(owed)}
           </Text>
-          <Text style={{ fontFamily: font.body, fontSize: 12.5, color: colors.onHeroMuted, marginTop: 4 }}>
+          <Text style={{ fontFamily: font.body, fontSize: 13, color: colors.onHeroMuted, marginTop: 4 }}>
+            {data?.commission_rate ?? 0}% commission, charged on each order once it&apos;s delivered.
+          </Text>
+          <Text style={{ fontFamily: font.body, fontSize: 12.5, color: colors.onHeroMuted, marginTop: 6 }}>
             {isOverdue
               ? `Overdue by ${data?.days_overdue} day${data?.days_overdue === 1 ? '' : 's'} — please settle right away.`
               : (data?.billed_total ?? 0) > 0
                 ? `Invoiced — due by ${shortDate(data?.due_date ?? null)}.`
                 : owed > 0
-                  ? 'Not invoiced yet. You’ll be billed for this once the period closes.'
-                  : (data?.today.commission_due ?? 0) > 0
-                    ? 'Today’s commission joins this balance when the day closes.'
-                    : 'Nothing outstanding. You’re all settled up.'}
+                  ? `Charged and waiting to be invoiced. You'll have ${data?.payment_due_days ?? 3} day${(data?.payment_due_days ?? 3) === 1 ? '' : 's'} to pay once invoiced.`
+                  : "Nothing outstanding. You're all settled up."}
+          </Text>
+
+          <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 18 }} />
+
+          <Text style={{ fontFamily: font.bold, fontSize: 11, letterSpacing: 1, color: colors.onHeroMuted, textTransform: 'uppercase' }}>
+            Added today
+          </Text>
+          <Text style={{ fontFamily: font.bold, fontSize: 26, color: colors.primary, letterSpacing: -0.5, marginTop: 4 }}>
+            {money(data?.today.commission_due ?? 0)}
+          </Text>
+          <Text style={{ fontFamily: font.body, fontSize: 12.5, color: colors.onHeroMuted, marginTop: 4 }}>
+            {data?.commission_rate ?? 0}% of {money(data?.today.gross_sales ?? 0)} across{' '}
+            {data?.today.orders ?? 0} delivered order{(data?.today.orders ?? 0) === 1 ? '' : 's'} today.
           </Text>
         </View>
 
@@ -128,7 +277,10 @@ export default function VendorCommissionsScreen() {
         )}
 
         {/* ── Breakdown ── */}
-        <StatGrid min={150}>
+        {/* 150 was too narrow for a cedi value plus a two-word label — the
+            amount had nowhere to go. 172 fits the common case on one line and
+            still gives two columns on a phone. */}
+        <StatGrid min={172}>
           <StatCard
             icon="today-outline"
             label="Today's sales"
@@ -170,8 +322,8 @@ export default function VendorCommissionsScreen() {
               <Divider />
               <PayStep
                 index={2}
-                title="We total the day"
-                body={`Each night we add up your delivered orders and charge ${data?.commission_rate ?? 0}% commission.`}
+                title="Commission logged instantly"
+                body={`Each time you verify a delivery, we immediately log ${data?.commission_rate ?? 0}% commission on that sale — no waiting for a nightly job.`}
               />
               <Divider />
               <PayStep

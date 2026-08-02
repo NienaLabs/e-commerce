@@ -214,12 +214,17 @@ export function StatCard({ icon, label, value, hint, hintTone = 'neutral', tone 
   const t = toneColor(colors, tone);
   const h = toneColor(colors, hintTone);
   return (
+    // height:'100%' makes every card in a row match the tallest one, so the row
+    // grows to fit its content rather than the content being squeezed to fit.
     <View style={[glass(colors, { radius: 22 }), { padding: 18, height: '100%' }]}>
       <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
         <Ionicons name={icon} size={22} color={t.fg} />
       </View>
-      <Text style={{ fontFamily: font.bold, fontSize: 25, color: colors.ink, letterSpacing: -0.6 }} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      <Text style={{ fontFamily: font.labelM, fontSize: 12.5, color: colors.inkMuted, marginTop: 3 }} numberOfLines={2}>{label}</Text>
+      {/* No single-line clamp: a long money value like "GH₵ 12,345.67" must wrap
+          rather than be cut off. adjustsFontSizeToFit is a no-op on web, so it
+          was silently truncating there instead of shrinking. */}
+      <Text style={{ fontFamily: font.bold, fontSize: 25, color: colors.ink, letterSpacing: -0.6, flexShrink: 1 }}>{value}</Text>
+      <Text style={{ fontFamily: font.labelM, fontSize: 12.5, color: colors.inkMuted, marginTop: 3, lineHeight: 17 }}>{label}</Text>
       {!!hint && <Text style={{ fontFamily: font.body, fontSize: 11.5, color: hintTone === 'neutral' ? colors.inkGhost : h.fg, marginTop: 8, lineHeight: 16 }}>{hint}</Text>}
     </View>
   );

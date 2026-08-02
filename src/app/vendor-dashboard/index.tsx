@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Platform, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,8 +6,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
-import { getVendorMe, getVendorDashboardOverview, getVendorDashboardAlerts, getVendorDashboardBenchmark, getVendorOrders } from '../../api/vendors';
-import { getVendorSummary, getVendorRevenue } from '../../api/analytics';
+import { getVendorMe, getVendorDashboardOverview, getVendorDashboardAlerts, getVendorDashboardBenchmark, getVendorOrders, getVendorProducts } from '../../api/vendors';
+import { getVendorSummary, getVendorRevenue, getVendorTopProducts } from '../../api/analytics';
+import { listCategories } from '../../api/products';
 import { getVendorCommissions } from '../../api/commissions';
 import { AuthContext } from '../../context/AuthContext';
 import { Header, Section, Card, ScreenBody, EmptyState, Badge, Skeleton, useResponsive, font, glass } from '../../components/vendor/kit';
@@ -16,7 +17,7 @@ import { useVendorDrawer } from '../../context/VendorDrawerContext';
 const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compact = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${(n ?? 0).toFixed(0)}`);
 // Commission figures come from the backend in cedis — keep them in cedis.
-const cedis = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const cedis = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function VendorDashboard() {
   const { colors } = useTheme();
@@ -30,7 +31,7 @@ export default function VendorDashboard() {
   const { data: revenueData = [] } = useQuery({ queryKey: ['vendor-revenue'], queryFn: () => getVendorRevenue(token!, { granularity: 'monthly', days: 240 }), enabled: !!token });
   const { data: orders = [] } = useQuery({ queryKey: ['vendor-orders', vendor?.id], queryFn: () => getVendorOrders(token!, vendor!.id), enabled: !!token && !!vendor?.id });
   const { data: overview } = useQuery({ queryKey: ['vendor-overview', vendor?.id], queryFn: () => getVendorDashboardOverview(token!, vendor!.id), enabled: !!token && !!vendor?.id });
-  const { data: commissions } = useQuery({ queryKey: ['vendor-commissions'], queryFn: () => getVendorCommissions(token!), enabled: !!token });
+  const { data: commissions, isError: commissionsError } = useQuery({ queryKey: ['vendor-commissions'], queryFn: () => getVendorCommissions(token!), enabled: !!token });
 
   if (authLoading || (analyticsLoading && !!vendor) || (vendorLoading && !isError)) {
     return (
@@ -133,26 +134,49 @@ export default function VendorDashboard() {
               style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 6 }}
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Commission on today&apos;s sales</Text>
+                <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Commission you owe</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.inkMuted} />
               </View>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.ink, letterSpacing: -0.5 }}>
-                {cedis(commissions?.today?.commission_due ?? 0)}
-              </Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16 }}>
-                {commissions?.commission_rate ?? 0}% of {cedis(commissions?.today?.gross_sales ?? 0)} sold today
-              </Text>
+              {/* A failed request must never read as "you owe nothing" — say so. */}
+              {commissionsError ? (
+                <>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.inkMuted, letterSpacing: -0.5 }}>
+                    Unavailable
+                  </Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8 }}>
+                    We couldn&apos;t load your commission right now. Tap to try again.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  {/* The debt is the headline. A vendor's first question is
+                      "what do I owe?", not "what did today add?". */}
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: (commissions?.outstanding ?? 0) > 0 ? (commissions?.is_overdue ? colors.error : colors.ink) : colors.ink, letterSpacing: -0.5 }}>
+                    {cedis(commissions?.outstanding ?? 0)}
+                  </Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16 }}>
+                    {commissions?.is_overdue
+                      ? `Overdue by ${commissions?.days_overdue} day${commissions?.days_overdue === 1 ? '' : 's'} — settle now`
+                      : (commissions?.outstanding ?? 0) > 0
+                        ? `${commissions?.commission_rate ?? 0}% charged on your delivered orders`
+                        : 'Nothing owed right now'}
+                  </Text>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons
-                  name={commissions?.is_overdue ? 'alert-circle' : 'wallet-outline'}
-                  size={13}
-                  color={commissions?.is_overdue ? colors.error : colors.inkMuted}
-                />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: commissions?.is_overdue ? colors.error : colors.inkSoft }}>
-                  {cedis(commissions?.outstanding ?? 0)} outstanding{commissions?.is_overdue ? ' · overdue' : ''}
-                </Text>
-              </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <Ionicons name="today-outline" size={13} color={colors.inkMuted} />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkSoft }}>
+                      {cedis(commissions?.today?.commission_due ?? 0)} from today&apos;s sales
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="calendar-outline" size={13} color={colors.inkMuted} />
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkSoft }}>
+                      {cedis(commissions?.this_month?.commission_due ?? 0)} this month
+                    </Text>
+                  </View>
+                </>
+              )}
             </Pressable>
 
             {/* Recent Activity / Alerts */}
@@ -181,20 +205,130 @@ export default function VendorDashboard() {
             <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, lineHeight: 18 }}>
               Explore your top categories and keep providing top products.
             </Text>
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-              <View style={{ flex: 1, backgroundColor: colors.isDark ? '#3a3a1a' : '#fff9c4', borderRadius: 16, padding: 16, alignItems: 'center' }}>
-                <Ionicons name="footsteps" size={24} color="#ffb300" style={{ marginBottom: 12 }} />
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>Footwear</Text>
-              </View>
-              <View style={{ flex: 1, backgroundColor: colors.isDark ? '#1a3a1a' : '#e8f5e9', borderRadius: 16, padding: 16, alignItems: 'center' }}>
-                <Ionicons name="bag-add" size={24} color="#28b463" style={{ marginBottom: 12 }} />
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>Accessories</Text>
-              </View>
-            </View>
+            <TopCategories vendorId={vendor.id} token={token!} />
           </View>
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+// ─── Top Categories ──────────────────────────────────────────────────────────
+// The vendor's own categories, ranked by what actually sold. There is no
+// "vendor top categories" endpoint, so we join three things the API already
+// exposes: the vendor's products (which carry category_id), the per-product
+// sales figures from analytics, and the category names.
+
+const CATEGORY_ICONS: { match: RegExp; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { match: /shoe|footwear|sneaker|sandal|boot/i, icon: 'footsteps' },
+  { match: /bag|accessor|jewel|watch/i, icon: 'bag-add' },
+  { match: /cloth|fashion|apparel|wear|shirt/i, icon: 'shirt' },
+  { match: /phone|electronic|comput|laptop|tech|gadget|audio/i, icon: 'phone-portrait' },
+  { match: /food|grocer|drink|beverage|snack/i, icon: 'fast-food' },
+  { match: /beauty|cosmetic|skin|hair|fragrance/i, icon: 'sparkles' },
+  { match: /home|furnit|kitchen|decor|garden/i, icon: 'home' },
+  { match: /sport|fitness|gym|outdoor/i, icon: 'basketball' },
+  { match: /book|station|art|craft/i, icon: 'book' },
+  { match: /baby|kid|toy|child/i, icon: 'happy' },
+  { match: /health|pharma|medic|wellness/i, icon: 'medkit' },
+  { match: /auto|car|vehicle|tool/i, icon: 'construct' },
+];
+
+const iconForCategory = (name: string): keyof typeof Ionicons.glyphMap =>
+  CATEGORY_ICONS.find(c => c.match.test(name))?.icon ?? 'pricetag';
+
+// Alternating tints, matching the rest of the dashboard's palette.
+const CATEGORY_TINTS = [
+  { light: '#fff9c4', dark: '#3a3a1a', accent: '#ffb300' },
+  { light: '#e8f5e9', dark: '#1a3a1a', accent: '#28b463' },
+];
+
+function TopCategories({ vendorId, token }: { vendorId: string; token: string }) {
+  const { colors } = useTheme();
+
+  // Same query key as the Products screen, so the two share one cache entry.
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ['vendor-products', vendorId],
+    queryFn: () => getVendorProducts(vendorId),
+    enabled: !!vendorId,
+  });
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ['categories'],
+    queryFn: listCategories,
+    staleTime: 5 * 60_000,
+  });
+  const { data: topProducts = [], isLoading: topProductsLoading } = useQuery({
+    queryKey: ['vendor-top-products'],
+    queryFn: () => getVendorTopProducts(token, 50),
+    enabled: !!token,
+  });
+
+  const ranked = useMemo(() => {
+    if (!products.length) return [];
+    const nameById = new Map(categories.map(c => [c.id, c.name]));
+    const salesById = new Map(topProducts.map(p => [p.product_id, p]));
+
+    const buckets = new Map<string, { id: string; name: string; revenue: number; units: number; productCount: number }>();
+    for (const p of products) {
+      if (!p.category_id) continue;
+      const bucket = buckets.get(p.category_id) ?? {
+        id: p.category_id,
+        name: nameById.get(p.category_id) ?? 'Uncategorised',
+        revenue: 0,
+        units: 0,
+        productCount: 0,
+      };
+      const sales = salesById.get(p.id);
+      bucket.revenue += sales?.total_revenue ?? 0;
+      bucket.units += sales?.units_sold ?? 0;
+      bucket.productCount += 1;
+      buckets.set(p.category_id, bucket);
+    }
+
+    // Rank by what sold; a vendor with no sales yet still sees their categories,
+    // ordered by how much of their catalogue sits in each.
+    return [...buckets.values()]
+      .sort((a, b) => b.units - a.units || b.revenue - a.revenue || b.productCount - a.productCount)
+      .slice(0, 2);
+  }, [products, categories, topProducts]);
+
+  if (productsLoading || categoriesLoading || topProductsLoading) {
+    return (
+      <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+        <Skeleton width="100%" height={92} radius={16} style={{ flex: 1 }} />
+        <Skeleton width="100%" height={92} radius={16} style={{ flex: 1 }} />
+      </View>
+    );
+  }
+
+  if (!ranked.length) {
+    return (
+      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginTop: 4 }}>
+        No categories yet — add products to your store to see which ones perform best.
+      </Text>
+    );
+  }
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+      {ranked.map((c, i) => {
+        const tint = CATEGORY_TINTS[i % CATEGORY_TINTS.length];
+        return (
+          <View
+            key={c.id}
+            style={{ flex: 1, backgroundColor: colors.isDark ? tint.dark : tint.light, borderRadius: 16, padding: 16, alignItems: 'center' }}
+          >
+            <Ionicons name={iconForCategory(c.name)} size={24} color={tint.accent} style={{ marginBottom: 12 }} />
+            <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink }}>{c.name}</Text>
+            <Text numberOfLines={1} style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 3 }}>
+              {c.units > 0
+                ? `${c.units.toLocaleString()} sold`
+                : `${c.productCount} product${c.productCount === 1 ? '' : 's'}`}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
