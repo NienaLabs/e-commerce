@@ -1,61 +1,82 @@
 import { Platform } from 'react-native';
 import { BASE_URL } from './auth';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 /**
- * Uploads a local image file URI (or blob: URL on web) to the backend.
+ * Uploads a local image file URI to S3 via presigned URL with client-side compression.
  * Returns the full public URL of the uploaded file.
  */
 export async function uploadFile(fileUri: string, token: string): Promise<string> {
-  const formData = new FormData();
+  // 1. Compress Image
+  // Scale down to max width 1080px (if larger) and compress JPEG to 80%
+  const manipResult = await ImageManipulator.manipulateAsync(
+    fileUri,
+    [{ resize: { width: 1080 } }], // ImageManipulator respects aspect ratio if height isn't provided
+    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+  );
 
+  const finalUri = manipResult.uri;
+  
+  // Extract filename and mime
+  const filename = finalUri.split('/').pop() || 'upload.jpg';
+  const mimeType = 'image/jpeg';
+  
+  let blob: Blob;
   if (Platform.OS === 'web') {
-    // On web, Expo image picker gives a blob: URL.
-    // We need to fetch that blob, then append the actual Blob object to FormData.
-    const blobRes = await fetch(fileUri);
-    const blob = await blobRes.blob();
-
-    // Infer extension from mime type
-    const mimeType = blob.type || 'image/jpeg';
-    const ext = mimeType.split('/')[1] || 'jpg';
-    const filename = `upload.${ext}`;
-
-    formData.append('file', blob, filename);
+    const blobRes = await fetch(finalUri);
+    blob = await blobRes.blob();
   } else {
-    // On React Native, we use the { uri, name, type } object form
-    const filename = fileUri.split('/').pop() || 'upload.jpg';
-    const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
-    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-
-    formData.append('file', {
-      uri: fileUri,
-      name: filename,
-      type: mimeType,
-    } as any);
+    // For React Native fetch with multipart/form-data or direct put
+    // Since we're using presigned POST, we need FormData
   }
 
-  const res = await fetch(`${BASE_URL}/upload/`, {
+  // 2. Request Presigned URL
+  const presignRes = await fetch(`${BASE_URL}/upload/presigned`, {
     method: 'POST',
     headers: {
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
-      // Do NOT manually set Content-Type for multipart/form-data —
-      // fetch sets it automatically with the correct boundary.
     },
-    body: formData,
+    body: JSON.stringify({ filename, content_type: mimeType }),
   });
 
-  if (!res.ok) {
-    let detail = 'Failed to upload file';
+  if (!presignRes.ok) {
+    let detail = 'Failed to get upload URL';
     try {
-      const errData = await res.json();
+      const errData = await presignRes.json();
       detail = errData.detail || detail;
     } catch {}
     throw new Error(detail);
   }
 
-  const data = await res.json();
+  const { presigned, url: publicUrl } = await presignRes.json();
 
-  // data.url is a relative path like /media/abc123.jpg
-  // Construct the full URL from the backend base URL
-  const origin = new URL(BASE_URL).origin;
-  return `${origin}${data.url}`;
+  // 3. Upload to S3 using Presigned POST
+  const formData = new FormData();
+  // Append all fields required by AWS exactly as returned
+  Object.keys(presigned.fields).forEach((key) => {
+    formData.append(key, presigned.fields[key]);
+  });
+
+  if (Platform.OS === 'web') {
+    formData.append('file', blob!, filename);
+  } else {
+    formData.append('file', {
+      uri: finalUri,
+      name: filename,
+      type: mimeType,
+    } as any);
+  }
+
+  const uploadRes = await fetch(presigned.url, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!uploadRes.ok) {
+    throw new Error('Failed to upload file to storage');
+  }
+
+  // Handle localstack quirk where S3 backend returns 204 but `url` is what we need
+  return publicUrl;
 }

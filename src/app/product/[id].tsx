@@ -83,6 +83,7 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const REVIEWS_PAGE_SIZE = 5;
 
   const isWishlisted = useWishlistStore((state) => state.items.some(i => i.id === productId));
@@ -118,6 +119,7 @@ export default function ProductDetail() {
   const productColors = product.colors.map(c => c.name);
   const productImages = product.images.map(i => i.image_url);
   const firstImage = productImages[0] ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800';
+  const displayImage = productImages[selectedImageIndex] ?? firstImage;
   const displayColors = productColors.length > 0 ? productColors : ['Default'];
   const currentColor = selectedColor || displayColors[0];
   const inStock = product.stock_quantity > 0;
@@ -161,18 +163,22 @@ export default function ProductDetail() {
           {/* Image Gallery */}
           <View style={{ flex: isDesktop ? 1 : undefined }}>
             <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceSoft, borderRadius: 24, overflow: 'hidden', marginBottom: 16 }}>
-              <Image source={{ uri: firstImage }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <Image source={{ uri: displayImage }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
               {product.discount_price && (
                 <View style={{ position: 'absolute', top: 0, left: 0, backgroundColor: '#d93651', paddingHorizontal: 16, paddingVertical: 8, borderBottomRightRadius: 16 }}>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#ffffff', letterSpacing: 1 }}>SALE</Text>
                 </View>
               )}
             </View>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
               {productImages.map((img, idx) => (
-                <View key={idx} style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === 0 ? 2 : 1, borderColor: idx === 0 ? colors.primary : colors.surfaceMuted, overflow: 'hidden' }}>
+                <Pressable 
+                  key={idx} 
+                  onPress={() => setSelectedImageIndex(idx)}
+                  style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === selectedImageIndex ? 2 : 1, borderColor: idx === selectedImageIndex ? colors.primary : colors.surfaceMuted, overflow: 'hidden' }}
+                >
                   <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
-                </View>
+                </Pressable>
               ))}
             </View>
           </View>

@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Platform, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -120,27 +120,40 @@ export default function VendorDashboard() {
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Summary</Text>
 
             {/* Your Balance */}
-            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 6 }}>
+            <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 6, position: 'relative', overflow: 'hidden' }}>
+              <Image 
+                source={require('../../../assets/3d icons/piggy-bank.png')} 
+                style={{ 
+                  position: 'absolute', 
+                  right: -20, 
+                  bottom: -20, 
+                  width: 140, 
+                  height: 140, 
+                  resizeMode: 'contain', 
+                  transform: [{ rotate: '-10deg' }],
+                  opacity: 0.9,
+                }} 
+              />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 14, color: colors.inkMuted }}>Your Balance</Text>
-                <Ionicons name="ellipsis-vertical" size={16} color={colors.inkMuted} />
+                <Text style={{ fontFamily: 'OpenSans_600SemiBold', fontSize: 14, color: colors.inkMuted, textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>Your Balance</Text>
+                <Ionicons name="ellipsis-vertical" size={16} color={colors.inkMuted} style={{ textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.ink, letterSpacing: -0.5 }}>{money(revTotal)}</Text>
-                <Pressable onPress={() => router.push('/vendor-dashboard/payouts' as any)} style={({ pressed }) => ({ width: 32, height: 32, borderRadius: 16, backgroundColor: pressed ? '#1e8449' : '#28b463', alignItems: 'center', justifyContent: 'center' })}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.ink, letterSpacing: -0.5, textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>{money(revTotal)}</Text>
+                <Pressable onPress={() => router.push('/vendor-dashboard/payouts' as any)} style={({ pressed }) => ({ width: 32, height: 32, borderRadius: 16, backgroundColor: pressed ? '#1e8449' : '#28b463', alignItems: 'center', justifyContent: 'center', shadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', shadowOffset: { width: 0, height: 0 }, shadowRadius: 10, shadowOpacity: 1, elevation: 5 })}>
                   <Ionicons name="add" size={20} color="#fff" />
                 </Pressable>
               </View>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16 }}>Current balance ready for payout</Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16, textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>Current balance ready for payout</Text>
               
               <View style={{ flexDirection: 'row', gap: 16 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="caret-up" size={12} color="#28b463" />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#28b463' }}>+$3,250.07</Text>
+                  <Ionicons name="caret-up" size={12} color="#28b463" style={{ textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }} />
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#28b463', textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>+$3,250.07</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="caret-down" size={12} color="#ff4d4d" />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#ff4d4d' }}>-$1,062.90</Text>
+                  <Ionicons name="caret-down" size={12} color="#ff4d4d" style={{ textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }} />
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#ff4d4d', textShadowColor: colors.isDark ? '#2a2a2a' : '#ffffff', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }}>-$1,062.90</Text>
                 </View>
               </View>
             </View>

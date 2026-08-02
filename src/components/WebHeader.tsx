@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import { Pressable, Text, View, useWindowDimensions, Image } from 'react-native';
+import { useEffect } from 'react';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +19,39 @@ export const WebHeader = () => {
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
   const { toggle } = useSidebar();
+
+  const cartTranslateY = useSharedValue(0);
+  const bellTranslateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (totalItems > 0) {
+      cartTranslateY.value = withSequence(
+        withTiming(-8, { duration: 100 }),
+        withTiming(0, { duration: 100 })
+      );
+    }
+  }, [totalItems]);
+
+  useEffect(() => {
+    if (unreadCount > 0) {
+      bellTranslateY.value = withSequence(
+        withTiming(-8, { duration: 100 }),
+        withTiming(0, { duration: 100 })
+      );
+    }
+  }, [unreadCount]);
+
+  const cartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: cartTranslateY.value }
+    ]
+  }));
+
+  const bellAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: bellTranslateY.value }
+    ]
+  }));
 
   if (!isDesktop) return null;
 
@@ -59,8 +94,7 @@ export const WebHeader = () => {
           { label: 'Home', path: '/' },
           { label: 'Discover', path: '/discover' },
           { label: 'Search', path: '/search' },
-          { label: 'Cart', path: '/cart', badge: totalItems > 0 ? totalItems.toString() : undefined },
-        ].map(({ label, path, badge }) => (
+        ].map(({ label, path }) => (
           <Pressable
             key={path}
             onPress={() => handleNav(path)}
@@ -69,20 +103,32 @@ export const WebHeader = () => {
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: isActive(path) ? colors.ink : colors.inkMuted }}>
               {label}
             </Text>
-            {badge && (
-              <View style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.onPrimary }}>{badge}</Text>
-              </View>
-            )}
           </Pressable>
         ))}
+
+        {/* Cart Icon */}
+        <Pressable
+          onPress={() => handleNav('/cart')}
+          style={{ paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: isActive('/cart') ? colors.primary : 'transparent' }}
+        >
+          <Animated.View style={cartAnimatedStyle}>
+            <Ionicons name={isActive('/cart') ? "cart" : "cart-outline"} size={24} color={isActive('/cart') ? colors.ink : colors.inkMuted} />
+            {totalItems > 0 && (
+              <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 5, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.surface }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.onPrimary }}>
+                  {totalItems}
+                </Text>
+              </View>
+            )}
+          </Animated.View>
+        </Pressable>
 
         {/* Notification Bell */}
         <Pressable
           onPress={() => handleNav('/notifications')}
           style={{ paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: isActive('/notifications') ? colors.primary : 'transparent' }}
         >
-          <View>
+          <Animated.View style={bellAnimatedStyle}>
             <Ionicons name={isActive('/notifications') ? "notifications" : "notifications-outline"} size={22} color={isActive('/notifications') ? colors.ink : colors.inkMuted} />
             {unreadCount > 0 && (
               <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.surface }}>
@@ -91,7 +137,7 @@ export const WebHeader = () => {
                 </Text>
               </View>
             )}
-          </View>
+          </Animated.View>
         </Pressable>
 
         {/* Profile Link */}

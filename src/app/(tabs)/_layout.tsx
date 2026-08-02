@@ -3,8 +3,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, Image, useWindowDimensions, Platform } from 'react-native';
 import { WebHeader } from '../../components/WebHeader';
 import { useRef, useEffect } from 'react';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
 import { useCartStore } from '../../store/cartStore';
+
+const AnimatedCartIcon = ({ color, focused, totalItems }: { color: string, focused: boolean, totalItems: number }) => {
+  const cartTranslateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (totalItems > 0) {
+      cartTranslateY.value = withSequence(
+        withTiming(-8, { duration: 100 }),
+        withTiming(0, { duration: 100 })
+      );
+    }
+  }, [totalItems]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: cartTranslateY.value }
+    ]
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Ionicons name={focused ? "cart" : "cart-outline"} size={24} color={color} />
+    </Animated.View>
+  );
+};
 
 export default function TabLayout() {
   const { colors } = useTheme();
@@ -76,7 +102,7 @@ export default function TabLayout() {
             tabBarBadge: totalItems > 0 ? totalItems : undefined,
             tabBarBadgeStyle: { backgroundColor: colors.primary, color: colors.onPrimary },
             tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? "cart" : "cart-outline"} size={24} color={color} />
+              <AnimatedCartIcon color={color} focused={focused} totalItems={totalItems} />
             ),
           }}
         />

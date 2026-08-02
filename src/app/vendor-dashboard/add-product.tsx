@@ -9,6 +9,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createProduct, updateProduct, getProduct, listCategories, deleteProduct } from '../../api/products';
 import { CATEGORY_SCHEMAS, DEFAULT_SCHEMA } from '../../utils/filterSchemas';
 import { Header, Section, Card, Field, Btn, Chip, EmptyState, useResponsive, font } from '../../components/vendor/kit';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadFile } from '../../api/upload';
+import { Image } from 'expo-image';
 
 export default function AddProductScreen() {
   const { colors } = useTheme();
@@ -25,6 +28,8 @@ export default function AddProductScreen() {
   const [customSpecs, setCustomSpecs] = useState<{ key: string; value: string }[]>([]);
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [images, setImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: listCategories });
 
@@ -48,6 +53,7 @@ export default function AddProductScreen() {
       setSelectedCategory(existingProduct.category_id || '');
       setAttributes(existingProduct.attributes || {});
       setCustomSpecs([]);
+      setImages(existingProduct.images?.map((img: any) => img.image_url) || []);
     }
   }, [existingProduct]);
 
@@ -66,6 +72,7 @@ export default function AddProductScreen() {
           is_active: true,
           category_id: selectedCategory || null,
           attributes: { ...attributes, ...specExtras },
+          images,
         };
         return updateProduct(token!, id!, payload);
       }
@@ -79,6 +86,7 @@ export default function AddProductScreen() {
         is_active: true,
         category_id: selectedCategory || null,
         attributes: { ...attributes, ...specExtras },
+        images,
       };
       return createProduct(token!, payload as any);
     },
@@ -107,6 +115,34 @@ export default function AddProductScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate() },
       ]);
+    }
+  };
+
+  const handlePickImage = async () => {
+    if (images.length >= 3) {
+      alert('Maximum of 3 images allowed.');
+      return;
+    }
+    
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 3 - images.length,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsUploading(true);
+        const newUrls = await Promise.all(
+          result.assets.map(asset => uploadFile(asset.uri, token!))
+        );
+        setImages(prev => [...prev, ...newUrls].slice(0, 3));
+      }
+    } catch (e: any) {
+      alert(`Image upload failed: ${e.message}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -156,6 +192,7 @@ export default function AddProductScreen() {
                   setSelectedCategory('');
                   setAttributes({});
                   setCustomSpecs([]);
+                  setImages([]);
                   setSaved(false);
                 }}
               />
@@ -234,36 +271,55 @@ export default function AddProductScreen() {
             <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }}>Product photos</Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 16, lineHeight: 18 }}>
-                Clear photos on a plain background sell best. The first image is your main listing photo.
+                Clear photos on a plain background sell best. The first image is your main listing photo. Maximum 3 images.
               </Text>
-              {/* Main photo slot */}
-              <Pressable
-                style={({ pressed }) => ({
-                  width: '100%', aspectRatio: 1, borderRadius: 16, borderWidth: 2,
-                  borderStyle: 'dashed', borderColor: pressed ? colors.primaryDim : colors.primary,
-                  backgroundColor: pressed ? 'rgba(16,185,129,0.08)' : colors.primaryGhost,
-                  alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-                })}
-              >
-                <Ionicons name="camera-outline" size={32} color={colors.primaryDim} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primaryDim, marginTop: 8 }}>Main photo</Text>
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>Tap to upload</Text>
-              </Pressable>
-              {/* Additional photos row */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {[1, 2, 3].map(i => (
+              
+              <View style={{ gap: 12 }}>
+                {images.map((imgUrl, idx) => (
+                  <View key={idx} style={{ position: 'relative', width: '100%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden' }}>
+                    <Image source={{ uri: imgUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                    <Pressable
+                      onPress={() => setImages(prev => prev.filter((_, i) => i !== idx))}
+                      style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#fff" />
+                    </Pressable>
+                    {idx === 0 && (
+                       <View style={{ position: 'absolute', bottom: 12, left: 12, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                         <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Main photo</Text>
+                       </View>
+                    )}
+                  </View>
+                ))}
+
+                {images.length < 3 && (
                   <Pressable
-                    key={i}
+                    onPress={handlePickImage}
+                    disabled={isUploading}
                     style={({ pressed }) => ({
-                      flex: 1, aspectRatio: 1, borderRadius: 12, borderWidth: 1.5,
-                      borderStyle: 'dashed', borderColor: pressed ? colors.inkMuted : colors.surfaceMuted,
-                      backgroundColor: colors.isDark ? '#1e1e1e' : '#f9fafb',
+                      width: '100%', aspectRatio: images.length === 0 ? 1 : 2.5, borderRadius: 16, borderWidth: 2,
+                      borderStyle: 'dashed', borderColor: pressed ? colors.primaryDim : colors.primary,
+                      backgroundColor: pressed ? 'rgba(16,185,129,0.08)' : colors.primaryGhost,
                       alignItems: 'center', justifyContent: 'center',
+                      opacity: isUploading ? 0.7 : 1
                     })}
                   >
-                    <Ionicons name="add" size={22} color={colors.inkGhost} />
+                    {isUploading ? (
+                      <>
+                        <ActivityIndicator size="small" color={colors.primaryDim} />
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primaryDim, marginTop: 8 }}>Uploading...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="camera-outline" size={32} color={colors.primaryDim} />
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.primaryDim, marginTop: 8 }}>
+                          {images.length === 0 ? 'Main photo' : 'Add photo'}
+                        </Text>
+                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted, marginTop: 2 }}>Tap to upload</Text>
+                      </>
+                    )}
                   </Pressable>
-                ))}
+                )}
               </View>
             </View>
 
