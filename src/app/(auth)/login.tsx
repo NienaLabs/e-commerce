@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { login, getGoogleLoginUrl } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
@@ -28,9 +28,9 @@ import KonuraLogo from '../../../assets/images/konura.svg';
 WebBrowser.maybeCompleteAuthSession();
 
 const CAROUSEL_IMAGES = [
-  'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=900&q=80&fit=crop',
-  'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=900&q=80&fit=crop',
-  'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=900&q=80&fit=crop',
+  require('../../../assets/features/konura-flyer.png'),
+  require('../../../assets/features/nice-shopping.png'),
+  require('../../../assets/features/shopping-easy.png'),
 ];
 
 // Auto-playing image carousel with dot indicators
@@ -80,8 +80,8 @@ function ImageCarousel({
         renderItem={({ item }) => (
           <View style={{ width, height }}>
             <Image
-              source={{ uri: item }}
-              style={StyleSheet.absoluteFill}
+              source={typeof item === 'string' ? { uri: item } : item}
+              style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
               resizeMode="cover"
             />
           </View>
@@ -158,10 +158,12 @@ function DesktopCarousel({
       {CAROUSEL_IMAGES.map((uri, i) => (
         <Animated.Image
           key={i}
-          source={{ uri }}
+          source={typeof uri === 'string' ? { uri } : uri}
           style={[
             StyleSheet.absoluteFill,
             {
+              width: '100%',
+              height: '100%',
               opacity: activeIndex === i ? 1 : 0,
               // On web, CSS transition handles the crossfade smoothly
               ...(Platform.OS === 'web'
@@ -227,6 +229,7 @@ export default function LoginScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { returnUrl } = useLocalSearchParams<{ returnUrl?: string }>();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -247,7 +250,11 @@ export default function LoginScreen() {
       if (!user.onboarding_done) {
         router.replace('/(auth)/onboarding' as any);
       } else {
-        router.replace('/(tabs)');
+        if (returnUrl) {
+          router.replace(returnUrl as any);
+        } else {
+          router.replace('/(tabs)');
+        }
       }
     } catch (error: any) {
       if ((error?.message ?? '').toLowerCase().includes('suspended')) {
@@ -285,7 +292,11 @@ export default function LoginScreen() {
           if (!user.onboarding_done) {
             router.replace('/(auth)/onboarding' as any);
           } else {
-            router.replace('/(tabs)');
+            if (returnUrl) {
+              router.replace(returnUrl as any);
+            } else {
+              router.replace('/(tabs)');
+            }
           }
         }
       }
@@ -584,7 +595,7 @@ export default function LoginScreen() {
         >
           Don't have an account?{' '}
         </Text>
-        <Pressable onPress={() => router.push('/(auth)/register')}>
+        <Pressable onPress={() => router.push(`/(auth)/register${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}` as any)}>
           <Text
             style={{
               fontFamily: 'Inter_700Bold',

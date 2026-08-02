@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +16,8 @@ import { getProductCrossSell } from '../../api/recommendations';
 import { useAuth } from '../../context/AuthContext';
 import { getProduct } from '../../api/products';
 import { RecommendationShelfRow } from '../../components/RecommendationShelf';
+import { smoothSpringTransition } from '../../utils/transitions';
+import { Skeleton } from '../../components/Skeleton';
 
 export default function ProductDetail() {
   const { colors } = useTheme();
@@ -101,9 +104,45 @@ export default function ProductDetail() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }} edges={['top']}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>Loading product...</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
+        {/* Header Skeleton */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: gutter, paddingVertical: 16 }}>
+          <Skeleton width={44} height={44} borderRadius={22} />
+          <Skeleton width={120} height={20} />
+          <Skeleton width={44} height={44} borderRadius={22} />
+        </View>
+        
+        <View style={{
+          flexDirection: isDesktop ? 'row' : 'column',
+          padding: gutter,
+          gap: isDesktop ? 32 : 24,
+          width: '100%',
+          maxWidth: MAX_CONTENT_WIDTH,
+          alignSelf: 'center',
+        }}>
+          {/* Image Gallery Skeleton */}
+          <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
+            <View style={{ width: '100%', aspectRatio: 1, marginBottom: 16 }}>
+              <Skeleton width="100%" height="100%" borderRadius={24} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Skeleton width={72} height={72} borderRadius={12} />
+              <Skeleton width={72} height={72} borderRadius={12} />
+              <Skeleton width={72} height={72} borderRadius={12} />
+              <Skeleton width={72} height={72} borderRadius={12} />
+            </View>
+          </View>
+
+          {/* Info Skeleton */}
+          <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
+            <Skeleton width="80%" height={32} style={{ marginBottom: 12 }} />
+            <Skeleton width="40%" height={20} style={{ marginBottom: 24 }} />
+            <Skeleton width="30%" height={40} style={{ marginBottom: 32 }} />
+            
+            <Skeleton width="100%" height={24} style={{ marginBottom: 12 }} />
+            <Skeleton width="100%" height={100} borderRadius={16} style={{ marginBottom: 32 }} />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -179,7 +218,13 @@ export default function ProductDetail() {
           {/* Image Gallery */}
           <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
             <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceSoft, borderRadius: 24, overflow: 'hidden', marginBottom: 16 }}>
-              <Image source={{ uri: displayImage }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <Animated.Image 
+                source={{ uri: displayImage }} 
+                style={{ width: '100%', height: '100%' }} 
+                resizeMode="cover" 
+                sharedTransitionTag={`product-image-${product.id}`}
+                sharedTransitionStyle={smoothSpringTransition}
+              />
               {product.discount_price && (
                 <View style={{ position: 'absolute', top: 0, left: 0, backgroundColor: '#d93651', paddingHorizontal: 16, paddingVertical: 8, borderBottomRightRadius: 16 }}>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#ffffff', letterSpacing: 1 }}>SALE</Text>

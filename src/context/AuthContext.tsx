@@ -252,11 +252,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const isCurrentlyOnboarding = segments[0] === '(auth)' && segments[1] === 'onboarding';
     const isSuspendedScreen = segments[0] === 'suspended';
 
+    const isProtectedRoute = 
+      segments[0] === 'checkout' || 
+      segments[0] === 'rewards' || 
+      inVendorGroup || 
+      isBecomingVendor;
+
     if (isSuspendedScreen) return;
 
-    if (!user && !inAuthGroup) {
-      // Not authenticated → go to login
-      router.replace('/(auth)/login');
+    if (!user) {
+      if (isProtectedRoute) {
+        const currentPath = '/' + segments.join('/');
+        router.replace(`/(auth)/login?returnUrl=${encodeURIComponent(currentPath)}` as any);
+      }
     } else if (user) {
       if (!user.onboarding_done && !hasPromptedOnboarding && !isCurrentlyOnboarding) {
         setTimeout(() => setHasPromptedOnboarding(true), 0);

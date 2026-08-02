@@ -7,8 +7,9 @@ import {
   useWindowDimensions,
   Platform,
   StyleSheet,
-  Animated,
+  Animated as RNAnimated,
 } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, cancelAnimation, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
@@ -16,6 +17,8 @@ import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
 import { useEventStore } from '../store/eventStore';
+import { smoothSpringTransition } from '../utils/transitions';
+import { Skeleton } from './Skeleton';
 
 interface RecommendationCardProps {
   id: string;
@@ -61,11 +64,11 @@ export const RecommendationCard = ({
   const IMAGE_HEIGHT = isDesktop ? 210 : 150;
 
   // ── Hover animation (desktop web only) ──
-  const [hoverAnim] = useState(() => new Animated.Value(0));
+  const [hoverAnim] = useState(() => new RNAnimated.Value(0));
 
   const handleMouseEnter = () => {
     if (!isDesktop) return;
-    Animated.spring(hoverAnim, {
+    RNAnimated.spring(hoverAnim, {
       toValue: 1,
       useNativeDriver: true,
       tension: 280,
@@ -75,7 +78,7 @@ export const RecommendationCard = ({
 
   const handleMouseLeave = () => {
     if (!isDesktop) return;
-    Animated.spring(hoverAnim, {
+    RNAnimated.spring(hoverAnim, {
       toValue: 0,
       useNativeDriver: true,
       tension: 280,
@@ -112,8 +115,23 @@ export const RecommendationCard = ({
     showToast(`${name} added to cart`, 'success');
   };
 
+  const heartScale = useSharedValue(1);
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }]
+  }));
+
   const handleWishlistToggle = (e: any) => {
     e.stopPropagation?.();
+    
+    if (!isItemInWishlist) {
+      cancelAnimation(heartScale);
+      heartScale.value = 1;
+      heartScale.value = withSequence(
+        withTiming(1.3, { duration: 120 }),
+        withTiming(1, { duration: 120 })
+      );
+    }
+
     toggleItem({
       id,
       name,
@@ -149,7 +167,7 @@ export const RecommendationCard = ({
       : 0;
 
   return (
-    <Animated.View
+    <RNAnimated.View
       style={[
         isDesktop && {
           transform: [{ scale: hoverScale }, { translateY: hoverTranslateY }],
@@ -196,11 +214,13 @@ export const RecommendationCard = ({
           position: 'relative',
         }}
       >
-        <Image
+        <Animated.Image
           source={{ uri: imageError ? fallbackImage : imageUrl }}
           style={{ width: '100%', height: '100%' }}
           resizeMode="cover"
           onError={() => setImageError(true)}
+          sharedTransitionTag={`product-image-${id}`}
+          sharedTransitionStyle={smoothSpringTransition}
         />
 
         {/* Wishlist heart */}
@@ -224,11 +244,13 @@ export const RecommendationCard = ({
               : 'rgba(255,255,255,0.4)',
           } as any}
         >
-          <Ionicons
-            name={isItemInWishlist ? 'heart' : 'heart-outline'}
-            size={15}
-            color={isItemInWishlist ? '#d93651' : colors.ink}
-          />
+          <Animated.View style={heartAnimatedStyle}>
+            <Ionicons
+              name={isItemInWishlist ? 'heart' : 'heart-outline'}
+              size={15}
+              color={isItemInWishlist ? '#d93651' : colors.ink}
+            />
+          </Animated.View>
         </Pressable>
 
         {/* Discount badge */}
@@ -375,6 +397,54 @@ export const RecommendationCard = ({
         )}
       </View>
     </Pressable>
-    </Animated.View>
+    </RNAnimated.View>
+  );
+};
+
+export const RecommendationCardSkeleton = () => {
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768 && Platform.OS === 'web';
+  const CARD_WIDTH = isDesktop ? 240 : 160;
+  const IMAGE_HEIGHT = isDesktop ? 210 : 150;
+
+  return (
+    <View
+      style={{
+        width: CARD_WIDTH,
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.surfaceMuted,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: colors.isDark ? 0.35 : 0.06,
+        shadowRadius: 16,
+        elevation: 4,
+      }}
+    >
+      <View
+        style={{
+          width: '100%',
+          height: IMAGE_HEIGHT,
+          backgroundColor: colors.surfaceSoft,
+          position: 'relative',
+        }}
+      >
+        <Skeleton width="100%" height="100%" />
+      </View>
+      <View style={{ padding: 10 }}>
+        <View style={{ marginBottom: 6, minHeight: isDesktop ? 36 : 32, gap: 4 }}>
+          <Skeleton width="100%" height={12} />
+          <Skeleton width="60%" height={12} />
+        </View>
+        <Skeleton width={60} height={16} />
+        <View style={{ paddingTop: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.surfaceMuted, flexDirection: 'row', alignItems: 'center' }}>
+          <Skeleton width={20} height={20} borderRadius={10} style={{ marginRight: 6 }} />
+          <Skeleton width={80} height={10} />
+        </View>
+      </View>
+    </View>
   );
 };

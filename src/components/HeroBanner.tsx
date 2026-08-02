@@ -11,19 +11,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
-// A handful of free-to-use Unsplash images (nature/landscape set).
-// Swap these out for your own URLs or pass `images` as a prop.
+// Default feature images
 const DEFAULT_IMAGES = [
-  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80',
-  'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1200&q=80',
-  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&q=80',
-  'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1200&q=80',
-  'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&q=80',
+  require('../../assets/features/konura-flyer.png'),
+  require('../../assets/features/nice-shopping.png'),
+  require('../../assets/features/shopping-easy.png'),
 ];
 
 interface AutoPlayCarouselProps {
-  /** Array of image URLs to cycle through */
-  images?: string[];
+  /** Array of image URLs or local image assets to cycle through */
+  images?: any[];
   /** Time each image stays on screen, in ms */
   interval?: number;
   /** Height of the carousel frame */
@@ -159,7 +156,7 @@ export default function HeroBanner({
         {slides.map((uri, i) => (
           <Image
             key={i}
-            source={{ uri }}
+            source={typeof uri === 'string' ? { uri } : uri}
             style={{ width: SCREEN_WIDTH, height }}
             resizeMode="cover"
           />

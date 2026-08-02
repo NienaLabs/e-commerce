@@ -121,7 +121,10 @@ export default function VendorDashboard() {
 
           {/* Right Rail: Summary */}
           <View style={{ flex: 1, minWidth: 280, gap: 24 }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Summary</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Summary</Text>
+              <Image source={require('../../../assets/3d icons/piggy-bank.png')} style={{ width: 48, height: 48 }} resizeMode="contain" />
+            </View>
 
             {/* Commission owed — vendors collect from customers directly, so
                 there is no balance to pay out; what matters is what they owe us. */}
@@ -134,10 +137,10 @@ export default function VendorDashboard() {
                 <Ionicons name="chevron-forward" size={16} color={colors.inkMuted} />
               </View>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.ink, letterSpacing: -0.5 }}>
-                {cedis(commissions?.today.commission_due ?? 0)}
+                {cedis(commissions?.today?.commission_due ?? 0)}
               </Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 8, marginBottom: 16 }}>
-                {commissions?.commission_rate ?? 0}% of {cedis(commissions?.today.gross_sales ?? 0)} sold today
+                {commissions?.commission_rate ?? 0}% of {cedis(commissions?.today?.gross_sales ?? 0)} sold today
               </Text>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

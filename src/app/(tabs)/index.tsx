@@ -21,8 +21,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoryCard } from '@/components/CategoryCard';
-import { ProductCard } from '@/components/ProductCard';
+import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
 import { PromoCard } from '@/components/PromoCard';
+import { Skeleton } from '@/components/Skeleton';
 import { FilterModal } from '@/components/FilterModal';
 import { LocationSearchModal, LocationResult } from '@/components/LocationSearchModal';
 import { RecommendationShelfRow } from '@/components/RecommendationShelf';
@@ -535,8 +536,8 @@ export default function Home() {
 
         {/* ─── Hero Banner ─── */}
         {heroBannersLoading ? (
-          <View style={{ height: 350, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={colors.primary} />
+          <View style={{ height: 350, marginHorizontal: 24, marginTop: 16 }}>
+            <Skeleton width="100%" height={350} borderRadius={24} />
           </View>
         ) : (
           <HeroBanner images={heroBanners.length > 0 ? heroBanners.map((b: any) => b.image_url) : undefined} height={350} />
@@ -675,11 +676,17 @@ export default function Home() {
         {!selectedCategory && (
           <View style={{ paddingBottom: 24 }}>
             {groupedLoading ? (
-              <View style={{ paddingVertical: 48, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
-                  Loading categories...
-                </Text>
+              <View style={{ paddingVertical: 24, paddingHorizontal: 24, gap: 16 }}>
+                {[1, 2].map((i) => (
+                  <View key={i} style={{ marginBottom: 24 }}>
+                    <Skeleton width={180} height={24} style={{ marginBottom: 16 }} />
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <Skeleton width={140} height={180} borderRadius={16} />
+                      <Skeleton width={140} height={180} borderRadius={16} />
+                      <Skeleton width={140} height={180} borderRadius={16} />
+                    </View>
+                  </View>
+                ))}
               </View>
             ) : (
               groupedCategories.map((group) => (
@@ -724,12 +731,11 @@ export default function Home() {
               gap: 16,
             }}>
               {productsLoading ? (
-                <View style={{ flex: 1, alignItems: 'center', paddingVertical: 48 }}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, marginTop: 12 }}>
-                    Loading products...
-                  </Text>
-                </View>
+                Array.from({ length: 6 }).map((_, i) => (
+                  <View key={i} style={{ width: isDesktop ? '48%' : '100%' }}>
+                    <ProductCardSkeleton />
+                  </View>
+                ))
               ) : (
                 filteredProducts.map(product => (
                   <View

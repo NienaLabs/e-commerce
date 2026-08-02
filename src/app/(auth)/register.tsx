@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useMutation } from '@tanstack/react-query';
 import { register, login } from '../../api/auth';
@@ -26,9 +26,9 @@ import KonuraLogo from '../../../assets/images/konura.svg';
 type AccountType = 'customer' | 'vendor';
 
 const CAROUSEL_IMAGES = [
-  'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=900&q=80&fit=crop',
-  'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=900&q=80&fit=crop',
-  'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=900&q=80&fit=crop',
+  require('../../../assets/features/konura-flyer.png'),
+  require('../../../assets/features/nice-shopping.png'),
+  require('../../../assets/features/shopping-easy.png'),
 ];
 
 function ImageCarousel({
@@ -77,8 +77,8 @@ function ImageCarousel({
         renderItem={({ item }) => (
           <View style={{ width, height }}>
             <Image
-              source={{ uri: item }}
-              style={StyleSheet.absoluteFill}
+              source={typeof item === 'string' ? { uri: item } : item}
+              style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
               resizeMode="cover"
             />
           </View>
@@ -152,10 +152,12 @@ function DesktopCarousel({
       {CAROUSEL_IMAGES.map((uri, i) => (
         <Image
           key={i}
-          source={{ uri }}
+          source={typeof uri === 'string' ? { uri } : uri}
           style={[
             StyleSheet.absoluteFill,
             {
+              width: '100%',
+              height: '100%',
               opacity: activeIndex === i ? 1 : 0,
               ...(Platform.OS === 'web'
                 ? ({ transition: 'opacity 0.85s cubic-bezier(0.4,0,0.2,1)' } as any)
@@ -217,6 +219,7 @@ export default function RegisterScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const { returnUrl } = useLocalSearchParams<{ returnUrl?: string }>();
 
   const [accountType, setAccountType] = useState<AccountType>('customer');
   const [fullName, setFullName] = useState('');
@@ -270,7 +273,11 @@ export default function RegisterScreen() {
       } else if (accountType === 'vendor') {
         router.replace('/vendor-dashboard');
       } else {
-        router.replace('/(tabs)');
+        if (returnUrl) {
+          router.replace(returnUrl as any);
+        } else {
+          router.replace('/(tabs)');
+        }
       }
     } catch (error: any) {
       alert(error.message);
@@ -729,7 +736,7 @@ export default function RegisterScreen() {
         >
           Already have an account?{' '}
         </Text>
-        <Pressable onPress={() => router.push('/(auth)/login')}>
+        <Pressable onPress={() => router.push(`/(auth)/login${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}` as any)}>
           <Text
             style={{
               fontFamily: 'Inter_700Bold',

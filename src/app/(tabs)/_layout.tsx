@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, Image, useWindowDimensions, Platform } from 'react-native';
 import { WebHeader } from '../../components/WebHeader';
 import { useRef, useEffect } from 'react';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
 import { useCartStore } from '../../store/cartStore';
 
@@ -12,9 +12,11 @@ const AnimatedCartIcon = ({ color, focused, totalItems }: { color: string, focus
 
   useEffect(() => {
     if (totalItems > 0) {
+      cancelAnimation(cartTranslateY);
+      cartTranslateY.value = 0;
       cartTranslateY.value = withSequence(
-        withTiming(-8, { duration: 100 }),
-        withTiming(0, { duration: 100 })
+        withSpring(-6, { damping: 12, stiffness: 200 }),
+        withSpring(0, { damping: 12, stiffness: 200 })
       );
     }
   }, [totalItems]);

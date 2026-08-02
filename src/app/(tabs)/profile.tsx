@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Modal, TextInput, Platform, Image } 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -44,6 +45,89 @@ export default function Profile() {
   
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
+
+  if (!user) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, paddingBottom: 100 }}>
+          <View style={{
+            width: '100%',
+            maxWidth: 400,
+            backgroundColor: colors.surface,
+            borderRadius: 32,
+            padding: 32,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: colors.isDark ? 0.3 : 0.08,
+            shadowRadius: 24,
+            elevation: 10,
+            borderWidth: 1,
+            borderColor: colors.surfaceMuted,
+          }}>
+            <Image 
+              source={require('@/assets/3d icons/konura-bird.png')}
+              style={{ width: 120, height: 120, marginBottom: 16 }}
+              resizeMode="contain"
+            />
+            
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: colors.ink, marginBottom: 12, textAlign: 'center' }}>
+              Welcome to Konura
+            </Text>
+            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.inkMuted, textAlign: 'center', marginBottom: 32, lineHeight: 22 }}>
+              Sign in to access your orders, saved items, and personalized recommendations.
+            </Text>
+
+            <Pressable
+              onPress={() => router.push('/(auth)/login?returnUrl=/profile')}
+              style={({ pressed }) => ({
+                width: '100%',
+                height: 54,
+                borderRadius: 16,
+                overflow: 'hidden',
+                marginBottom: 16,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+                shadowColor: colors.primaryDim,
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.42,
+                shadowRadius: 16,
+                elevation: 8,
+              })}
+            >
+              <LinearGradient
+                colors={[colors.primary, colors.primary, colors.primaryDim] as [string, string, string]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: '#18181a', letterSpacing: 0.3 }}>
+                  Sign In
+                </Text>
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/(auth)/register?returnUrl=/profile')}
+              style={({ pressed }) => ({
+                width: '100%',
+                height: 54,
+                borderRadius: 16,
+                borderWidth: 2,
+                borderColor: colors.surfaceMuted,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? colors.surfaceSoft : 'transparent',
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+              })}
+            >
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>
+                Create an Account
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const handleOpenEdit = () => {
     setEditName(user?.name || '');

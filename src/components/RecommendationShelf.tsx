@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { RecommendationCard } from './RecommendationCard';
+import { RecommendationCard, RecommendationCardSkeleton } from './RecommendationCard';
 import { SHELF_META } from '../api/recommendations';
 import { router } from 'expo-router';
 
@@ -139,15 +139,20 @@ export const RecommendationShelfRow = ({
 
       {/* ── Horizontal Scroll ── */}
       {isLoading ? (
-        <View
-          style={{
-            height: 220,
-            alignItems: 'center',
-            justifyContent: 'center',
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingLeft: 24,
+            paddingRight: 12,
+            gap: 12,
+            paddingBottom: 4,
           }}
         >
-          <ActivityIndicator size="small" color={colors.primary} />
-        </View>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <RecommendationCardSkeleton key={i} />
+          ))}
+        </ScrollView>
       ) : (
         <ScrollView
           horizontal

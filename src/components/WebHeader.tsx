@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import { Pressable, Text, View, useWindowDimensions, Image } from 'react-native';
 import { useEffect } from 'react';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { useTheme } from '../theme/ThemeContext';
 import { useCartStore } from '../store/cartStore';
 import { useAuth } from '../context/AuthContext';
@@ -25,18 +25,22 @@ export const WebHeader = () => {
 
   useEffect(() => {
     if (totalItems > 0) {
+      cancelAnimation(cartTranslateY);
+      cartTranslateY.value = 0;
       cartTranslateY.value = withSequence(
-        withTiming(-8, { duration: 100 }),
-        withTiming(0, { duration: 100 })
+        withSpring(-6, { damping: 12, stiffness: 200 }),
+        withSpring(0, { damping: 12, stiffness: 200 })
       );
     }
   }, [totalItems]);
 
   useEffect(() => {
     if (unreadCount > 0) {
+      cancelAnimation(bellTranslateY);
+      bellTranslateY.value = 0;
       bellTranslateY.value = withSequence(
-        withTiming(-8, { duration: 100 }),
-        withTiming(0, { duration: 100 })
+        withSpring(-6, { damping: 12, stiffness: 200 }),
+        withSpring(0, { damping: 12, stiffness: 200 })
       );
     }
   }, [unreadCount]);
@@ -140,24 +144,35 @@ export const WebHeader = () => {
           </Animated.View>
         </Pressable>
 
-        {/* Profile Link */}
-        <Pressable
-          onPress={() => handleNav('/profile')}
-          style={{ paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: isActive('/profile') ? colors.primary : 'transparent' }}
-        >
-          {user?.image ? (
-            <Image source={{ uri: user.image }} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8 }} />
-          ) : (
-            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 8, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.ink }}>
-                {user?.name ? `${user.name.charAt(0)}${user.name.charAt(user.name.length - 1)}`.toUpperCase() : 'U'}
-              </Text>
-            </View>
-          )}
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: isActive('/profile') ? colors.ink : colors.inkMuted }}>
-            Profile
-          </Text>
-        </Pressable>
+        {/* Profile / Sign In Link */}
+        {user ? (
+          <Pressable
+            onPress={() => handleNav('/profile')}
+            style={{ paddingBottom: 4, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: isActive('/profile') ? colors.primary : 'transparent' }}
+          >
+            {user.image ? (
+              <Image source={{ uri: user.image }} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8 }} />
+            ) : (
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', marginRight: 8, borderWidth: 1, borderColor: colors.surfaceMuted }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.ink }}>
+                  {user.name ? `${user.name.charAt(0)}${user.name.charAt(user.name.length - 1)}`.toUpperCase() : 'U'}
+                </Text>
+              </View>
+            )}
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: isActive('/profile') ? colors.ink : colors.inkMuted }}>
+              Profile
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => handleNav('/(auth)/login')}
+            style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: '#18181a' }}>
+              Sign In
+            </Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );

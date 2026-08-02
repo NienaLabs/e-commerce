@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, Image, Pressable, useWindowDimensions, Platform, Animated } from 'react-native';
+import { View, Text, Image, Pressable, useWindowDimensions, Platform, Animated as RNAnimated } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, cancelAnimation, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
@@ -7,6 +8,8 @@ import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
 import { useEventStore } from '../store/eventStore';
+import { smoothSpringTransition } from '../utils/transitions';
+import { Skeleton } from './Skeleton';
 
 interface ProductCardProps {
   id: string;
@@ -44,11 +47,11 @@ export const ProductCard = ({
   const addEvent = useEventStore((state) => state.addEvent);
 
   // ── Hover animation (desktop web only) ──
-  const [hoverAnim] = useState(() => new Animated.Value(0));
+  const [hoverAnim] = useState(() => new RNAnimated.Value(0));
 
   const handleMouseEnter = () => {
     if (!isDesktop) return;
-    Animated.spring(hoverAnim, {
+    RNAnimated.spring(hoverAnim, {
       toValue: 1,
       useNativeDriver: true,
       tension: 300,
@@ -58,7 +61,7 @@ export const ProductCard = ({
 
   const handleMouseLeave = () => {
     if (!isDesktop) return;
-    Animated.spring(hoverAnim, {
+    RNAnimated.spring(hoverAnim, {
       toValue: 0,
       useNativeDriver: true,
       tension: 300,
@@ -72,6 +75,11 @@ export const ProductCard = ({
   const isItemInWishlist = useWishlistStore((state) => state.items.some(i => i.id === id));
   const toggleItem = useWishlistStore((state) => state.toggleItem);
   const isHeartFilled = isWishlisted ?? isItemInWishlist;
+
+  const heartScale = useSharedValue(1);
+  const heartAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }]
+  }));
 
   const handleVendorPress = (e: any) => {
     e.stopPropagation?.();
@@ -106,7 +114,7 @@ export const ProductCard = ({
   };
 
   return (
-    <Animated.View
+    <RNAnimated.View
       style={[
         { width: '100%' },
         isDesktop && {
@@ -152,16 +160,29 @@ export const ProductCard = ({
         overflow: 'hidden',
         position: 'relative',
       }}>
-        <Image
+        <Animated.Image
           source={{ uri: imageUrl }}
           style={{ width: '100%', height: '100%' }}
           resizeMode="cover"
+          sharedTransitionTag={`product-image-${id}`}
+          sharedTransitionStyle={smoothSpringTransition}
         />
 
         {/* Wishlist button */}
         <Pressable
           onPress={(e) => {
             e.stopPropagation?.();
+            
+            // Trigger animation when liking
+            if (!isHeartFilled) {
+              cancelAnimation(heartScale);
+              heartScale.value = 1;
+              heartScale.value = withSequence(
+                withTiming(1.3, { duration: 120 }),
+                withTiming(1, { duration: 120 })
+              );
+            }
+
             toggleItem({ id, name, price, salePrice, imageUrl, vendorId, vendorName, vendorAvatar, inStock: true });
             if (!isHeartFilled) {
               addEvent({
@@ -185,11 +206,13 @@ export const ProductCard = ({
             borderWidth: 1, borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.5)',
           } as any}
         >
-          <Ionicons
-            name={isHeartFilled ? 'heart' : 'heart-outline'}
-            size={18}
-            color={isHeartFilled ? '#d93651' : colors.ink}
-          />
+          <Animated.View style={heartAnimatedStyle}>
+            <Ionicons
+              name={isHeartFilled ? 'heart' : 'heart-outline'}
+              size={18}
+              color={isHeartFilled ? '#d93651' : colors.ink}
+            />
+          </Animated.View>
         </Pressable>
 
         {/* Sale badge */}
@@ -342,6 +365,56 @@ export const ProductCard = ({
         </Pressable>
       )}
     </Pressable>
-    </Animated.View>
+    </RNAnimated.View>
   );
 };
+
+export const ProductCardSkeleton = () => {
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768 && Platform.OS === 'web';
+
+  return (
+    <View
+      style={{
+        width: '100%',
+        backgroundColor: colors.surface,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: colors.surfaceMuted,
+        padding: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: colors.isDark ? 0.3 : 0.05,
+        shadowRadius: 24,
+        elevation: 3,
+      }}
+    >
+      <View
+        style={{
+          width: '100%',
+          aspectRatio: 1,
+          borderRadius: 14,
+          backgroundColor: colors.surfaceSoft,
+          marginBottom: 10,
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <Skeleton width="100%" height="100%" />
+      </View>
+      <View style={{ marginBottom: 6, minHeight: isDesktop ? 44 : 36, gap: 4 }}>
+        <Skeleton width="100%" height={14} />
+        <Skeleton width="70%" height={14} />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Skeleton width={60} height={20} />
+      </View>
+      <View style={{ paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.surfaceMuted, flexDirection: 'row', alignItems: 'center' }}>
+        <Skeleton width={26} height={26} borderRadius={13} style={{ marginRight: 7 }} />
+        <Skeleton width={100} height={14} />
+      </View>
+    </View>
+  );
+};
+
