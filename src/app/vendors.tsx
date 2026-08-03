@@ -17,9 +17,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { listVendors, Vendor } from '../api/vendors';
 import { getAllFollowing } from '../api/localFollows';
+import { VendorAvatar } from '../components/VendorAvatar';
 
-const FALLBACK_AVATAR =
-  'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200';
 
 // ─── Vendor Grid Card ─────────────────────────────────────────────
 
@@ -115,11 +114,7 @@ function VendorGridCard({ vendor, isFollowed, colors }: GridCardProps) {
               elevation: 4,
             }}
           >
-            <Image
-              source={{ uri: vendor.logo_url ?? FALLBACK_AVATAR }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-            />
+            <VendorAvatar uri={vendor.logo_url} size={52} radius={26} />
           </View>
 
           {/* Following / Verified badge */}

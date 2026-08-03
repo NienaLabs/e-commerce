@@ -179,7 +179,7 @@ export const Sidebar: React.FC = () => {
           <Text style={[styles.sectionTitle, { color: colors.inkGhost }]}>Settings</Text>
           <View style={[styles.group, { borderColor: colors.surfaceMuted }]}>
             <SidebarItem icon="notifications-outline" title="Notifications" onPress={() => handleNavigate('/profile/notifications')} />
-            <SidebarItem icon="options-outline" title="Preferences" onPress={() => handleNavigate('/(auth)/onboarding')} />
+            <SidebarItem icon="options-outline" title="Preferences" onPress={() => handleNavigate('/profile/preferences')} />
             <SidebarItem icon="color-palette-outline" title="Appearance" onPress={() => handleNavigate('/profile/appearance')} />
             <SidebarItem icon="help-circle-outline" title="Help & Support" onPress={() => handleNavigate('/profile/support')} />
           </View>

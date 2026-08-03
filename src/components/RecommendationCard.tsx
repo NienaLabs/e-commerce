@@ -329,7 +329,7 @@ export const RecommendationCard = ({
               color: salePrice ? '#d93651' : colors.ink,
             }}
           >
-            ${displayPrice.toFixed(2)}
+            GH₵{displayPrice.toFixed(2)}
           </Text>
           {salePrice && price > salePrice && (
             <Text
@@ -340,7 +340,7 @@ export const RecommendationCard = ({
                 textDecorationLine: 'line-through',
               }}
             >
-              ${price.toFixed(2)}
+              GH₵{price.toFixed(2)}
             </Text>
           )}
         </View>

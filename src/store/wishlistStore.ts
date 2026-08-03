@@ -84,14 +84,27 @@ export const useWishlistStore = create<WishlistState>()(
       hasItem: (id) => get().items.some((i) => i.id === id),
 
       _switchUser: (userId: string | null) => {
-        // Update the storage key to be user-scoped
-        currentStorageName = userId
+        const nextName = userId
           ? `vendor-wishlist-storage-${userId}`
           : 'vendor-wishlist-storage-guest';
-        // Clear in-memory state first
-        set({ items: [] });
-        // Rehydrate from the new user-scoped storage
-        useWishlistStore.persist.rehydrate();
+        if (currentStorageName === nextName) return;
+        currentStorageName = nextName;
+
+        // Read the partition directly rather than clearing and rehydrating.
+        // persist writes on every set, and the key has already been switched,
+        // so `set({ items: [] })` would overwrite the stored wishlist and
+        // rehydrate would read back the emptiness it just wrote — wiping a
+        // signed-in shopper's wishlist on every launch.
+        void (async () => {
+          let stored: WishlistItem[] = [];
+          try {
+            const raw = await customStorage.getItem(nextName);
+            if (raw) stored = JSON.parse(raw)?.state?.items ?? [];
+          } catch {
+            stored = [];
+          }
+          set({ items: stored });
+        })();
       },
     }),
     {

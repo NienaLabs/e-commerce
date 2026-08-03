@@ -17,6 +17,7 @@ import { MapMarker } from '../components/Map/MapMarker';
 import { LocationSearchModal, LocationResult } from '../components/LocationSearchModal';
 import { useLocationStore } from '../store/locationStore';
 import * as Location from 'expo-location';
+import { API_BASE_URL } from '../api/client';
 
 async function reverseGeocodeAddress(lat: number, lng: number) {
   if (Platform.OS === 'web') {
@@ -35,7 +36,9 @@ async function reverseGeocodeAddress(lat: number, lng: number) {
   }
 }
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+// Was defaulting to :8000 — the API sits behind nginx on :80, so that
+// fallback could never have worked. Use the one shared origin.
+const BASE_URL = API_BASE_URL;
 
 interface Address {
   id: string;

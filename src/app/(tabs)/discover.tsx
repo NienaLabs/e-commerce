@@ -8,9 +8,11 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { useLocationStore } from '../../store/locationStore';
 import { listVendors } from '../../api/vendors';
+import { listCategories, listProducts } from '../../api/products';
 import haversine from 'haversine';
 import { MapView, GeoJSONSource, Layer } from '../../components/Map/MapView';
 import { MapMarker } from '../../components/Map/MapMarker';
+import { VendorAvatar } from '../../components/VendorAvatar';
 
 // Helper to get distance badge colors
 function getDistanceBadgeColor(km: number, colors: any) {
@@ -19,7 +21,7 @@ function getDistanceBadgeColor(km: number, colors: any) {
   return { bg: colors.surfaceSoft, text: colors.inkMuted };
 }
 
-const CATEGORIES = ['All', 'Electronics', 'Fashion', 'Home & Living', 'Beauty', 'Sports', 'Food & Groceries'];
+const ALL_CATEGORY_ID = 'all';
 
 export default function DiscoverScreen() {
   const { colors } = useTheme();
@@ -35,7 +37,7 @@ export default function DiscoverScreen() {
   // UI State
   const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORY_ID);
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
   
   const [deliveryLocation, setDeliveryLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -75,6 +77,46 @@ export default function DiscoverScreen() {
     queryFn: () => listVendors({ limit: 100 }),
   });
 
+  // Real category chips, so the filter can never offer a category that
+  // doesn't exist (the old list was hardcoded and unrelated to the data).
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: listCategories,
+    staleTime: 5 * 60_000,
+  });
+
+  // A vendor has no category of its own — it belongs to a category by virtue
+  // of selling something in it. Ask for that category's products and keep the
+  // vendors behind them. Only runs when a real category is selected.
+  const { data: categoryProducts = [], isFetching: categoryLoading } = useQuery({
+    queryKey: ['category-vendor-ids', activeCategory],
+    // The endpoint caps limit at 100 (le=100) and 422s above it, so page
+    // through rather than asking for one oversized batch. We only need the
+    // distinct vendor ids, so stop as soon as a short page comes back.
+    queryFn: async () => {
+      const PAGE = 100;
+      const MAX_PAGES = 5;
+      const all: Awaited<ReturnType<typeof listProducts>> = [];
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const page = await listProducts({
+          category_id: activeCategory,
+          skip: i * PAGE,
+          limit: PAGE,
+        });
+        all.push(...page);
+        if (page.length < PAGE) break;
+      }
+      return all;
+    },
+    enabled: activeCategory !== ALL_CATEGORY_ID,
+    staleTime: 60_000,
+  });
+
+  const vendorIdsInCategory = useMemo(() => {
+    if (activeCategory === ALL_CATEGORY_ID) return null;
+    return new Set(categoryProducts.map(p => p.vendor_id));
+  }, [activeCategory, categoryProducts]);
+
   // Calculate distances & filter
   const processedVendors = useMemo(() => {
     return vendors.map(v => {
@@ -106,15 +148,16 @@ export default function DiscoverScreen() {
         isOpen: true,
         lat,
         lng,
-        image: v.logo_url ?? 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200',
+        image: v.logo_url ?? null,
       };
     });
   }, [vendors, userLocation, deliveryLocation]);
 
   const filteredVendors = processedVendors.filter(v => {
-    // API doesn't have categories for vendors, so we just match search for now
     const matchesSearch = v.store_name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    // null means "All" — no category narrowing at all.
+    const matchesCategory = !vendorIdsInCategory || vendorIdsInCategory.has(v.id);
+    return matchesSearch && matchesCategory;
   })
   .sort((a, b) => a.distanceKm - b.distanceKm);
 
@@ -221,20 +264,25 @@ export default function DiscoverScreen() {
 
         {/* ── Search & Toggle Row ── */}
         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          {/* minWidth: 0 on both the row and the input is what actually stops
+              the placeholder spilling out. A flex item defaults to
+              min-width:auto, so it refuses to shrink below its text and
+              overflows the rounded box instead of ellipsising inside it. */}
           <View style={{
-            flex: 1, flexDirection: 'row', alignItems: 'center',
+            flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center',
             backgroundColor: colors.surfaceSoft, borderRadius: 16, paddingHorizontal: 16, height: 48,
             borderWidth: 1, borderColor: colors.surfaceMuted,
           }}>
-            <Ionicons name="search" size={20} color={colors.inkGhost} />
+            <Ionicons name="search" size={20} color={colors.inkGhost} style={{ flexShrink: 0 }} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
               onSubmitEditing={handleSearchSubmit}
               returnKeyType="search"
-              placeholder="Search vendors or locations..."
+              placeholder="Search vendors or places"
               placeholderTextColor={colors.inkGhost}
-              style={{ flex: 1, marginLeft: 10, fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}) }}
+              numberOfLines={1}
+              style={{ flex: 1, minWidth: 0, marginLeft: 10, fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink, ...(Platform.OS === 'web' ? { outlineStyle: 'none', textOverflow: 'ellipsis' } as any : {}) }}
             />
           </View>
 
@@ -260,19 +308,26 @@ export default function DiscoverScreen() {
         {/* ── Category Filters ── */}
         <View style={{ marginTop: 12, marginHorizontal: -20 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
-            {CATEGORIES.map(cat => (
-              <Pressable
-                key={cat}
-                onPress={() => setActiveCategory(cat)}
-                style={{
-                  paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-                  backgroundColor: activeCategory === cat ? colors.ink : colors.surface,
-                  borderWidth: 1, borderColor: activeCategory === cat ? colors.ink : colors.surfaceMuted,
-                }}
-              >
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: activeCategory === cat ? colors.surface : colors.inkSoft }}>{cat}</Text>
-              </Pressable>
-            ))}
+            {[{ id: ALL_CATEGORY_ID, name: 'All' }, ...categories].map(cat => {
+              const isActive = activeCategory === cat.id;
+              return (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => setActiveCategory(cat.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 6,
+                    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+                    backgroundColor: isActive ? colors.ink : colors.surface,
+                    borderWidth: 1, borderColor: isActive ? colors.ink : colors.surfaceMuted,
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: isActive ? colors.surface : colors.inkSoft }}>{cat.name}</Text>
+                  {isActive && categoryLoading && <ActivityIndicator size="small" color={colors.surface} />}
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </View>
       </View>
@@ -350,7 +405,7 @@ export default function DiscoverScreen() {
                     onPress={() => setSelectedVendor(vendor.id)}
                   >
                     <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: selectedVendor === vendor.id ? colors.ink : colors.surface, borderWidth: 2, borderColor: selectedVendor === vendor.id ? '#ffffff' : colors.primaryDim, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 4, overflow: 'hidden' }}>
-                      <Image source={{ uri: vendor.image }} style={{ width: '100%', height: '100%' }} />
+                      <VendorAvatar uri={vendor.image} size={32} radius={16} />
                     </View>
                   </MapMarker>
                 ))}
@@ -364,22 +419,45 @@ export default function DiscoverScreen() {
                   const v = filteredVendors.find(x => x.id === selectedVendor);
                   if (!v) return null;
                   return (
-                    <Pressable
-                      onPress={() => router.push(`/vendor/${v.id}` as any)}
-                      style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 8 }}
-                    >
-                      <Image source={{ uri: v.image }} style={{ width: 60, height: 60, borderRadius: 14, marginRight: 14 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>{v.store_name}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Ionicons name="time" size={12} color={colors.inkMuted} />
-                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkMuted }}>~{v.etaMins} mins</Text>
-                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkGhost }}>•</Text>
-                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: v.isOpen ? colors.success : colors.error }}>{v.isOpen ? 'Open' : 'Closed'}</Text>
+                    <View>
+                      <Pressable
+                        onPress={() => router.push(`/vendor/${v.id}` as any)}
+                        style={{ backgroundColor: colors.surface, borderRadius: 20, padding: 16, paddingRight: 28, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 8 }}
+                      >
+                        <VendorAvatar uri={v.image} size={60} radius={14} style={{ marginRight: 14 }} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>{v.store_name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="time" size={12} color={colors.inkMuted} />
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkMuted }}>~{v.etaMins} mins</Text>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkGhost }}>•</Text>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: v.isOpen ? colors.success : colors.error }}>{v.isOpen ? 'Open' : 'Closed'}</Text>
+                          </View>
                         </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color={colors.inkGhost} />
-                    </Pressable>
+                        <Ionicons name="chevron-forward" size={20} color={colors.inkGhost} />
+                      </Pressable>
+
+                      {/* Dismiss. Selecting a pin was a one-way door — the card
+                          covered the map with no way to put it away. Sits above
+                          the card so it can't be swallowed by the row press. */}
+                      <Pressable
+                        onPress={() => setSelectedVendor(null)}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss vendor card"
+                        style={({ pressed }) => ({
+                          position: 'absolute', top: -8, right: -8,
+                          width: 28, height: 28, borderRadius: 14,
+                          backgroundColor: colors.ink,
+                          alignItems: 'center', justifyContent: 'center',
+                          shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.25, shadowRadius: 6, elevation: 10,
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <Ionicons name="close" size={16} color={colors.surface} />
+                      </Pressable>
+                    </View>
                   );
                 })()}
               </View>
@@ -421,7 +499,7 @@ export default function DiscoverScreen() {
                       borderWidth: 1.5, borderColor: isSelected && isDesktop ? colors.primary : colors.surfaceMuted,
                     })}
                   >
-                    <Image source={{ uri: vendor.image }} style={{ width: 56, height: 56, borderRadius: 14, marginRight: 14, backgroundColor: colors.surfaceMuted }} />
+                    <VendorAvatar uri={vendor.image} size={56} radius={14} style={{ marginRight: 14 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>
                         {vendor.store_name}

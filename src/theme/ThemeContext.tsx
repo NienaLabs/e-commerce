@@ -17,10 +17,10 @@ export const lightColors = {
   inkMuted:      '#6b696b',
   inkGhost:      '#9e9c9e',
   // Brand
-  primary:       '#28b463',
+  primary:       '#29B463',
   primaryDim:    '#1e8449',
-  primaryGhost:  '#28b46318',
-  primaryBorder: '#28b46350',
+  primaryGhost:  '#29B46318',
+  primaryBorder: '#29B46350',
   // Text/icons placed ON a primary (emerald-green) background. The green is a
   // DARK colour, so on-primary content must stay white in BOTH themes.
   onPrimary:     '#ffffff',
@@ -33,8 +33,8 @@ export const lightColors = {
   onHero:        '#ffffff',
   onHeroMuted:   '#ffffffb3',
   // Feedback
-  success:       '#28b463',
-  successGhost:  '#28b46318',
+  success:       '#29B463',
+  successGhost:  '#29B46318',
   warning:       '#d4820a',
   warningGhost:  '#d4820a18',
   error:         '#d93651',
@@ -57,10 +57,10 @@ export const darkColors = {
   inkMuted:      '#9e9c9e',
   inkGhost:      '#6b696b',
   // Brand (unchanged — primary stays emerald)
-  primary:       '#28b463',
+  primary:       '#29B463',
   primaryDim:    '#1e8449',
-  primaryGhost:  '#28b46328',
-  primaryBorder: '#28b46360',
+  primaryGhost:  '#29B46328',
+  primaryBorder: '#29B46360',
   // On-primary stays white in dark mode too — the green primary is dark.
   onPrimary:     '#ffffff',
   onPrimaryMuted:'#ffffffb3',
@@ -69,8 +69,8 @@ export const darkColors = {
   onHero:        '#ffffff',
   onHeroMuted:   '#ffffffb3',
   // Feedback (unchanged)
-  success:       '#28b463',
-  successGhost:  '#28b46328',
+  success:       '#29B463',
+  successGhost:  '#29B46328',
   warning:       '#d4820a',
   warningGhost:  '#d4820a30',
   error:         '#d93651',
