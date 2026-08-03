@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -59,6 +59,36 @@ export const Sidebar: React.FC = () => {
   // dashboard once an admin has actually approved it.
   const isPendingVendor = !!vendor && vendor.is_verified === false && user?.role !== 'admin';
   const { isOpen, close } = useSidebar();
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // Check if it already fired before this component mounted
+      if ((window as any).deferredPrompt) {
+        setDeferredPrompt((window as any).deferredPrompt);
+      }
+      
+      const handleBeforeInstallPrompt = (e: any) => {
+        e.preventDefault();
+        (window as any).deferredPrompt = e;
+        setDeferredPrompt(e);
+      };
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      };
+    }
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
 
   const translateX = useSharedValue(-DRAWER_WIDTH);
   const opacity = useSharedValue(0);
@@ -183,6 +213,19 @@ export const Sidebar: React.FC = () => {
             <SidebarItem icon="color-palette-outline" title="Appearance" onPress={() => handleNavigate('/profile/appearance')} />
             <SidebarItem icon="help-circle-outline" title="Help & Support" onPress={() => handleNavigate('/profile/support')} />
           </View>
+
+          {deferredPrompt && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.inkGhost }]}>App</Text>
+              <View style={[styles.group, { borderColor: colors.surfaceMuted }]}>
+                <SidebarItem 
+                  icon="download-outline" 
+                  title="Install App" 
+                  onPress={handleInstallClick} 
+                />
+              </View>
+            </>
+          )}
 
           {hasVendorAccount ? (
             <View style={[styles.group, { borderColor: colors.surfaceMuted, marginTop: 12 }]}>
