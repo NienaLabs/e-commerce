@@ -107,20 +107,7 @@ export default function OrderTracking() {
 
   const isDelivered = order.status === 'delivered';
   const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=-122.45%2C37.76%2C-122.41%2C37.79&layer=mapnik`;
-  const estimatedDelivery = isDelivered ? 'Delivered' : '2-3 Business Days';
 
-  const simulateDelivery = async () => {
-    if (isLocal) {
-      try {
-        const existing = await getLocalOrders();
-        const updated = existing.map(o => o.id === orderId ? { ...o, status: 'delivered' } : o);
-        await AsyncStorage.setItem('@local_orders', JSON.stringify(updated));
-        queryClient.invalidateQueries({ queryKey: ['local-orders'] });
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -158,13 +145,19 @@ export default function OrderTracking() {
           {/* Left column */}
           <View style={{ flex: 1, width: '100%', gap: 16 }}>
 
-            {/* ETA Card */}
+            {/* Status card. There is no delivery-estimate data behind this
+                screen, so it reports the state we actually know rather than
+                inventing an arrival window. */}
             <View style={{ backgroundColor: colors.isDark ? '#1a2a0a' : '#f0f8e0', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.isDark ? '#2d4010' : '#c3d80940' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Ionicons name="time" size={18} color={colors.primaryDim} style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.primaryDim }}>Estimated Arrival</Text>
+                <Ionicons name={isDelivered ? 'checkmark-circle' : 'time'} size={18} color={colors.primaryDim} style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.primaryDim }}>
+                  {isDelivered ? 'Delivered' : 'Order status'}
+                </Text>
               </View>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>{estimatedDelivery}</Text>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink, textTransform: 'capitalize' }}>
+                {isDelivered ? 'Delivered' : (order?.status ?? 'Processing')}
+              </Text>
             </View>
 
             {/* Delivery PIN Card */}
@@ -252,12 +245,6 @@ export default function OrderTracking() {
                       </View>
                     </View>
 
-                    {isLocal && !isDelivered && (
-                      <Pressable onPress={simulateDelivery} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.ink, marginRight: 8 }}>
-                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.surface }}>Test Delivery</Text>
-                      </Pressable>
-                    )}
-
                     {(order as any).agent_phone && (
                       <Pressable style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' }}>
                         <Ionicons name="call" size={20} color={colors.primaryDim} />
@@ -276,11 +263,6 @@ export default function OrderTracking() {
                       </Text>
                     </View>
                     
-                    {isLocal && !isDelivered && (
-                      <Pressable onPress={simulateDelivery} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.ink, marginRight: 8 }}>
-                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.surface }}>Test Delivery</Text>
-                      </Pressable>
-                    )}
                   </View>
                 )}
               </View>

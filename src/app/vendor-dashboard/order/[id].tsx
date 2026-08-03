@@ -12,6 +12,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { getVendorOrderDetail } from '../../../api/vendors';
 import { useWsEvent } from '../../../context/WebSocketContext';
 import { Header, Card, Badge, Btn, Divider, font, shadow, useResponsive } from '../../../components/vendor/kit';
+// Same shared origin as the API modules (the old :8000 fallback was wrong).
+import { API_BASE_URL as BASE_URL } from '../../../api/client';
 
 const STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered'];
 const STATUS_LABELS: Record<string, string> = {
@@ -64,6 +66,7 @@ export default function VendorOrderDetailScreen() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const [verifySuccess, setVerifySuccess] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -93,7 +96,6 @@ export default function VendorOrderDetailScreen() {
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
       const res = await fetch(`${BASE_URL}/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -159,8 +161,12 @@ export default function VendorOrderDetailScreen() {
   };
 
   const handleVerifyPin = async () => {
+    // Verification is a network round trip that marks the order delivered and
+    // charges commission. Without a busy state the button looked idle, so an
+    // impatient second tap fired a second verify.
+    if (verifying) return;
+    setVerifying(true);
     try {
-      const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
       const res = await fetch(`${BASE_URL}/orders/${order.id}/verify-delivery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -182,10 +188,17 @@ export default function VendorOrderDetailScreen() {
     } catch (e: any) {
       setPinError(e.message || 'Incorrect delivery PIN');
       setPinInput('');
+    } finally {
+      setVerifying(false);
     }
   };
 
-  const handleCloseModal = () => { setShowVerifyModal(false); setPinInput(''); setPinError(''); setVerifySuccess(false); };
+  const handleCloseModal = () => {
+    // Don't let the sheet be dismissed mid-request — the order may already be
+    // delivered by the time the vendor gets back to it.
+    if (verifying) return;
+    setShowVerifyModal(false); setPinInput(''); setPinError(''); setVerifySuccess(false);
+  };
 
   const vendorTotal = order.items.reduce((acc: number, item: any) => acc + ((item.discount_price ?? item.unit_price) * item.quantity), 0);
 
@@ -269,14 +282,14 @@ export default function VendorOrderDetailScreen() {
                       )}
                     </View>
                     <Text style={{ fontFamily: font.bold, fontSize: 14.5, color: colors.ink }}>
-                      ${((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}
+                      GH₵{((item.discount_price ?? item.unit_price) * item.quantity).toFixed(2)}
                     </Text>
                   </View>
                 ))}
                 <Divider style={{ marginVertical: 12 }} />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontFamily: font.h2, fontSize: 16, color: colors.ink }}>Total</Text>
-                  <Text style={{ fontFamily: font.bold, fontSize: 20, color: colors.ink }}>${vendorTotal.toFixed(2)}</Text>
+                  <Text style={{ fontFamily: font.bold, fontSize: 20, color: colors.ink }}>GH₵{vendorTotal.toFixed(2)}</Text>
                 </View>
               </View>
             </Card>
@@ -391,6 +404,7 @@ export default function VendorOrderDetailScreen() {
                 <TextInput
                   value={pinInput}
                   onChangeText={text => { setPinError(''); if (text.length <= 4 && /^\d*$/.test(text)) setPinInput(text); }}
+                  editable={!verifying}
                   placeholder="· · · ·"
                   placeholderTextColor={colors.inkGhost}
                   keyboardType="number-pad"
@@ -413,8 +427,14 @@ export default function VendorOrderDetailScreen() {
                   </Text>
                 )}
                 <View style={{ height: 20 }} />
-                <Btn title="Confirm delivery" onPress={handleVerifyPin} disabled={pinInput.length < 4} fullWidth />
-                <Btn title="Cancel" variant="ghost" onPress={handleCloseModal} fullWidth />
+                <Btn
+                  title={verifying ? 'Confirming…' : 'Confirm delivery'}
+                  onPress={handleVerifyPin}
+                  loading={verifying}
+                  disabled={pinInput.length < 4 || verifying}
+                  fullWidth
+                />
+                <Btn title="Cancel" variant="ghost" onPress={handleCloseModal} disabled={verifying} fullWidth />
               </>
             )}
           </Pressable>

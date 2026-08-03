@@ -31,7 +31,7 @@ import { VendorShelf } from '@/components/VendorShelf';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { useTheme } from '../../theme/ThemeContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { listProducts, mapProductToCard, Product, getGroupedProducts, getHeroBanners } from '../../api/products';
 import { getRecommendations, RecommendationResponse } from '../../api/recommendations';
 import { listCategories } from '../../api/categories';
@@ -64,13 +64,50 @@ const CATEGORIES = [
   { id: 'pet_supplies', label: 'Pet Supplies', image: require('@/assets/3d icons/3d-food.png') },
 ];
 
-const SORT_OPTIONS = ['Recommended', 'Price: Low to High', 'Price: High to Low', 'Newest Arrivals', 'Best Sellers', 'Top Rated'];
-const OFFER_OPTIONS = ['All Offers', 'Clearance Sale', 'Flash Sale', 'Buy 1 Get 1', 'Bundle Deals', 'Members Only'];
-const RATING_OPTIONS = ['Any Rating', '4.5 Stars & Up', '4 Stars & Up', '3 Stars & Up', '2 Stars & Up'];
-const BRAND_OPTIONS = ['All Brands', 'Sony', 'Apple', 'Samsung', 'Nike', 'Adidas', 'IKEA', 'Zara'];
+// Every option here is backed by a field the API actually returns, so picking
+// one always changes the list. The previous lists promised things the data
+// couldn't deliver — "Buy 1 Get 1", "Members Only", and a hardcoded brand list
+// (Sony/Apple/Nike…) with no brand field on a product anywhere.
+const SORT_RECOMMENDED = 'Recommended';
+const SORT_DISCOUNT = 'Biggest Discount';
 
+const BASE_SORT_OPTIONS = [
+  SORT_RECOMMENDED,
+  'Price: Low to High',
+  'Price: High to Low',
+  'Newest Arrivals',
+  'Top Rated',
+  'Most Popular',
+];
 
-type DropdownKey = 'Sort' | 'Offers' | 'Ratings' | 'Brand' | null;
+const PRODUCTS_PAGE_SIZE = 20;
+
+// The filter sheet speaks its own vocabulary; map it onto the chip sort so the
+// two controls can't disagree about how the list is ordered.
+const MODAL_SORT_TO_LABEL: Record<string, string> = {
+  recommended: SORT_RECOMMENDED,
+  newest: 'Newest Arrivals',
+  price_asc: 'Price: Low to High',
+  price_desc: 'Price: High to Low',
+  rating: 'Top Rated',
+  bestsellers: 'Most Popular',
+};
+
+const OFFER_ALL = 'All Products';
+const OFFER_OPTIONS = [OFFER_ALL, 'Discounted Only'];
+
+const RATING_ANY = 'Any Rating';
+const RATING_OPTIONS = [RATING_ANY, '4.5 Stars & Up', '4 Stars & Up', '3 Stars & Up', '2 Stars & Up'];
+
+/** Price a shopper actually pays — used for both sorting and discount maths. */
+const effectivePrice = (p: any) => p.discount_price ?? p.actual_price;
+
+const discountPct = (p: any) =>
+  p.discount_price && p.actual_price > 0
+    ? (p.actual_price - p.discount_price) / p.actual_price
+    : 0;
+
+type DropdownKey = 'Sort' | 'Offers' | 'Ratings' | null;
 
 export default function Home() {
   const { colors } = useTheme();
@@ -79,6 +116,13 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
+  const [sortBy, setSortBy] = useState<string>(SORT_RECOMMENDED);
+  const [offerFilter, setOfferFilter] = useState<string>(OFFER_ALL);
+  const [ratingFilter, setRatingFilter] = useState<string>(RATING_ANY);
+  // Price band + availability chosen in the filter sheet. Its onApply used to
+  // be an empty TODO, so every selection in that sheet was discarded on Apply.
+  const [priceBand, setPriceBand] = useState<[number, number] | null>(null);
+  const [availability, setAvailability] = useState<string[]>([]);
   const [showLocationSearch, setShowLocationSearch] = useState(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
@@ -147,11 +191,31 @@ export default function Home() {
     };
   });
 
-  // Fetch real products from API
-  const { data: products = [], isLoading: productsLoading } = useQuery({
+  // Paged products. The old call fetched a fixed 20 and never sent
+  // category_id, so the category sat in the query key while every category
+  // refetched the same first 20 rows and filtered them on the client — a
+  // category whose products fell outside that window looked empty.
+  const {
+    data: productPages,
+    isLoading: productsLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['products', selectedCategory],
-    queryFn: () => listProducts({ limit: 20 }),
+    queryFn: ({ pageParam }) =>
+      listProducts({
+        skip: pageParam,
+        limit: PRODUCTS_PAGE_SIZE,
+        category_id: selectedCategory ?? undefined,
+      }),
+    initialPageParam: 0,
+    // A short page means the server has nothing left to give.
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < PRODUCTS_PAGE_SIZE ? undefined : allPages.length * PRODUCTS_PAGE_SIZE,
   });
+
+  const products = useMemo(() => productPages?.pages.flat() ?? [], [productPages]);
 
   // Fetch grouped products for category shelves
   const { data: groupedCategories = [], isLoading: groupedLoading } = useQuery({
@@ -287,10 +351,77 @@ export default function Home() {
 
 
 
-  const mappedProducts = products.map(mapProductToCard);
-  const filteredProducts = selectedCategory
-    ? mappedProducts.filter((p) => (p as any).categoryId === selectedCategory)
-    : mappedProducts;
+  // Narrow to the chosen category first, then filter, then sort — all on the
+  // raw API shape, which still carries avg_rating / created_at / view_count.
+  // mapProductToCard drops those, so sorting after mapping is impossible.
+  // The request is already scoped to the category, so nothing to narrow here.
+  const categoryProducts = products;
+
+  // Offer a discount sort only where there is something discounted to sort by,
+  // so each category's menu reflects what's actually in it.
+  const sortOptions = useMemo(() => {
+    const hasDiscounts = categoryProducts.some(p => discountPct(p) > 0);
+    return hasDiscounts ? [...BASE_SORT_OPTIONS, SORT_DISCOUNT] : BASE_SORT_OPTIONS;
+  }, [categoryProducts]);
+
+  // A category with no discounts can't keep a discount sort selected.
+  useEffect(() => {
+    if (!sortOptions.includes(sortBy)) setSortBy(SORT_RECOMMENDED);
+  }, [sortOptions, sortBy]);
+
+  const filteredProducts = useMemo(() => {
+    let list = [...categoryProducts];
+
+    if (offerFilter === 'Discounted Only') {
+      list = list.filter(p => discountPct(p) > 0);
+    }
+
+    const minRating = parseFloat(ratingFilter);
+    if (!Number.isNaN(minRating)) {
+      list = list.filter(p => (p.avg_rating ?? 0) >= minRating);
+    }
+
+    // ── From the filter sheet ──
+    if (priceBand) {
+      const [min, max] = priceBand;
+      list = list.filter(p => {
+        const price = effectivePrice(p);
+        return price >= min && price <= max;
+      });
+    }
+    if (availability.includes('in_stock')) {
+      list = list.filter(p => p.stock_quantity > 0);
+    }
+    if (availability.includes('on_sale')) {
+      list = list.filter(p => discountPct(p) > 0);
+    }
+
+    switch (sortBy) {
+      case 'Price: Low to High':
+        list.sort((a, b) => effectivePrice(a) - effectivePrice(b));
+        break;
+      case 'Price: High to Low':
+        list.sort((a, b) => effectivePrice(b) - effectivePrice(a));
+        break;
+      case 'Newest Arrivals':
+        list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'Top Rated':
+        list.sort((a, b) => (b.avg_rating ?? 0) - (a.avg_rating ?? 0));
+        break;
+      case 'Most Popular':
+        list.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
+        break;
+      case SORT_DISCOUNT:
+        list.sort((a, b) => discountPct(b) - discountPct(a));
+        break;
+      default:
+        // Recommended = whatever order the API returned.
+        break;
+    }
+
+    return list.map(mapProductToCard);
+  }, [categoryProducts, offerFilter, ratingFilter, sortBy, priceBand, availability]);
 
   useEffect(() => {
     startTracking();
@@ -299,7 +430,9 @@ export default function Home() {
 
   const renderDropdownChip = (
     label: DropdownKey & string,
-    options: string[]
+    options: string[],
+    selected: string,
+    onSelect: (value: string) => void,
   ) => (
     <View key={label}>
       <Pressable
@@ -322,12 +455,13 @@ export default function Home() {
           }
         ]}
       >
-        <Text style={{
+        <Text numberOfLines={1} style={{
           fontFamily: 'Inter_600SemiBold',
           fontSize: 13,
           color: openDropdown === label ? colors.surface : colors.inkSoft,
           marginRight: 5,
-        }}>{label}</Text>
+          maxWidth: 160,
+        }}>{options[0] === selected ? label : selected}</Text>
         <Ionicons
           name={openDropdown === label ? 'chevron-up' : 'chevron-down'}
           size={13}
@@ -365,28 +499,35 @@ export default function Home() {
               </Pressable>
             </View>
             <View style={{ padding: 8 }}>
-              {options.map((opt, i) => (
-                <Pressable
-                  key={opt}
-                  onPress={() => setOpenDropdown(null)}
-                  style={({ pressed }) => [{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 16,
-                    paddingVertical: 14,
-                    borderRadius: 12,
-                    backgroundColor: pressed ? colors.surfaceSoft : 'transparent',
-                  }]}
-                >
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.inkSoft }}>{opt}</Text>
-                  {i === 0 && (
-                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name="checkmark" size={12} color={colors.onPrimary} />
-                    </View>
-                  )}
-                </Pressable>
-              ))}
+              {options.map((opt) => {
+                // The tick used to be pinned to index 0, so it always claimed
+                // the first option was active no matter what you picked.
+                const isSelected = opt === selected;
+                return (
+                  <Pressable
+                    key={opt}
+                    onPress={() => { onSelect(opt); setOpenDropdown(null); }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    style={({ pressed }) => [{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      backgroundColor: pressed ? colors.surfaceSoft : 'transparent',
+                    }]}
+                  >
+                    <Text style={{ fontFamily: isSelected ? 'Inter_600SemiBold' : 'OpenSans_400Regular', fontSize: 15, color: isSelected ? colors.ink : colors.inkSoft }}>{opt}</Text>
+                    {isSelected && (
+                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="checkmark" size={12} color={colors.onPrimary} />
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </Pressable>
         </Pressable>
@@ -626,10 +767,9 @@ export default function Home() {
                 <Ionicons name="options" size={18} color={colors.surface} />
               </Pressable>
 
-              {renderDropdownChip('Sort', SORT_OPTIONS)}
-              {renderDropdownChip('Offers', OFFER_OPTIONS)}
-              {renderDropdownChip('Ratings', RATING_OPTIONS)}
-              {renderDropdownChip('Brand', BRAND_OPTIONS)}
+              {renderDropdownChip('Sort', sortOptions, sortBy, setSortBy)}
+              {renderDropdownChip('Offers', OFFER_OPTIONS, offerFilter, setOfferFilter)}
+              {renderDropdownChip('Ratings', RATING_OPTIONS, ratingFilter, setRatingFilter)}
             </ScrollView>
           </View>
         )}
@@ -749,12 +889,36 @@ export default function Home() {
                       salePrice={product.salePrice}
                       imageUrl={product.imageUrl}
                       vendorId={product.vendorId}
+                      inStock={product.inStock}
                       onPress={() => router.push(`/product/${product.id}` as any)}
                     />
                   </View>
                 ))
               )}
             </View>
+
+            {/* Pull the next page in. A button rather than onEndReached
+                because this feed lives in a ScrollView, not a FlatList. */}
+            {hasNextPage && filteredProducts.length > 0 && (
+              <Pressable
+                onPress={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  alignSelf: 'center', marginTop: 24,
+                  paddingHorizontal: 24, paddingVertical: 14, borderRadius: 24,
+                  backgroundColor: colors.surface,
+                  borderWidth: 1, borderColor: colors.surfaceMuted,
+                  opacity: pressed || isFetchingNextPage ? 0.7 : 1,
+                })}
+              >
+                {isFetchingNextPage && <ActivityIndicator size="small" color={colors.primary} />}
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>
+                  {isFetchingNextPage ? 'Loading…' : 'Load more'}
+                </Text>
+              </Pressable>
+            )}
 
             {!productsLoading && filteredProducts.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 64 }}>
@@ -777,7 +941,21 @@ export default function Home() {
         onClose={() => setShowFilterModal(false)}
         categoryId={selectedCategory ? displayCategories.find(c => c.id === selectedCategory)?.schemaKey : null}
         onApply={(filters) => {
-          // TODO: wire filters into the listProducts query params
+          // Fold the sheet's selections into the same state the chips drive,
+          // so both controls describe one list rather than fighting over it.
+          const mapped = MODAL_SORT_TO_LABEL[filters.sort];
+          if (mapped) setSortBy(mapped);
+
+          // Price presets arrive as "min-max" strings, e.g. "25-50".
+          const band = filters.sections?.price?.[0];
+          if (band) {
+            const [min, max] = band.split('-').map(Number);
+            setPriceBand(Number.isNaN(min) || Number.isNaN(max) ? null : [min, max]);
+          } else {
+            setPriceBand(null);
+          }
+
+          setAvailability(filters.sections?.availability ?? []);
         }}
       />
       {/* Location Search Modal */}

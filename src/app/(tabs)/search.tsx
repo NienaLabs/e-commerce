@@ -18,6 +18,11 @@ export default function Search() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [vendorSuggestions, setVendorSuggestions] = useState<any[]>([]);
   const [results, setResults] = useState<SearchHit[]>([]);
+  // Search returned only the first page and nothing ever asked for page 2, so
+  // anything past the first ~20 matches was unreachable.
+  const [page, setPage] = useState(1);
+  const [totalFound, setTotalFound] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [vendorResults, setVendorResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [committedQuery, setCommittedQuery] = useState('');
@@ -95,6 +100,8 @@ export default function Search() {
     } else {
       setHasSearched(false);
       setResults([]);
+      setTotalFound(0);
+      setPage(1);
       setVendorResults([]);
       setSuggestions([]);
       setVendorSuggestions([]);
@@ -131,8 +138,12 @@ export default function Search() {
 
     if (response && response.hits) {
       setResults(response.hits);
+      setTotalFound(response.found ?? response.hits.length);
+      setPage(1);
     } else {
       setResults([]);
+      setTotalFound(0);
+      setPage(1);
     }
 
     if (vendorResponse && vendorResponse.hits) {
@@ -142,6 +153,27 @@ export default function Search() {
     }
 
     setIsSearching(false);
+  };
+
+  /** Append the next page of matches to what's already on screen. */
+  const handleLoadMore = async () => {
+    if (isLoadingMore || !committedQuery) return;
+    setIsLoadingMore(true);
+    try {
+      const next = page + 1;
+      const response = await fetchSearchResults(committedQuery, next);
+      if (response?.hits?.length) {
+        // Guard against duplicates if a page boundary shifts between requests.
+        setResults(prev => {
+          const seen = new Set(prev.map(h => h.document.id));
+          return [...prev, ...response.hits.filter(h => !seen.has(h.document.id))];
+        });
+        setTotalFound(response.found ?? totalFound);
+        setPage(next);
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   const handleClear = () => {
@@ -458,6 +490,27 @@ export default function Search() {
                   );
                 })}
                     </View>
+
+                    {results.length < totalFound && (
+                      <Pressable
+                        onPress={handleLoadMore}
+                        disabled={isLoadingMore}
+                        accessibilityRole="button"
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          alignSelf: 'center', marginTop: 8, marginBottom: 24,
+                          paddingHorizontal: 24, paddingVertical: 14, borderRadius: 24,
+                          backgroundColor: colors.surface,
+                          borderWidth: 1, borderColor: colors.surfaceMuted,
+                          opacity: pressed || isLoadingMore ? 0.7 : 1,
+                        })}
+                      >
+                        {isLoadingMore && <ActivityIndicator size="small" color={colors.primary} />}
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>
+                          {isLoadingMore ? 'Loading…' : `Load more (${results.length} of ${totalFound})`}
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
             ) : vendorResults.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>

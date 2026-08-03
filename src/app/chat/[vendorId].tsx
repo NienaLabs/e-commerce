@@ -5,8 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
+import { API_BASE_URL } from '../../api/client';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
+// Was defaulting to :8000 — the API sits behind nginx on :80, so that
+// fallback could never have worked. Use the one shared origin.
+const BASE_URL = API_BASE_URL;
 const WS_URL = BASE_URL.replace(/^http/, 'ws');
 
 const QUICK_REPLIES = ['Is this in stock?', 'Can I get a discount?', 'What are the dimensions?', 'Do you offer returns?'];

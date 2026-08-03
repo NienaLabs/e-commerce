@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
-import { BASE_URL } from './auth';
+// auth.ts only aliases this import locally, so it can't be re-exported from
+// there. Take it from the shared helper that owns it.
+import { API_BASE_URL as BASE_URL } from './client';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 /**

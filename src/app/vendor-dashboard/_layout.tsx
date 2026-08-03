@@ -138,7 +138,7 @@ function VendorDashboardShell() {
                   {vendor?.logo_url ? (
                     <Image source={{ uri: vendor.logo_url }} style={{ width: 40, height: 40 }} resizeMode="cover" />
                   ) : (
-                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: '#28b463' }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: '#29B463' }}>
                       {(vendor?.store_name ?? 'V').charAt(0).toUpperCase()}
                     </Text>
                   )}

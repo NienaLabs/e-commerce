@@ -383,10 +383,10 @@ export default function AddProductScreen() {
               </Text>
               <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 16 }}>
                 <View style={{ flex: isDesktop ? 1 : undefined }}>
-                  <Field label="Price ($)" placeholder="0.00" value={form.price} onChangeText={v => setForm(f => ({ ...f, price: v }))} keyboardType="decimal-pad" error={errors.price} />
+                  <Field label="Price (GH₵)" placeholder="0.00" value={form.price} onChangeText={v => setForm(f => ({ ...f, price: v }))} keyboardType="decimal-pad" error={errors.price} />
                 </View>
                 <View style={{ flex: isDesktop ? 1 : undefined }}>
-                  <Field label="Sale price ($)" placeholder="Optional" value={form.salePrice} onChangeText={v => setForm(f => ({ ...f, salePrice: v }))} keyboardType="decimal-pad" hint="Leave blank if not on sale." />
+                  <Field label="Sale price (GH₵)" placeholder="Optional" value={form.salePrice} onChangeText={v => setForm(f => ({ ...f, salePrice: v }))} keyboardType="decimal-pad" hint="Leave blank if not on sale." />
                 </View>
               </View>
               <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 16 }}>

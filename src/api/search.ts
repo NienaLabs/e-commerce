@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://127.0.0.1';
+// Shared origin helper — keeps search on the same origin as every other call.
+import { API_BASE_URL } from './client';
 
 export interface ProductSuggestion {
   suggestions: string[];

@@ -6,17 +6,8 @@
 // commission they owe the platform on what they sold.
 // ─────────────────────────────────────────────
 
-import { Platform } from 'react-native';
-
-// On web, the browser enforces CORS strictly: a page on http://localhost:8081
-// fetching to http://127.0.0.1 is treated as CROSS-origin (different hostname),
-// even though both resolve to the loopback address. Replacing 127.0.0.1 with
-// localhost makes the request same-origin from the browser's perspective.
-// The .env value is intentionally left as-is; we normalise here only.
-const _rawBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1';
-const BASE_URL = Platform.OS === 'web'
-  ? _rawBase.replace('127.0.0.1', 'localhost')
-  : _rawBase;
+// One shared origin for every API module — see ./client.
+import { API_BASE_URL as BASE_URL } from './client';
 
 
 export type CommissionEntryStatus = 'pending' | 'billed' | 'paid';

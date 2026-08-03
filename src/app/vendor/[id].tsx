@@ -20,9 +20,9 @@ import { mapProductToCard } from '../../api/products';
 import { useAuth } from '../../context/AuthContext';
 import { ToastAndroid } from 'react-native';
 import { setFollowState } from '../../api/localFollows';
+import { VendorAvatar } from '../../components/VendorAvatar';
 
 const FALLBACK_BANNER = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=1200';
-const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1493863641943-9b68992a8d07?auto=format&fit=crop&q=80&w=200';
 
 /** Widest the storefront ever gets on a large monitor — beyond this it centres. */
 const MAX_CONTENT_WIDTH = 1200;
@@ -293,7 +293,7 @@ export default function VendorStorefront() {
               shadowRadius: 10,
               elevation: 6,
             }}>
-              <Image source={{ uri: vendor.logo_url ?? FALLBACK_AVATAR }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <VendorAvatar uri={vendor.logo_url} size={96} radius={48} />
             </View>
 
             {!isOwnStore && (
@@ -470,6 +470,7 @@ export default function VendorStorefront() {
                     salePrice={product.salePrice}
                     imageUrl={product.imageUrl}
                     vendorId={product.vendorId}
+                    inStock={product.inStock}
                     onPress={() => router.push(`/product/${product.id}` as any)}
                   />
                 </View>

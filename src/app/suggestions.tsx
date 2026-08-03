@@ -58,6 +58,7 @@ export default function SuggestionsScreen() {
                   salePrice={product.salePrice}
                   imageUrl={product.imageUrl}
                   vendorId={product.vendorId}
+                  inStock={product.inStock}
                   onPress={() => router.push(`/product/${product.id}` as any)}
                 />
               </View>

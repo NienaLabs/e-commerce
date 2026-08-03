@@ -24,6 +24,8 @@ interface ProductCardProps {
   onWishlist?: () => void;
   onAddToCart?: () => void;
   isWishlisted?: boolean;
+  /** Defaults to true so existing callers keep working; pass stock_quantity > 0. */
+  inStock?: boolean;
 }
 
 export const ProductCard = ({
@@ -39,6 +41,7 @@ export const ProductCard = ({
   onWishlist,
   onAddToCart,
   isWishlisted,
+  inStock = true,
 }: ProductCardProps) => {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
@@ -90,6 +93,12 @@ export const ProductCard = ({
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation?.();
+    // Guard as well as disable the control: the card is also reachable by
+    // keyboard on web, where a disabled-looking pill can still fire.
+    if (!inStock) {
+      showToast(`${name} is out of stock`, 'error');
+      return;
+    }
     // Always add to the global cart store
     addItem({
       id,
@@ -183,7 +192,7 @@ export const ProductCard = ({
               );
             }
 
-            toggleItem({ id, name, price, salePrice, imageUrl, vendorId, vendorName, vendorAvatar, inStock: true });
+            toggleItem({ id, name, price, salePrice, imageUrl, vendorId, vendorName, vendorAvatar, inStock });
             if (!isHeartFilled) {
               addEvent({
                 event_type: 'add_to_wishlist',
@@ -234,21 +243,48 @@ export const ProductCard = ({
         {!isDesktop && (
           <Pressable
             onPress={handleAddToCart}
+            disabled={!inStock}
+            accessibilityState={{ disabled: !inStock }}
+            accessibilityLabel={inStock ? `Add ${name} to cart` : `${name} is out of stock`}
             style={({ pressed }) => ({
               position: 'absolute',
               bottom: 10, right: 10,
               width: 36, height: 36, borderRadius: 18,
-              backgroundColor: pressed ? colors.primaryDim : colors.primary,
+              backgroundColor: !inStock ? colors.surfaceMuted : pressed ? colors.primaryDim : colors.primary,
               alignItems: 'center', justifyContent: 'center',
-              shadowColor: colors.primary,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.4,
-              shadowRadius: 8,
-              elevation: 5,
+              opacity: inStock ? 1 : 0.7,
+              ...(inStock
+                ? {
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }
+                : null),
             })}
           >
-            <Ionicons name="cart" size={18} color={colors.ink} />
+            <Ionicons name={inStock ? 'cart' : 'close'} size={18} color={inStock ? colors.ink : colors.inkMuted} />
           </Pressable>
+        )}
+
+        {/* Sold-out veil over the image, so the state is obvious at a glance
+            rather than only discoverable by tapping a disabled button. */}
+        {!inStock && (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: colors.isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.6)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.ink }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: colors.surface, letterSpacing: 0.4 }}>
+                OUT OF STOCK
+              </Text>
+            </View>
+          </View>
         )}
       </View>
 
@@ -278,37 +314,44 @@ export const ProductCard = ({
           {salePrice ? (
             <>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: '#d93651' }}>
-                ${salePrice.toFixed(2)}
+                GH₵{salePrice.toFixed(2)}
               </Text>
               <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: isDesktop ? 14 : 12, color: colors.inkGhost, textDecorationLine: 'line-through' }}>
-                ${price.toFixed(2)}
+                GH₵{price.toFixed(2)}
               </Text>
             </>
           ) : (
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: colors.ink }}>
-              ${price.toFixed(2)}
+              GH₵{price.toFixed(2)}
             </Text>
           )}
         </View>
 
-        {/* Desktop: Add to Cart pill */}
+        {/* Desktop: Add to Cart pill — faded and inert when there's no stock,
+            so the state is legible before the tap rather than after it. */}
         {isDesktop && (
           <Pressable
             onPress={handleAddToCart}
+            disabled={!inStock}
+            accessibilityState={{ disabled: !inStock }}
+            accessibilityLabel={inStock ? `Add ${name} to cart` : `${name} is out of stock`}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: pressed ? colors.primaryDim : colors.primary,
+              backgroundColor: !inStock ? colors.surfaceMuted : pressed ? colors.primaryDim : colors.primary,
               borderRadius: 20,
               paddingHorizontal: 16,
               paddingVertical: 8,
               gap: 6,
-              shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
+              opacity: inStock ? 1 : 0.6,
+              ...(inStock
+                ? { shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }
+                : null),
             })}
           >
-            <Ionicons name="cart" size={16} color={colors.ink} />
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: colors.ink }}>
-              Add
+            <Ionicons name={inStock ? 'cart' : 'close-circle-outline'} size={16} color={inStock ? colors.ink : colors.inkMuted} />
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13, color: inStock ? colors.ink : colors.inkMuted }}>
+              {inStock ? 'Add' : 'Out of stock'}
             </Text>
           </Pressable>
         )}

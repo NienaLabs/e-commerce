@@ -1,4 +1,8 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1';
+// Routed through the shared helper so every module agrees on one origin.
+// Modules that built their own URL hit http://127.0.0.1 while auth/vendors
+// used localhost — different origins to a browser, and a second HTTP cache.
+import { API_BASE_URL as BASE_URL } from './client';
+
 
 export interface NotificationResponse {
   id: string;

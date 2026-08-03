@@ -79,14 +79,26 @@ export const useEventStore = create<EventStoreState>()(
       },
 
       _switchUser: (userId: string | null) => {
-        // Update the storage key to be user-scoped
-        currentStorageName = userId
+        const nextName = userId
           ? `ecommerce-event-store-${userId}`
           : 'ecommerce-event-store-guest';
-        // Clear in-memory state first
-        set({ pendingEvents: [] });
-        // Rehydrate from the new user-scoped storage
-        useEventStore.persist.rehydrate();
+        if (currentStorageName === nextName) return;
+        currentStorageName = nextName;
+
+        // Same hazard as the cart and wishlist stores: clearing state after
+        // repointing the key persists the empty array over the queue, and the
+        // rehydrate that follows just reads it back. Events queued but not yet
+        // uploaded were dropped on every launch.
+        void (async () => {
+          let stored: QueuedEvent[] = [];
+          try {
+            const raw = await customStorage.getItem(nextName);
+            if (raw) stored = JSON.parse(raw)?.state?.pendingEvents ?? [];
+          } catch {
+            stored = [];
+          }
+          set({ pendingEvents: stored });
+        })();
       },
     }),
     {

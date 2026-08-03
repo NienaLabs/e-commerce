@@ -52,8 +52,27 @@ const customStorage = {
   },
 };
 
+const GUEST_STORAGE_NAME = 'vendor-cart-storage-guest';
+
 // Track the current storage key so we can change it per user
 let currentStorageName = 'vendor-cart-storage';
+
+/**
+ * Fold a guest cart into a signed-in cart. Matching lines (same variant id)
+ * have their quantities summed rather than one silently replacing the other.
+ */
+function mergeCarts(existing: CartItem[], incoming: CartItem[]): CartItem[] {
+  const merged = [...existing];
+  for (const item of incoming) {
+    const match = merged.findIndex((i) => i.id === item.id);
+    if (match >= 0) {
+      merged[match] = { ...merged[match], quantity: merged[match].quantity + item.quantity };
+    } else {
+      merged.push(item);
+    }
+  }
+  return merged;
+}
 
 const jsonStorage = createJSONStorage(() => customStorage);
 
@@ -112,14 +131,48 @@ export const useCartStore = create<CartState>()(
       },
 
       _switchUser: (userId: string | null) => {
-        // Update the storage key to be user-scoped
-        currentStorageName = userId
+        const previousName = currentStorageName;
+        const nextName = userId
           ? `vendor-cart-storage-${userId}`
           : 'vendor-cart-storage-guest';
-        // Clear in-memory state first
-        set({ items: [] });
-        // Rehydrate from the new user-scoped storage
-        useCartStore.persist.rehydrate();
+
+        if (previousName === nextName) return;
+
+        // Anything sitting in the guest cart was put there by the person who
+        // just signed in, so it has to travel with them. Previously the key
+        // simply changed and those items were stranded in the guest bucket —
+        // from the shopper's side the cart looked emptied by logging in.
+        const carryOver = userId && previousName === GUEST_STORAGE_NAME ? get().items : [];
+
+        currentStorageName = nextName;
+
+        // Read the target partition ourselves instead of clearing state and
+        // asking persist to refill it.
+        //
+        // The obvious version — set({ items: [] }) then rehydrate() — destroys
+        // the cart it is trying to load. The middleware persists on *every*
+        // set, and currentStorageName already points at the new partition, so
+        // the clear writes [] straight over the stored cart; rehydrate then
+        // faithfully reads back the empty array it just caused. A signed-in
+        // shopper lost their cart on every single launch.
+        void (async () => {
+          let stored: CartItem[] = [];
+          try {
+            const raw = await customStorage.getItem(nextName);
+            if (raw) stored = JSON.parse(raw)?.state?.items ?? [];
+          } catch {
+            // Unreadable or malformed partition — start empty rather than throw.
+            stored = [];
+          }
+
+          set({ items: carryOver.length ? mergeCarts(stored, carryOver) : stored });
+
+          if (carryOver.length) {
+            // Empty the guest bucket so the next signed-out shopper starts
+            // clean and these items can't be merged in a second time.
+            void customStorage.removeItem(GUEST_STORAGE_NAME);
+          }
+        })();
       },
     }),
     {

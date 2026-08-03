@@ -92,7 +92,7 @@ export default function VendorDashboard() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>Recent Orders</Text>
               <Pressable onPress={() => router.push('/vendor-dashboard/orders' as any)}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#28b463', letterSpacing: 0.5 }}>SEE ALL</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#29B463', letterSpacing: 0.5 }}>SEE ALL</Text>
               </Pressable>
             </View>
             <View style={{ backgroundColor: colors.isDark ? '#2a2a2a' : '#ffffff', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
@@ -100,7 +100,7 @@ export default function VendorDashboard() {
                 <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.inkMuted }}>No recent orders.</Text>
               ) : (
                 recentOrders.map((o, i) => {
-                  const statusColor = o.status === 'delivered' ? '#28b463' : o.status === 'cancelled' ? '#ff4d4d' : colors.inkMuted;
+                  const statusColor = o.status === 'delivered' ? '#29B463' : o.status === 'cancelled' ? '#ff4d4d' : colors.inkMuted;
                   const statusLabel = o.status.charAt(0).toUpperCase() + o.status.slice(1);
                   return (
                     <View key={o.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: i === recentOrders.length - 1 ? 0 : 1, borderBottomColor: colors.isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
@@ -111,7 +111,7 @@ export default function VendorDashboard() {
                           {new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </Text>
                       )}
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink, width: 60 }}>${o.total_amount.toFixed(2)}</Text>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink, width: 60 }}>GH₵{o.total_amount.toFixed(2)}</Text>
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: statusColor, width: 70, textAlign: 'right' }}>{statusLabel}</Text>
                     </View>
                   );
@@ -184,7 +184,7 @@ export default function VendorDashboard() {
             <View style={{ gap: 16 }}>
               {alerts.slice(0, 3).map((alert, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#28b463', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#29B463', alignItems: 'center', justifyContent: 'center' }}>
                     <Ionicons name={alert.type === 'payout' ? 'wallet' : 'receipt'} size={20} color="#fff" />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -240,7 +240,7 @@ const iconForCategory = (name: string): keyof typeof Ionicons.glyphMap =>
 // Alternating tints, matching the rest of the dashboard's palette.
 const CATEGORY_TINTS = [
   { light: '#fff9c4', dark: '#3a3a1a', accent: '#ffb300' },
-  { light: '#e8f5e9', dark: '#1a3a1a', accent: '#28b463' },
+  { light: '#e8f5e9', dark: '#1a3a1a', accent: '#29B463' },
 ];
 
 function TopCategories({ vendorId, token }: { vendorId: string; token: string }) {
@@ -337,7 +337,7 @@ function TopStatCard({ title, value, desc, icon }: { title: string; value: strin
   const { colors } = useTheme();
   return (
     <View style={{ flex: 1, minWidth: 140, height: 110, borderRadius: 20, overflow: 'hidden' }}>
-      <LinearGradient colors={['#28b463', '#1e8449']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, padding: 16, paddingRight: 50 }}>
+      <LinearGradient colors={['#29B463', '#1e8449']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, padding: 16, paddingRight: 50 }}>
         {/* Tilted Watermark Icon */}
         <Ionicons name={icon} size={70} color="rgba(255,255,255,0.15)" style={{ position: 'absolute', right: -15, bottom: -15, transform: [{ rotate: '-15deg' }] }} />
         
@@ -394,7 +394,7 @@ function RevenuePanel({ revenueData, thisMonth, total, loading }: { revenueData:
               <View key={d.period} style={{ flex: 1, alignItems: 'center' }}>
                 <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9.5, color: isPeak ? colors.ink : colors.inkMuted, marginBottom: 5 }}>{compact(d.revenue)}</Text>
                 {isPeak ? (
-                  <LinearGradient colors={['#28b463', '#1e8449']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: '60%', height: h, borderRadius: 6 }} />
+                  <LinearGradient colors={['#29B463', '#1e8449']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: '60%', height: h, borderRadius: 6 }} />
                 ) : (
                   <View style={{ width: '60%', height: h, borderRadius: 6, backgroundColor: colors.isDark ? 'rgba(40,180,99,0.15)' : 'rgba(40,180,99,0.2)' }} />
                 )}

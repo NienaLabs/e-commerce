@@ -297,11 +297,11 @@ export default function ProductDetail() {
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
               {product.discount_price ? (
                 <>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 27 : 32, color: '#d93651' }}>${product.discount_price}</Text>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: isNarrow ? 16 : 18, color: colors.inkGhost, textDecorationLine: 'line-through', paddingBottom: 4 }}>${product.actual_price}</Text>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 27 : 32, color: '#d93651' }}>GH₵{product.discount_price}</Text>
+                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: isNarrow ? 16 : 18, color: colors.inkGhost, textDecorationLine: 'line-through', paddingBottom: 4 }}>GH₵{product.actual_price}</Text>
                 </>
               ) : (
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 27 : 32, color: colors.ink }}>${product.actual_price}</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 27 : 32, color: colors.ink }}>GH₵{product.actual_price}</Text>
               )}
             </View>
 
@@ -391,24 +391,18 @@ export default function ProductDetail() {
               </View>
             )}
             
-            {/* Benefits */}
-            <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, padding: 20, marginBottom: 40 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <Ionicons name="checkmark-circle-outline" size={24} color={colors.success} style={{ marginRight: 12 }} />
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>Free 2-day delivery</Text>
-              </View>
-              {product.warranty_info ? (
+            {/* Benefits — only what the vendor actually stated. Delivery speed
+                and warranty length were hardcoded promises the platform can't
+                keep on every vendor's behalf, so the block now renders only
+                when there is real warranty info to show. */}
+            {!!product.warranty_info && (
+              <View style={{ backgroundColor: colors.surfaceSoft, borderRadius: 16, padding: 20, marginBottom: 40 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="shield-checkmark-outline" size={24} color={colors.info} style={{ marginRight: 12 }} />
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>{product.warranty_info}</Text>
                 </View>
-              ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="shield-checkmark-outline" size={24} color={colors.info} style={{ marginRight: 12 }} />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.inkSoft }}>1-year warranty included</Text>
-                </View>
-              )}
-            </View>
+              </View>
+            )}
 
             {/* Customer Reviews */}
             <View style={{ marginBottom: 40 }}>
@@ -517,12 +511,15 @@ export default function ProductDetail() {
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginBottom: 2 }}>Total Price</Text>
           <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: 'Inter_700Bold', fontSize: isNarrow ? 19 : 22, color: colors.ink }}>
-            ${product.discount_price ?? product.actual_price}
+            GH₵{product.discount_price ?? product.actual_price}
           </Text>
         </View>
         <View style={{ flex: 2, minWidth: 0 }}>
           <Button
             title={inStock ? 'Add to Cart' : 'Out of Stock'}
+            // The tap was already a no-op when out of stock, but the button
+            // still looked live. Fade it so the state reads before the tap.
+            disabled={!inStock}
             onPress={() => {
               if (!inStock) return;
               
@@ -546,6 +543,12 @@ export default function ProductDetail() {
                 price: product.actual_price,
                 salePrice: product.discount_price ?? undefined,
                 imageUrl: firstImage,
+                // Without these the cart row falls back to "Vendor: Unknown".
+                // Adding from a product card passed them; adding from the
+                // detail page did not, which is the common path.
+                vendorId: product.vendor_id,
+                vendorName: product.vendor_name ?? undefined,
+                vendorAvatar: product.vendor_logo_url ?? undefined,
                 quantity: 1,
                 selectedAttributes: Object.keys(finalAttributes).length > 0 ? finalAttributes : undefined,
               });

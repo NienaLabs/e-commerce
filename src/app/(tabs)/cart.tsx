@@ -22,8 +22,49 @@ export default function Cart() {
   const getSubtotal = useCartStore((state) => state.getSubtotal);
 
   const subtotal = getSubtotal();
-  const shipping = 5.00;
-  const total = subtotal + shipping;
+  // There is no platform shipping fee — the backend sets SHIPPING_FEE = 0.0 and
+  // customers pay the vendor in cash on delivery. A `shipping = 5.00` was being
+  // added to a `total` that nothing rendered; live, it would have overstated
+  // every basket by $5 against what checkout actually charges.
+
+  // ── Live stock for everything in the cart ──
+  // The cart stores a snapshot taken at add-to-cart time, so an item can sell
+  // out while it sits here. The backend rejects the order in that case, which
+  // surfaced as a raw failure at the very last step. Re-check current stock so
+  // the cart can say so up front and refuse to proceed.
+  const cartProductIds = React.useMemo(
+    () => [...new Set(cartItems.map(i => i.productId))],
+    [cartItems],
+  );
+
+  const { data: liveProducts = [] } = useQuery({
+    queryKey: ['cart-stock', cartProductIds.join(',')],
+    queryFn: () => Promise.all(cartProductIds.map(id => getProduct(id))),
+    enabled: cartProductIds.length > 0,
+    // Stock is the one thing here that must not be stale.
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+
+  const stockByProductId = React.useMemo(
+    () => Object.fromEntries(liveProducts.map(p => [p.id, p.stock_quantity])),
+    [liveProducts],
+  );
+
+  /** undefined while stock is still loading — treated as available. */
+  const availabilityFor = (item: { productId: string; quantity: number }) => {
+    const stock = stockByProductId[item.productId];
+    if (stock === undefined) return { state: 'unknown' as const, stock };
+    if (stock <= 0) return { state: 'out' as const, stock };
+    if (stock < item.quantity) return { state: 'partial' as const, stock };
+    return { state: 'ok' as const, stock };
+  };
+
+  const blockingItems = cartItems.filter(i => {
+    const s = availabilityFor(i).state;
+    return s === 'out' || s === 'partial';
+  });
+  const checkoutBlocked = blockingItems.length > 0;
 
   // ── "Complete the set" — based on the user's purchase history ──
   const { data: completeTheSetShelf } = useQuery({
@@ -118,12 +159,48 @@ export default function Cart() {
                   shadowRadius: 16,
                   elevation: 2,
                 }}>
-                  <Image source={{ uri: item.imageUrl }} style={{ width: 84, height: 84, borderRadius: 12, backgroundColor: colors.surfaceSoft }} />
+                  {/* The thumbnail is the natural way back to the product. */}
+                  <Pressable
+                    onPress={() => router.push(`/product/${item.productId}` as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${item.name}`}
+                    style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+                  >
+                    <Image source={{ uri: item.imageUrl }} style={{ width: 84, height: 84, borderRadius: 12, backgroundColor: colors.surfaceSoft }} />
+                  </Pressable>
                   <View style={{ flex: 1, marginLeft: 16, justifyContent: 'space-between' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <View style={{ flex: 1, marginRight: 12 }}>
                         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }} numberOfLines={2}>{item.name}</Text>
-                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 4 }}>Vendor: {item.vendorName || 'Unknown'}</Text>
+                        {/* Only claim a vendor when we actually know one — "Unknown"
+                            reads like the store is missing rather than unlabelled. */}
+                        {!!item.vendorName && (
+                          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 4 }}>Vendor: {item.vendorName}</Text>
+                        )}
+                        {(() => {
+                          const { state, stock } = availabilityFor(item);
+                          if (state === 'out') {
+                            return (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
+                                <Ionicons name="close-circle" size={14} color={colors.error} />
+                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.error }}>
+                                  Out of stock — remove to continue
+                                </Text>
+                              </View>
+                            );
+                          }
+                          if (state === 'partial') {
+                            return (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
+                                <Ionicons name="alert-circle" size={14} color={colors.warning} />
+                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.warning }}>
+                                  Only {stock} left — reduce the quantity
+                                </Text>
+                              </View>
+                            );
+                          }
+                          return null;
+                        })()}
                         {item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0 && (
                           <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkSoft, marginTop: 4, textTransform: 'capitalize' }}>
                             {Object.entries(item.selectedAttributes).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' | ')}
@@ -136,7 +213,10 @@ export default function Cart() {
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12 }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>
-                        ${(item.salePrice ?? item.price).toFixed(2)}
+                        {/* Checkout, the order summary and commissions are all
+                            in cedis. The cart said "$" for the same number, so
+                            the price appeared to change between screens. */}
+                        GH₵{(item.salePrice ?? item.price).toFixed(2)}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceSoft, borderRadius: 16, padding: 4 }}>
                         <Pressable
@@ -189,7 +269,26 @@ export default function Cart() {
 
       {cartItems.length > 0 && (
         <View style={{ padding: 24, paddingBottom: Math.max(24, insets.bottom + 80), backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.surfaceMuted }}>
-          <Button title="Proceed to Checkout" onPress={() => router.push('/checkout')} />
+          {checkoutBlocked && (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
+              <Ionicons name="warning-outline" size={16} color={colors.error} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 12.5, color: colors.error, lineHeight: 18 }}>
+                {blockingItems.length === 1
+                  ? '1 item is no longer available in the quantity you selected.'
+                  : `${blockingItems.length} items are no longer available in the quantities you selected.`}
+              </Text>
+            </View>
+          )}
+          <Button
+            title={checkoutBlocked ? 'Resolve items to checkout' : 'Proceed to Checkout'}
+            disabled={checkoutBlocked}
+            onPress={() => {
+              // Belt and braces: the button is disabled, but never let a
+              // sold-out basket reach checkout.
+              if (checkoutBlocked) return;
+              router.push('/checkout');
+            }}
+          />
         </View>
       )}
     </SafeAreaView>

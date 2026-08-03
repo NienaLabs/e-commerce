@@ -17,6 +17,12 @@ export interface UserResponse {
   role?: string | null;       // 'admin' | 'vendor' | 'user' — from backend
   is_suspended?: boolean;
   category_interest_ids?: string[];
+  // Preference fields the backend already returns from GET /users/me. They were
+  // missing here, so the Preferences screen had no way to show current values.
+  date_of_birth?: string | null;
+  gender?: 'male' | 'female' | 'non_binary' | 'prefer_not' | null;
+  budget_preference?: 'budget' | 'mid' | 'premium' | null;
+  referral_source?: 'social' | 'friend' | 'ad' | 'search' | 'other' | null;
   created_at: string;
   updated_at: string;
 }

@@ -111,7 +111,7 @@ export default function VendorOrdersScreen() {
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Text style={{ fontFamily: font.bold, fontSize: 16, color: colors.ink }}>${order.total_amount.toFixed(2)}</Text>
+                    <Text style={{ fontFamily: font.bold, fontSize: 16, color: colors.ink }}>GH₵{order.total_amount.toFixed(2)}</Text>
                     <Ionicons name="chevron-forward" size={18} color={colors.inkGhost} />
                   </View>
                 </View>
