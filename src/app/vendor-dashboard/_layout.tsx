@@ -161,7 +161,7 @@ function VendorDashboardShell() {
                     item.label === 'Orders' ? 'ORDERS' :
                       item.label === 'Analytics' ? 'STATISTICS' :
                         item.label === 'Products' ? 'PRODUCT' :
-                          item.label === 'Store Settings' ? 'CATEGORY' :
+                          item.label === 'Store Settings' ? 'SETTINGS' :
                             item.label.toUpperCase();
 
                   return (
@@ -275,7 +275,7 @@ function VendorDashboardShell() {
                     item.label === 'Orders' ? 'ORDERS' :
                       item.label === 'Analytics' ? 'STATISTICS' :
                         item.label === 'Products' ? 'PRODUCT' :
-                          item.label === 'Store Settings' ? 'CATEGORY' :
+                          item.label === 'Store Settings' ? 'SETTINGS' :
                             item.label.toUpperCase();
 
                   if (item.label === 'Support') return null; // Hide extra links for exact UI match

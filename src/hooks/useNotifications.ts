@@ -88,8 +88,11 @@ async function getWebFcmToken(): Promise<string | undefined> {
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
 
-    // Register the service worker
-    await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    // Register the one service worker this app has. It handles both the PWA
+    // shell cache and FCM background messages — see public/sw.js for why they
+    // can't be separate files. Registering the same script twice (this call and
+    // the one in app/_layout.tsx) is an idempotent update check, not a conflict.
+    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
 
     // CRITICAL: Wait until the service worker is fully activated.
     // navigator.serviceWorker.ready blocks until there is an active (not just installing) SW.
@@ -104,16 +107,23 @@ async function getWebFcmToken(): Promise<string | undefined> {
 
     if (fcmToken) {
       console.log('[FCM] Token obtained:', fcmToken.slice(0, 20) + '...');
-      // Handle foreground (in-app) messages
+      // Handle foreground (in-app) messages.
+      //
+      // Must go through the service worker registration rather than
+      // `new Notification(...)`: Chrome on Android — including an installed
+      // PWA, which is the main way this app gets used — does not implement the
+      // Notification constructor and throws "Illegal constructor" outright.
+      // showNotification() is the only path that works on every platform.
       onMessage(messaging, (payload) => {
         console.log('[FCM] Foreground message:', payload);
-        // Show native notification even when app is in foreground
-        if (Notification.permission === 'granted') {
-          new Notification(payload.notification?.title || 'New Notification', {
-            body: payload.notification?.body || '',
-            icon: '/favicon.png',
-          });
-        }
+        if (Notification.permission !== 'granted') return;
+        // Same dual payload shape the service worker handles — see public/sw.js.
+        const data = payload.data || {};
+        swRegistration.showNotification(payload.notification?.title || data.title || 'New Notification', {
+          body: payload.notification?.body || data.body || '',
+          icon: '/favicon.png',
+          data,
+        }).catch((e) => console.warn('[FCM] Could not show foreground notification:', e));
       });
     } else {
       console.error('[FCM] getToken returned empty token — check VAPID key in Firebase console');

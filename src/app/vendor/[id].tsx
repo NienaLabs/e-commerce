@@ -3,12 +3,12 @@ import {
   View,
   Text,
   ScrollView,
-  Image,
   Pressable,
   ActivityIndicator,
   useWindowDimensions,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -245,9 +245,12 @@ export default function VendorStorefront() {
         {/* ─── Banner ─── */}
         <View style={{ height: bannerHeight, width: '100%', backgroundColor: colors.surfaceMuted }}>
           <Image
-            source={{ uri: vendor.banner_url ?? FALLBACK_BANNER }}
+            source={vendor.banner_url ?? FALLBACK_BANNER}
             style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+            priority="high"
           />
           <View style={{
             position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,

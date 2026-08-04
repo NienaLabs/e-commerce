@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getVendorMe, updateVendor, deleteVendor } from '../../../api/vendors';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { uploadFile } from '../../../api/upload';
 import { Header, ScreenBody, Section, Card, Field, Btn, Badge, font } from '../../../components/vendor/kit';
 
 export default function GeneralSettingsScreen() {
@@ -18,6 +19,7 @@ export default function GeneralSettingsScreen() {
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [uploading, setUploading] = useState<'logoUrl' | 'bannerUrl' | null>(null);
   const [form, setForm] = useState({
     storeName: '', storeSlug: '', bio: '', logoUrl: '', bannerUrl: '',
     latitude: null as number | null, longitude: null as number | null,
@@ -39,20 +41,35 @@ export default function GeneralSettingsScreen() {
     }
   }, [vendor]);
 
+  // A picked-but-not-yet-uploaded image is a device-local URI (blob: on web,
+  // file:// on native). Saving one puts a reference in the database that only
+  // this device could ever resolve — and not even here after a reload. Treat
+  // those as "no change" rather than persisting them.
+  const isUploadableUrl = (url: string) => /^https?:\/\//i.test(url);
+
   const mutation = useMutation({
     mutationFn: () =>
       updateVendor(token!, vendor!.id, {
         store_name: form.storeName,
         store_slug: form.storeSlug,
         bio: form.bio,
-        ...(form.logoUrl && { logo_url: form.logoUrl }),
-        ...(form.bannerUrl && { banner_url: form.bannerUrl }),
+        ...(isUploadableUrl(form.logoUrl) && { logo_url: form.logoUrl }),
+        ...(isUploadableUrl(form.bannerUrl) && { banner_url: form.bannerUrl }),
         ...(form.latitude !== null && { latitude: form.latitude }),
         ...(form.longitude !== null && { longitude: form.longitude }),
       }),
     onSuccess: () => {
       setSaved(true);
+      // The logo and name appear in several places, each under its own cache
+      // key. Only 'vendor-me' was being invalidated, so a freshly uploaded
+      // logo showed on the storefront (that request cache-busts every time)
+      // but the home "Shop by Store" shelf kept serving its 5-minute-stale
+      // list, and Discover its own copy. Refresh everything that renders
+      // vendor identity.
       queryClient.invalidateQueries({ queryKey: ['vendor-me'] });
+      queryClient.invalidateQueries({ queryKey: ['vendors-shelf'] });
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      if (vendor?.id) queryClient.invalidateQueries({ queryKey: ['vendor', vendor.id] });
       showToast('Store details saved successfully!', 'success');
       setTimeout(() => setSaved(false), 3000);
     },
@@ -89,7 +106,32 @@ export default function GeneralSettingsScreen() {
       aspect: field === 'logoUrl' ? [1, 1] : [3, 1],
       quality: 0.8,
     });
-    if (!result.canceled) setForm(prev => ({ ...prev, [field]: result.assets[0].uri }));
+    if (result.canceled) return;
+
+    const localUri = result.assets[0].uri;
+    // Show the local file immediately so the picker feels responsive…
+    setForm(prev => ({ ...prev, [field]: localUri }));
+
+    // …but the picker hands back a device-local URI (file:// on native,
+    // blob: on web). That was being saved to the vendor profile verbatim, so
+    // logo_url pointed at a path only that one device could resolve — it
+    // looked fine to the vendor until they reloaded, and was never visible to
+    // anyone else. Upload it and store the public URL instead.
+    setUploading(field);
+    try {
+      // A logo is never drawn larger than 96px; a banner spans the page.
+      const publicUrl = await uploadFile(localUri, token!, field === 'logoUrl' ? 'logo' : 'banner');
+      setForm(prev => ({ ...prev, [field]: publicUrl }));
+    } catch (e: any) {
+      // Roll back to whatever was saved before, so we can't persist a local URI.
+      setForm(prev => ({
+        ...prev,
+        [field]: field === 'logoUrl' ? (vendor?.logo_url ?? '') : (vendor?.banner_url ?? ''),
+      }));
+      showToast(e?.message ?? 'Could not upload image. Please try again.', 'error');
+    } finally {
+      setUploading(null);
+    }
   };
 
   const fetchLocation = async () => {
@@ -130,10 +172,20 @@ export default function GeneralSettingsScreen() {
                 {form.logoUrl ? <Image source={{ uri: form.logoUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : (
                   <><Ionicons name="image-outline" size={26} color={colors.primaryDim} /><Text style={{ fontFamily: font.labelM, fontSize: 11, color: colors.primaryDim, marginTop: 6 }}>Logo</Text></>
                 )}
+                {uploading === 'logoUrl' && (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+                    <ActivityIndicator color="#fff" />
+                  </View>
+                )}
               </Pressable>
               <Pressable onPress={() => pickImage('bannerUrl')} style={{ flex: 1, height: 100, borderRadius: 18, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.surfaceMuted, overflow: 'hidden' }}>
                 {form.bannerUrl ? <Image source={{ uri: form.bannerUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : (
                   <><Ionicons name="image-outline" size={26} color={colors.inkGhost} /><Text style={{ fontFamily: font.labelM, fontSize: 11, color: colors.inkGhost, marginTop: 6 }}>Banner image</Text></>
+                )}
+                {uploading === 'bannerUrl' && (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' }}>
+                    <ActivityIndicator color="#fff" />
+                  </View>
                 )}
               </Pressable>
             </View>
@@ -170,7 +222,13 @@ export default function GeneralSettingsScreen() {
             </Card>
           </Section>
 
-          <Btn title={mutation.isPending ? 'Saving…' : 'Save changes'} loading={mutation.isPending} disabled={!vendor} onPress={() => mutation.mutate()} fullWidth />
+          <Btn
+            title={mutation.isPending ? 'Saving…' : uploading ? 'Uploading image…' : 'Save changes'}
+            loading={mutation.isPending || !!uploading}
+            disabled={!vendor || !!uploading}
+            onPress={() => mutation.mutate()}
+            fullWidth
+          />
 
           {/* Danger zone */}
           <Section title="Danger zone" caption="Deleting your store is permanent. Every product, sale and your store profile will be erased.">

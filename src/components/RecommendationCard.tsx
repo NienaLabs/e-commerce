@@ -2,14 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  Image,
   Pressable,
   useWindowDimensions,
   Platform,
   StyleSheet,
   Animated as RNAnimated,
 } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, cancelAnimation, withTiming } from 'react-native-reanimated';
+import { Image } from 'expo-image';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, cancelAnimation, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
@@ -17,7 +17,7 @@ import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
 import { useEventStore } from '../store/eventStore';
-import { smoothSpringTransition } from '../utils/transitions';
+import { useSizedImage } from '../utils/imageUrl';
 import { Skeleton } from './Skeleton';
 
 interface RecommendationCardProps {
@@ -31,6 +31,8 @@ interface RecommendationCardProps {
   vendorAvatar?: string;
   reasonLabel?: string;
   hasDiscount?: boolean;
+  /** Defaults to true so existing callers keep working; pass stock_quantity > 0. */
+  inStock?: boolean;
   onPress?: () => void;
 }
 
@@ -45,6 +47,7 @@ export const RecommendationCard = ({
   vendorAvatar,
   reasonLabel,
   hasDiscount,
+  inStock = true,
   onPress,
 }: RecommendationCardProps) => {
   const { colors } = useTheme();
@@ -53,6 +56,7 @@ export const RecommendationCard = ({
   const { showToast } = useToast();
   const [imageError, setImageError] = useState(false);
   const addEvent = useEventStore((state) => state.addEvent);
+  const cardImage = useSizedImage(imageUrl, isDesktop ? 240 : 160);
 
   const isItemInWishlist = useWishlistStore((state) =>
     state.items.some((i) => i.id === id)
@@ -96,6 +100,14 @@ export const RecommendationCard = ({
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation?.();
+    // These cards used to assume everything was in stock, so a sold-out
+    // product could be added from the home shelves and only revealed itself
+    // at the cart. Guard as well as disable — the control is keyboard
+    // reachable on web.
+    if (!inStock) {
+      showToast(`${name} is out of stock`, 'error');
+      return;
+    }
     addItem({
       id,
       productId: id,
@@ -140,7 +152,7 @@ export const RecommendationCard = ({
       imageUrl,
       vendorId,
       vendorName,
-      inStock: true,
+      inStock,
     });
     
     if (!isItemInWishlist) {
@@ -214,13 +226,27 @@ export const RecommendationCard = ({
           position: 'relative',
         }}
       >
-        <Animated.Image
-          source={{ uri: imageError ? fallbackImage : imageUrl }}
+        {/* These cards are 160–240px wide but were downloading the full-size
+            original — and the home screen renders 75+ of them, which is the
+            single biggest reason browsing felt slow. Ask for a rendition that
+            matches the slot, degrading thumbnail → original → placeholder. */}
+        {/* The home screen mounts ~95 of these. expo-image is what makes that
+            affordable: on web it renders an <img> that defers offscreen tiles
+            (only ~4 per shelf are visible), and on native it keeps a disk cache
+            so a second app launch doesn't re-download the whole catalogue. */}
+        <Image
+          source={imageError ? fallbackImage : cardImage.uri}
           style={{ width: '100%', height: '100%' }}
-          resizeMode="cover"
-          onError={() => setImageError(true)}
-          sharedTransitionTag={`product-image-${id}`}
-          sharedTransitionStyle={smoothSpringTransition}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={200}
+          recyclingKey={id}
+          onError={() => {
+            // First failure retries the full-size original; only once that
+            // fails too do we show the generic placeholder.
+            if (cardImage.isOriginal) setImageError(true);
+            else cardImage.onError();
+          }}
         />
 
         {/* Wishlist heart */}
@@ -279,13 +305,36 @@ export const RecommendationCard = ({
           </View>
         )}
 
+        {/* Sold-out veil, so the state is obvious at a glance rather than only
+            discoverable by tapping. Matches ProductCard. */}
+        {!inStock && (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: colors.isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.6)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: colors.ink }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.surface, letterSpacing: 0.4 }}>
+                OUT OF STOCK
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Quick add to cart */}
         <Pressable
           onPress={handleAddToCart}
+          disabled={!inStock}
+          accessibilityState={{ disabled: !inStock }}
+          accessibilityLabel={inStock ? `Add ${name} to cart` : `${name} is out of stock`}
           style={({ pressed }) => ({
             position: 'absolute',
             bottom: 8,
             right: 8,
+            opacity: inStock ? 1 : 0,
             width: 30,
             height: 30,
             borderRadius: 15,
@@ -372,7 +421,7 @@ export const RecommendationCard = ({
               flexShrink: 0,
             }}>
               {vendorAvatar ? (
-                <Image source={{ uri: vendorAvatar }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                <Image source={vendorAvatar} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryGhost }}>
                   <Ionicons name="storefront-outline" size={10} color="#7a8a05" />

@@ -68,8 +68,16 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
       .setLngLat(coordinate)
       .addTo(map);
 
-    // Use a stable wrapper that always calls the latest onPress ref
-    const stableClickHandler = () => {
+    // Use a stable wrapper that always calls the latest onPress ref.
+    //
+    // stopPropagation is load-bearing, not defensive. MapLibre mounts marker
+    // elements inside the map's own canvas container, and binds the map's
+    // 'click' event on that same container — so without this, one tap on a
+    // marker runs the marker's onPress AND the map's onPress. On Discover that
+    // meant selecting a vendor also dropped the delivery pin on top of the
+    // vendor's icon, since the map handler reads the click's lngLat.
+    const stableClickHandler = (event: MouseEvent) => {
+      event.stopPropagation();
       onPressRef.current?.();
     };
 

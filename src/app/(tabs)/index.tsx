@@ -40,29 +40,33 @@ import { useNotifications } from '../../context/NotificationContext';
 import HeroBanner from '@/components/HeroBanner';
 import { useSidebar } from '../../context/SidebarContext';
 import { useLocationStore } from '../../store/locationStore';
+import { resolveCategory, iconForSchemaKey } from '../../utils/categoryIcons';
 
 
+// Icons come from the shared map so this list, the live-category matcher below,
+// and the all-categories screen can't drift apart again. Ids double as filter
+// schema keys; anything without art yet renders a neutral placeholder.
 const CATEGORIES = [
-  { id: 'electronics', label: 'Electronics', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'fashion', label: 'Fashion', image: require('@/assets/3d icons/3d-clothes.png') },
-  { id: 'home', label: 'Home & Living', image: require('@/assets/3d icons/3d-house.png') },
-  { id: 'phones', label: 'Mobile Phones', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'computers', label: 'Computers & Tablets', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'wearables', label: 'Wearables', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'cameras', label: 'Cameras', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'gaming', label: 'Gaming', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'beauty', label: 'Accessories', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'health_beauty', label: 'Health & Beauty', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'sports', label: 'Sports', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'outdoor', label: 'Outdoors', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'home_appliances', label: 'Home Appliances', image: require('@/assets/3d icons/3d-house.png') },
-  { id: 'food', label: 'Food', image: require('@/assets/3d icons/3d-food.png') },
-  { id: 'automotive', label: 'Automotive', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'toys', label: 'Toys & Hobbies', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'books', label: 'Books', image: require('@/assets/3d icons/3d-clothes.png') },
-  { id: 'art_crafts', label: 'Art & Crafts', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'pet_supplies', label: 'Pet Supplies', image: require('@/assets/3d icons/3d-food.png') },
-];
+  { id: 'electronics', label: 'Electronics' },
+  { id: 'fashion', label: 'Fashion' },
+  { id: 'home', label: 'Home & Living' },
+  { id: 'phones', label: 'Mobile Phones' },
+  { id: 'computers', label: 'Computers & Tablets' },
+  { id: 'wearables', label: 'Wearables' },
+  { id: 'cameras', label: 'Cameras' },
+  { id: 'gaming', label: 'Gaming' },
+  { id: 'beauty', label: 'Accessories' },
+  { id: 'health_beauty', label: 'Health & Beauty' },
+  { id: 'sports', label: 'Sports' },
+  { id: 'outdoor', label: 'Outdoors' },
+  { id: 'home_appliances', label: 'Home Appliances' },
+  { id: 'food', label: 'Food' },
+  { id: 'automotive', label: 'Automotive' },
+  { id: 'toys', label: 'Toys & Hobbies' },
+  { id: 'books', label: 'Books' },
+  { id: 'art_crafts', label: 'Art & Crafts' },
+  { id: 'pet_supplies', label: 'Pet Supplies' },
+].map(c => ({ ...c, image: iconForSchemaKey(c.id) }));
 
 // Every option here is backed by a field the API actually returns, so picking
 // one always changes the list. The previous lists promised things the data
@@ -128,7 +132,7 @@ export default function Home() {
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const insets = useSafeAreaInsets();
   const { unreadCount, pushPermissionStatus, requestPushPermission } = useNotifications();
-  
+
   // Location tracking
   const { city: locationName, status: locationStatus, startTracking } = useLocationStore();
 
@@ -217,10 +221,18 @@ export default function Home() {
 
   const products = useMemo(() => productPages?.pages.flat() ?? [], [productPages]);
 
-  // Fetch grouped products for category shelves
+  // Fetch grouped products for category shelves.
+  //
+  // This screen fires seven requests on mount, and with the global 60s
+  // staleTime every one of them re-fired on each window focus. The shelves are
+  // an editorial "what's popular" view, not a live stock readout — the cart
+  // re-checks stock against the server before checkout — so a couple of
+  // minutes of cache here costs nothing and takes the biggest payload on the
+  // screen out of the refetch storm.
   const { data: groupedCategories = [], isLoading: groupedLoading } = useQuery({
     queryKey: ['groupedProducts', token],
     queryFn: () => getGroupedProducts(15, 5, token),
+    staleTime: 2 * 60 * 1000,
   });
 
   // Fetch recommendation shelves (only if authenticated)
@@ -232,30 +244,26 @@ export default function Home() {
     staleTime: 5 * 60 * 1000, // Cache for 5 mins
   });
 
-  // Fetch real categories to match user preferences
+  // Fetch real categories to match user preferences. The category list is
+  // effectively static — matches the staleTime discover.tsx already uses, so
+  // the two screens share one cache entry instead of invalidating each other.
   const { data: dbCategories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: () => listCategories(0, 50),
+    staleTime: 5 * 60 * 1000,
   });
 
   const displayCategories = useMemo(() => {
-    if (dbCategories.length === 0) return CATEGORIES.map(c => ({ ...c, schemaKey: 'default' }));
+    // The ids in CATEGORIES are already filter schema keys — passing 'default'
+    // here meant the offline fallback list always got generic filters.
+    if (dbCategories.length === 0) return CATEGORIES.map(c => ({ ...c, schemaKey: c.id }));
 
     const mapped = dbCategories.map(c => {
-      let img = require('@/assets/3d icons/3d-house.png');
-      const s = c.slug.toLowerCase();
-      let schemaKey = 'default';
-
-      if (s.includes('electronic')) { img = require('@/assets/3d icons/3d-headphones.png'); schemaKey = 'electronics'; }
-      else if (s.includes('fashion') || s.includes('cloth')) { img = require('@/assets/3d icons/3d-clothes.png'); schemaKey = 'fashion'; }
-      else if (s.includes('home')) { img = require('@/assets/3d icons/3d-house.png'); schemaKey = 'home'; }
-      else if (s.includes('beaut') || s.includes('accessor')) { img = require('@/assets/3d icons/3d-watch.png'); schemaKey = 'beauty'; }
-      else if (s.includes('sport')) { img = require('@/assets/3d icons/3d-sports.png'); schemaKey = 'sports'; }
-      else if (s.includes('food')) { img = require('@/assets/3d icons/3d-food.png'); schemaKey = 'food'; }
-      else if (s.includes('gam')) { img = require('@/assets/3d icons/3d-headphones.png'); schemaKey = 'gaming'; }
-      else if (s.includes('book')) { img = require('@/assets/3d icons/3d-house.png'); schemaKey = 'books'; }
-
-      return { id: c.id, label: c.name, image: img, schemaKey };
+      // Match on slug first, then fall back to the display name — a DB slug
+      // like "cat-7" carries no meaning, but its name usually does.
+      const bySlug = resolveCategory(c.slug);
+      const visual = bySlug.schemaKey === 'default' ? resolveCategory(c.name) : bySlug;
+      return { id: c.id, label: c.name, image: visual.icon, schemaKey: visual.schemaKey };
     });
 
     if (user?.category_interest_ids && user.category_interest_ids.length > 0) {
@@ -272,10 +280,12 @@ export default function Home() {
     queryFn: () => listProducts({ limit: 10, has_discount: true }),
   });
 
-  // Fetch Hero Banners from API
+  // Fetch Hero Banners from API. Merchandising art, changed by hand — no
+  // reason to re-request it every time the window regains focus.
   const { data: heroBanners = [], isLoading: heroBannersLoading } = useQuery({
     queryKey: ['heroBanners'],
     queryFn: () => getHeroBanners(),
+    staleTime: 10 * 60 * 1000,
   });
 
   // Build a product lookup map for hydrating recommendations
@@ -314,6 +324,7 @@ export default function Home() {
               vendorAvatar: product.vendor_logo_url ?? undefined,
               reason_label: item.reason_label,
               has_discount: item.has_discount,
+              inStock: product.stock_quantity > 0,
             };
           })
           .filter(Boolean) as any[],
@@ -344,6 +355,7 @@ export default function Home() {
           vendorAvatar: product.vendor_logo_url ?? undefined,
           reason_label: item.reason_label,
           has_discount: item.has_discount,
+          inStock: product.stock_quantity > 0,
         };
       })
       .filter(Boolean) as any[];
@@ -845,6 +857,7 @@ export default function Home() {
                       vendorId: card.vendorId,
                       reason_label: 'Popular in this category',
                       has_discount: !!card.salePrice,
+                      inStock: card.inStock,
                     };
                   })}
                 />

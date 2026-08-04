@@ -1,10 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, Pressable, Image, Platform, useWindowDimensions, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 
 interface CategoryCardProps {
   label: string;
-  iconSource: any;
+  /** Omit when no 3D icon exists for this category yet — a neutral glyph is
+   *  drawn instead. Borrowing another category's icon reads as a labelling bug
+   *  to shoppers; an obvious placeholder reads as "artwork pending". */
+  iconSource?: any;
   onPress: () => void;
   isActive?: boolean;
   flex?: boolean;
@@ -76,7 +80,18 @@ export const CategoryCard = ({
         justifyContent: 'center',
         marginBottom: 8,
       }}>
-        <Image source={iconSource} style={{ width: 72, height: 72, resizeMode: 'contain' }} />
+        {iconSource ? (
+          <Image source={iconSource} style={{ width: 72, height: 72, resizeMode: 'contain' }} />
+        ) : (
+          <View style={{
+            width: 72, height: 72, borderRadius: 20,
+            backgroundColor: colors.surfaceSoft,
+            borderWidth: 1, borderColor: colors.surfaceMuted,
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Ionicons name="pricetags-outline" size={30} color={colors.inkGhost} />
+          </View>
+        )}
       </View>
 
       <Text style={{

@@ -28,9 +28,9 @@ import KonuraLogo from '../../../assets/images/konura.svg';
 WebBrowser.maybeCompleteAuthSession();
 
 const CAROUSEL_IMAGES = [
-  require('../../../assets/features/konura-flyer.png'),
-  require('../../../assets/features/nice-shopping.png'),
-  require('../../../assets/features/shopping-easy.png'),
+  require('../../../assets/features/konura-flyer.jpg'),
+  require('../../../assets/features/nice-shopping.jpg'),
+  require('../../../assets/features/shopping-easy.jpg'),
 ];
 
 // Auto-playing image carousel with dot indicators

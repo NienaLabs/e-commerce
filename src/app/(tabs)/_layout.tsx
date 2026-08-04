@@ -60,7 +60,11 @@ export default function TabLayout() {
           tabBarActiveTintColor: colors.ink,
           tabBarInactiveTintColor: colors.inkMuted,
           tabBarLabelStyle: {
-            fontFamily: 'Inter-Bold',
+            // 'Inter-Bold' was never a loaded family — the app registers
+            // Inter_700Bold / OpenSans_600SemiBold etc., so this silently fell
+            // back to the system font and the tab bar didn't match anything
+            // else in the app.
+            fontFamily: 'OpenSans_600SemiBold',
             fontSize: 10,
             textTransform: 'uppercase',
             letterSpacing: 0.5,

@@ -18,17 +18,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useMutation } from '@tanstack/react-query';
-import { register, login } from '../../api/auth';
+import { register, login, getGoogleLoginUrl } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import KonuraLogo from '../../../assets/images/konura.svg';
+
+// Closes the browser tab that Google redirects back into. Must run at module
+// scope, before the component mounts — same as (auth)/login.tsx.
+WebBrowser.maybeCompleteAuthSession();
 
 type AccountType = 'customer' | 'vendor';
 
 const CAROUSEL_IMAGES = [
-  require('../../../assets/features/konura-flyer.png'),
-  require('../../../assets/features/nice-shopping.png'),
-  require('../../../assets/features/shopping-easy.png'),
+  require('../../../assets/features/konura-flyer.jpg'),
+  require('../../../assets/features/nice-shopping.jpg'),
+  require('../../../assets/features/shopping-easy.jpg'),
 ];
 
 function ImageCarousel({
@@ -281,6 +287,67 @@ export default function RegisterScreen() {
       }
     } catch (error: any) {
       alert(error.message);
+    }
+  };
+
+  const [googleBusy, setGoogleBusy] = useState(false);
+
+  /**
+   * Sign up with Google.
+   *
+   * Deliberately the same endpoint the login screen uses: /auth/google/login
+   * creates the account if the Google identity is new and signs in if it isn't,
+   * so "sign up" and "sign in" are one flow to the backend. Kept byte-for-byte
+   * consistent with login.tsx's handler so the two can't drift.
+   */
+  const handleGoogleSignUp = async () => {
+    if (googleBusy) return;
+    setGoogleBusy(true);
+    try {
+      const authUrl = await getGoogleLoginUrl();
+      const redirectUri = Linking.createURL('/(auth)/register');
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+      if (result.type !== 'success' || !result.url) return; // user dismissed
+
+      const parsedUrl = Linking.parse(result.url);
+      // The backend delivers the session token in the URL fragment (#token=)
+      // so it never leaks into server logs or Referer headers. Fall back to
+      // the query param for backward compatibility.
+      let token: string | undefined =
+        typeof parsedUrl.queryParams?.token === 'string'
+          ? (parsedUrl.queryParams.token as string)
+          : undefined;
+      if (!token && result.url.includes('#')) {
+        const fragment = result.url.split('#')[1] ?? '';
+        token = new URLSearchParams(fragment).get('token') ?? undefined;
+      }
+      if (!token) {
+        alert('Google sign-up did not return a session. Please try again.');
+        return;
+      }
+
+      const { getMe } = await import('../../api/auth');
+      const user = await getMe(token);
+      await signIn(token, user);
+
+      if (!user.onboarding_done) {
+        router.replace('/(auth)/onboarding' as any);
+      } else if (accountType === 'vendor') {
+        router.replace('/vendor-dashboard');
+      } else if (returnUrl) {
+        router.replace(returnUrl as any);
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (error: any) {
+      console.error(error);
+      if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+        router.replace('/suspended' as any);
+        return;
+      }
+      alert('Google sign-up failed: ' + error.message);
+    } finally {
+      setGoogleBusy(false);
     }
   };
 
@@ -701,6 +768,56 @@ export default function RegisterScreen() {
               : 'Create Account'}
           </Text>
         </LinearGradient>
+      </Pressable>
+
+      {/* OR divider */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: isDark ? '#3a383a' : '#e5e2dc' }} />
+        <Text
+          style={{
+            fontFamily: 'Inter_600SemiBold',
+            fontSize: 12,
+            color: colors.inkGhost,
+            marginHorizontal: 12,
+            letterSpacing: 0.5,
+          }}
+        >
+          OR
+        </Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: isDark ? '#3a383a' : '#e5e2dc' }} />
+      </View>
+
+      {/* Google Sign Up */}
+      <Pressable
+        onPress={handleGoogleSignUp}
+        disabled={googleBusy || registerMutation.isPending}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: googleBusy || registerMutation.isPending }}
+        style={({ pressed }) => ({
+          height: 52,
+          borderRadius: 14,
+          backgroundColor: isDark ? '#2e2c2e' : '#f1f0ec',
+          borderWidth: 1,
+          borderColor: isDark ? '#3a383a' : '#e5e2dc',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          gap: 10,
+          opacity: pressed || googleBusy ? 0.75 : 1,
+          marginBottom: 16,
+          transform: [{ scale: pressed ? 0.978 : 1 }],
+        })}
+      >
+        <Ionicons name="logo-google" size={18} color={colors.ink} />
+        <Text
+          style={{
+            fontFamily: 'Inter_600SemiBold',
+            fontSize: 15,
+            color: colors.ink,
+          }}
+        >
+          {googleBusy ? 'Opening Google…' : 'Continue with Google'}
+        </Text>
       </Pressable>
 
       {/* Terms */}

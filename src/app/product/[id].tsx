@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +15,7 @@ import { getProductCrossSell } from '../../api/recommendations';
 import { useAuth } from '../../context/AuthContext';
 import { getProduct } from '../../api/products';
 import { RecommendationShelfRow } from '../../components/RecommendationShelf';
-import { smoothSpringTransition } from '../../utils/transitions';
+import { Image as ExpoImage } from 'expo-image';
 import { Skeleton } from '../../components/Skeleton';
 
 export default function ProductDetail() {
@@ -218,12 +217,17 @@ export default function ProductDetail() {
           {/* Image Gallery */}
           <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
             <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceSoft, borderRadius: 24, overflow: 'hidden', marginBottom: 16 }}>
-              <Animated.Image 
-                source={{ uri: displayImage }} 
-                style={{ width: '100%', height: '100%' }} 
-                resizeMode="cover" 
-                sharedTransitionTag={`product-image-${product.id}`}
-                sharedTransitionStyle={smoothSpringTransition}
+              {/* Full-size original on purpose — this is the one place the
+                  shopper actually inspects the photo. Lists use the thumbnail
+                  rendition via sizedImageUrl. */}
+              <ExpoImage
+                source={displayImage}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+                recyclingKey={product.id}
+                priority="high"
               />
               {product.discount_price && (
                 <View style={{ position: 'absolute', top: 0, left: 0, backgroundColor: '#d93651', paddingHorizontal: 16, paddingVertical: 8, borderBottomRightRadius: 16 }}>

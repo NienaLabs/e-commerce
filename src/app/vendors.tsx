@@ -4,12 +4,12 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Image,
   ActivityIndicator,
   TextInput,
   useWindowDimensions,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -58,9 +58,11 @@ function VendorGridCard({ vendor, isFollowed, colors }: GridCardProps) {
       <View style={{ height: 72, backgroundColor: colors.surfaceSoft }}>
         {vendor.banner_url ? (
           <Image
-            source={{ uri: vendor.banner_url }}
+            source={vendor.banner_url}
             style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={vendor.id}
           />
         ) : (
           <View

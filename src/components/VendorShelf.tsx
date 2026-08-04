@@ -4,9 +4,9 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Image,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
@@ -58,9 +58,11 @@ function VendorCard({ vendor, isFollowed, colors }: VendorCardProps) {
       >
         {vendor.logo_url ? (
           <Image
-            source={{ uri: vendor.logo_url }}
+            source={vendor.logo_url}
             style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={vendor.id}
           />
         ) : (
           <View

@@ -79,7 +79,9 @@ export default function VendorDashboard() {
           {/* Main Content Area */}
           <View style={{ flex: 3, gap: 24 }}>
             {/* Top Cards (Green themed, detailed descriptions) */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+            {/* alignItems:'stretch' keeps the three cards the same height as
+                the tallest one once any of them grows. */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'stretch' }}>
               <TopStatCard title="CUSTOMERS" value={followers.toLocaleString()} desc="Total number of customers following your store" icon="people" />
               <TopStatCard title="INCOME" value={money(revTotal)} desc="Your total income generated from sales" icon="wallet" />
               <TopStatCard title="PRODUCTS SOLD" value={productsSold.toLocaleString()} desc="Total number of products sold to date" icon="cube" />
@@ -336,7 +338,10 @@ function TopCategories({ vendorId, token }: { vendorId: string; token: string })
 function TopStatCard({ title, value, desc, icon }: { title: string; value: string; desc: string; icon: keyof typeof Ionicons.glyphMap }) {
   const { colors } = useTheme();
   return (
-    <View style={{ flex: 1, minWidth: 140, height: 110, borderRadius: 20, overflow: 'hidden' }}>
+    // minHeight rather than a fixed height: a long income figure (or a longer
+    // description) used to be clipped by the 110px ceiling instead of making
+    // the card taller.
+    <View style={{ flex: 1, minWidth: 140, minHeight: 110, borderRadius: 20, overflow: 'hidden' }}>
       <LinearGradient colors={['#29B463', '#1e8449']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, padding: 16, paddingRight: 50 }}>
         {/* Tilted Watermark Icon */}
         <Ionicons name={icon} size={70} color="rgba(255,255,255,0.15)" style={{ position: 'absolute', right: -15, bottom: -15, transform: [{ rotate: '-15deg' }] }} />

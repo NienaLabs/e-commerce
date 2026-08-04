@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text, ScrollView, Image, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/Button';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useCartStore } from '../../store/cartStore';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { getRecommendationShelf, getProductCrossSell } from '../../api/recommendations';
 import { getProduct } from '../../api/products';
@@ -37,21 +38,33 @@ export default function Cart() {
     [cartItems],
   );
 
-  const { data: liveProducts = [] } = useQuery({
-    queryKey: ['cart-stock', cartProductIds.join(',')],
-    queryFn: () => Promise.all(cartProductIds.map(id => getProduct(id))),
-    enabled: cartProductIds.length > 0,
-    // Stock is the one thing here that must not be stale.
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+  // One query per product rather than a single query keyed on the joined ids.
+  // With the combined key, adding anything to the cart minted a brand-new key
+  // whose data started empty — so every line reverted to "stock unknown" and
+  // the checkout button unblocked itself. Adding an in-stock item was enough to
+  // let a sold-out one through. Per-product queries keep what they already know.
+  const stockQueries = useQueries({
+    queries: cartProductIds.map(id => ({
+      queryKey: ['cart-stock', id],
+      queryFn: () => getProduct(id),
+      // Stock is the one thing here that must not be stale.
+      staleTime: 0,
+      refetchOnWindowFocus: true,
+    })),
   });
 
-  const stockByProductId = React.useMemo(
-    () => Object.fromEntries(liveProducts.map(p => [p.id, p.stock_quantity])),
-    [liveProducts],
-  );
+  const stockByProductId = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const q of stockQueries) {
+      if (q.data) map[q.data.id] = q.data.stock_quantity;
+    }
+    return map;
+  }, [stockQueries]);
 
-  /** undefined while stock is still loading — treated as available. */
+  /** True until every cart line has a confirmed stock figure. */
+  const stockLoading = stockQueries.some(q => q.isPending);
+
+  /** undefined while stock is still loading — reported as 'unknown'. */
   const availabilityFor = (item: { productId: string; quantity: number }) => {
     const stock = stockByProductId[item.productId];
     if (stock === undefined) return { state: 'unknown' as const, stock };
@@ -64,7 +77,11 @@ export default function Cart() {
     const s = availabilityFor(i).state;
     return s === 'out' || s === 'partial';
   });
-  const checkoutBlocked = blockingItems.length > 0;
+
+  // Hold checkout until stock is actually confirmed. Treating "not loaded yet"
+  // as available left a window — a second or two on a slow connection, longer
+  // on mobile data — where a sold-out basket sailed through to checkout.
+  const checkoutBlocked = blockingItems.length > 0 || stockLoading;
 
   // ── "Complete the set" — based on the user's purchase history ──
   const { data: completeTheSetShelf } = useQuery({
@@ -166,7 +183,7 @@ export default function Cart() {
                     accessibilityLabel={`View ${item.name}`}
                     style={({ pressed }) => [pressed && { opacity: 0.7 }]}
                   >
-                    <Image source={{ uri: item.imageUrl }} style={{ width: 84, height: 84, borderRadius: 12, backgroundColor: colors.surfaceSoft }} />
+                    <Image source={item.imageUrl} style={{ width: 84, height: 84, borderRadius: 12, backgroundColor: colors.surfaceSoft }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.id} />
                   </Pressable>
                   <View style={{ flex: 1, marginLeft: 16, justifyContent: 'space-between' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -253,7 +270,7 @@ export default function Cart() {
           </>
         ) : (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 200 }}>
-            <Image source={require('@/assets/3d icons/empty cart.png')} style={{ width: 160, height: 160, marginBottom: 24 }} resizeMode="contain" />
+            <Image source={require('@/assets/3d icons/empty cart.png')} style={{ width: 160, height: 160, marginBottom: 24 }} contentFit="contain" />
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 22, color: colors.ink, marginBottom: 8 }}>
               Your cart is empty
             </Text>
@@ -269,7 +286,9 @@ export default function Cart() {
 
       {cartItems.length > 0 && (
         <View style={{ padding: 24, paddingBottom: Math.max(24, insets.bottom + 80), backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.surfaceMuted }}>
-          {checkoutBlocked && (
+          {/* Only cry wolf about availability once we actually know it —
+              while stock is still loading the button simply waits. */}
+          {blockingItems.length > 0 && (
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
               <Ionicons name="warning-outline" size={16} color={colors.error} style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 12.5, color: colors.error, lineHeight: 18 }}>
@@ -280,7 +299,13 @@ export default function Cart() {
             </View>
           )}
           <Button
-            title={checkoutBlocked ? 'Resolve items to checkout' : 'Proceed to Checkout'}
+            title={
+              blockingItems.length > 0
+                ? 'Resolve items to checkout'
+                : stockLoading
+                  ? 'Checking availability…'
+                  : 'Proceed to Checkout'
+            }
             disabled={checkoutBlocked}
             onPress={() => {
               // Belt and braces: the button is disabled, but never let a

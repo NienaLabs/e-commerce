@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Image, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleProp, ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -40,9 +41,20 @@ export function VendorAvatar({
   ];
 
   if (uri) {
+    // Deliberately NOT routed through sizedImageUrl. Logos upload under the
+    // 'logo' preset, which caps them at 320px — smaller than the 400px
+    // thumbnail uploadThumbnail generates, so substituting the "small"
+    // rendition would download a *bigger* file. Product photos (1080px) are
+    // the ones worth shrinking; see UPLOAD_PRESETS in api/upload.ts.
     return (
       <View style={frame}>
-        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+        <Image
+          source={uri}
+          style={{ width: '100%', height: '100%' }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={uri}
+        />
       </View>
     );
   }

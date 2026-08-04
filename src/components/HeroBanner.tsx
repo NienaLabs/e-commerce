@@ -1,21 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
-  Image,
   StyleSheet,
   useWindowDimensions,
   Pressable,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
 // Default feature images
 const DEFAULT_IMAGES = [
-  require('../../assets/features/konura-flyer.png'),
-  require('../../assets/features/nice-shopping.png'),
-  require('../../assets/features/shopping-easy.png'),
+  require('../../assets/features/konura-flyer.jpg'),
+  require('../../assets/features/nice-shopping.jpg'),
+  require('../../assets/features/shopping-easy.jpg'),
 ];
 
 interface AutoPlayCarouselProps {
@@ -153,12 +153,19 @@ export default function HeroBanner({
         onScrollEndDrag={onScrollEndDrag}
         style={{ width: SCREEN_WIDTH, height }}
       >
+        {/* Eager, unlike the product shelves. There are only three slides and
+            the carousel auto-advances every 4s, so deferring them just means a
+            blank frame the moment it rotates. The first is the largest thing
+            on the home screen, hence the priority. */}
         {slides.map((uri, i) => (
           <Image
             key={i}
-            source={typeof uri === 'string' ? { uri } : uri}
+            source={uri}
             style={{ width: SCREEN_WIDTH, height }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            loading="eager"
+            priority={i === 0 ? 'high' : 'normal'}
           />
         ))}
       </ScrollView>

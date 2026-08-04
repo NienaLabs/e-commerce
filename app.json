@@ -35,7 +35,7 @@
         [
           "expo-splash-screen",
           {
-            "backgroundColor": "#208AEF",
+            "backgroundColor": "#29B463",
             "android": {
               "image": "./assets/favicon/web-app-manifest-512x512.png",
               "imageWidth": 76

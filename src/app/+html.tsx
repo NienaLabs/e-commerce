@@ -15,7 +15,10 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#208AEF" />
+        {/* This is what paints the title/status bar of the installed app.
+            It overrides the manifest's theme_color, so both must match —
+            changing the manifest alone left the header the old template blue. */}
+        <meta name="theme-color" content="#29B463" />
 
         {/*
           Disable body scrolling on web. This makes ScrollView components work closer to how they do on native.

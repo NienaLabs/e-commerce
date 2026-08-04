@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, useWindowDimensions, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -366,7 +367,7 @@ export default function Search() {
                     onPress={() => router.push(`/vendor/${vendor.id || vendor.objectID}` as any)}
                   >
                     {vendor.logo_url ? (
-                      <Image source={{ uri: vendor.logo_url }} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 16 }} />
+                      <Image source={vendor.logo_url} style={{ width: 24, height: 24, borderRadius: 12, marginRight: 16 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={vendor.id} />
                     ) : (
                       <Ionicons name="storefront-outline" size={24} color={colors.inkSoft} style={{ marginRight: 16 }} />
                     )}
@@ -442,7 +443,7 @@ export default function Search() {
                         >
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                             {vendor.logo_url ? (
-                              <Image source={{ uri: vendor.logo_url }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} />
+                              <Image source={vendor.logo_url} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={vendor.id} />
                             ) : (
                               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                                 <Ionicons name="storefront" size={20} color={colors.primary} />

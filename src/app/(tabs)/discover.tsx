@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, Platform, useWindowDimensions, Pressable, Image, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { useLocationStore } from '../../store/locationStore';
@@ -14,8 +13,10 @@ import { MapView, GeoJSONSource, Layer } from '../../components/Map/MapView';
 import { MapMarker } from '../../components/Map/MapMarker';
 import { VendorAvatar } from '../../components/VendorAvatar';
 
-// Helper to get distance badge colors
-function getDistanceBadgeColor(km: number, colors: any) {
+// Helper to get distance badge colors. Accepts null for "no GPS fix yet" —
+// the badge isn't rendered in that case, but this is called before the check.
+function getDistanceBadgeColor(km: number | null, colors: any) {
+  if (km === null) return { bg: colors.surfaceSoft, text: colors.inkMuted };
   if (km < 2) return { bg: colors.primaryGhost, text: colors.primaryDim };
   if (km < 5) return { bg: colors.warningGhost, text: colors.warning };
   return { bg: colors.surfaceSoft, text: colors.inkMuted };
@@ -30,7 +31,12 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
 
   const { latitude, longitude, status: locationStatus, errorMsg } = useLocationStore();
-  const userLocation = latitude && longitude ? { latitude, longitude } : null;
+  // Memoised on the primitives: this object feeds an effect dependency array,
+  // and a fresh object every render would re-fire the route lookup endlessly.
+  const userLocation = useMemo(
+    () => (latitude && longitude ? { latitude, longitude } : null),
+    [latitude, longitude]
+  );
   const loading = locationStatus === 'loading' || locationStatus === 'idle';
   const locationError = errorMsg;
   
@@ -40,36 +46,7 @@ export default function DiscoverScreen() {
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORY_ID);
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
   
-  const [deliveryLocation, setDeliveryLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
-
-  useEffect(() => {
-    if (userLocation && !deliveryLocation) {
-      setDeliveryLocation(userLocation);
-    }
-  }, [userLocation]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      async function checkActiveDelivery() {
-        try {
-          const data = await AsyncStorage.getItem('@active_delivery');
-          if (data) {
-            const parsed = JSON.parse(data);
-            if (parsed.lat && parsed.lng) {
-              setDeliveryLocation({ latitude: parsed.lat, longitude: parsed.lng });
-              if (parsed.vendorId) setSelectedVendor(parsed.vendorId);
-              // Clear it so it only applies right after checkout
-              await AsyncStorage.removeItem('@active_delivery');
-            }
-          }
-        } catch (e) {
-          console.error('Failed to parse active delivery', e);
-        }
-      }
-      checkActiveDelivery();
-    }, [])
-  );
 
   // Real Vendors from API
   const { data: vendors = [], isLoading: vendorsLoading } = useQuery({
@@ -124,34 +101,29 @@ export default function DiscoverScreen() {
       const lat = v.latitude !== null && v.latitude !== undefined ? v.latitude : 5.6037;
       const lng = v.longitude !== null && v.longitude !== undefined ? v.longitude : -0.1870;
 
-      // Calculate accurate distance using haversine
-      let distanceKm = 5.0; // Default fallback distance in km
-      if (deliveryLocation) {
-        distanceKm = haversine(
-          { latitude: deliveryLocation.latitude, longitude: deliveryLocation.longitude },
-          { latitude: lat, longitude: lng },
-          { unit: 'km' }
-        );
-      } else if (userLocation) {
-        distanceKm = haversine(
-          { latitude: userLocation.latitude, longitude: userLocation.longitude },
-          { latitude: lat, longitude: lng },
-          { unit: 'km' }
-        );
-      }
+      // Distance is measured from wherever the shopper actually is. With no
+      // fix on their location we report null rather than inventing a number —
+      // the old code defaulted every vendor to a flat 5.0km, which made the
+      // "nearest first" ordering and every ETA badge quietly meaningless.
+      const distanceKm = userLocation
+        ? haversine(
+            { latitude: userLocation.latitude, longitude: userLocation.longitude },
+            { latitude: lat, longitude: lng },
+            { unit: 'km' }
+          )
+        : null;
 
-      const etaMins = Math.round((distanceKm * 3) + 10);
       return {
         ...v,
         distanceKm,
-        etaMins,
+        etaMins: distanceKm === null ? null : Math.round(distanceKm * 3 + 10),
         isOpen: true,
         lat,
         lng,
         image: v.logo_url ?? null,
       };
     });
-  }, [vendors, userLocation, deliveryLocation]);
+  }, [vendors, userLocation]);
 
   const filteredVendors = processedVendors.filter(v => {
     const matchesSearch = v.store_name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -159,14 +131,17 @@ export default function DiscoverScreen() {
     const matchesCategory = !vendorIdsInCategory || vendorIdsInCategory.has(v.id);
     return matchesSearch && matchesCategory;
   })
-  .sort((a, b) => a.distanceKm - b.distanceKm);
+  // Nearest first when we know where the user is; vendors with no distance
+  // sink to the bottom rather than jumbling in at a fake 5km.
+  .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
 
-  const centerLat = deliveryLocation?.latitude ?? userLocation?.latitude ?? 5.6037;
-  const centerLng = deliveryLocation?.longitude ?? userLocation?.longitude ?? -0.187;
+  const centerLat = userLocation?.latitude ?? 5.6037;
+  const centerLng = userLocation?.longitude ?? -0.187;
 
-  // Fetch route when vendor or delivery location changes
+  // Draw the driving route from the shopper to whichever vendor they tapped —
+  // the map's job here is to answer "how far is this store from me".
   useEffect(() => {
-    if (!selectedVendor || !deliveryLocation) {
+    if (!selectedVendor || !userLocation) {
       setRouteGeoJSON(null);
       return;
     }
@@ -181,7 +156,7 @@ export default function DiscoverScreen() {
     let cancelled = false;
 
     const fetchRoute = async () => {
-      const url = `https://router.project-osrm.org/route/v1/driving/${deliveryLocation.longitude},${deliveryLocation.latitude};${vLng},${vLat}?overview=full&geometries=geojson`;
+      const url = `https://router.project-osrm.org/route/v1/driving/${userLocation.longitude},${userLocation.latitude};${vLng},${vLat}?overview=full&geometries=geojson`;
 
       // The public OSRM demo server is frequently rate-limited and drops
       // connections, surfacing as "Failed to fetch". A single attempt often
@@ -222,23 +197,7 @@ export default function DiscoverScreen() {
     return () => {
       cancelled = true;
     };
-  }, [selectedVendor, deliveryLocation, vendors]);
-
-  const handleSearchSubmit = async () => {
-    if (!searchQuery.trim()) return;
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lon = parseFloat(data[0].lon);
-        setDeliveryLocation({ latitude: lat, longitude: lon });
-        setViewMode('map');
-      }
-    } catch (e) {
-      console.error('Error geocoding search:', e);
-    }
-  };
+  }, [selectedVendor, userLocation, vendors]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -277,9 +236,8 @@ export default function DiscoverScreen() {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearchSubmit}
               returnKeyType="search"
-              placeholder="Search vendors or places"
+              placeholder="Search vendors"
               placeholderTextColor={colors.inkGhost}
               numberOfLines={1}
               style={{ flex: 1, minWidth: 0, marginLeft: 10, fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink, ...(Platform.OS === 'web' ? { outlineStyle: 'none', textOverflow: 'ellipsis' } as any : {}) }}
@@ -352,6 +310,10 @@ export default function DiscoverScreen() {
                 </Text>
               </View>
             ) : (
+              /* The map is a browsing aid, not an input. The only pin the user
+                 gets is their own GPS dot, drawn by the map itself via
+                 showUserLocation — there is deliberately no onPress, so tapping
+                 bare map does nothing. */
               <MapView
                 style={{ flex: 1 }}
                 mapStyle="https://tiles.openfreemap.org/styles/liberty"
@@ -361,37 +323,8 @@ export default function DiscoverScreen() {
                   zoom: 12,
                 }}
                 showUserLocation={true}
-                onPress={(feature) => {
-                  if (feature?.geometry?.coordinates) {
-                    setDeliveryLocation({
-                      longitude: feature.geometry.coordinates[0],
-                      latitude: feature.geometry.coordinates[1],
-                    });
-                  }
-                }}
               >
-                {/* Delivery Pin */}
-                {deliveryLocation && (
-                  <MapMarker
-                    id="delivery-pin"
-                    coordinate={[deliveryLocation.longitude, deliveryLocation.latitude]}
-                    title="Delivery Location"
-                  >
-                    <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'flex-end' }}>
-                      <Ionicons 
-                        name="location" 
-                        size={40} 
-                        color={colors.primary} 
-                        style={Platform.OS === 'web' 
-                          ? { filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' } as any 
-                          : { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }
-                        } 
-                      />
-                    </View>
-                  </MapMarker>
-                )}
-
-                {/* Route Line */}
+                {/* Route Line — from the shopper to the vendor they tapped */}
                 {routeGeoJSON && (
                   <GeoJSONSource id="routeSource" data={routeGeoJSON}>
                     <Layer id="routeFill" type="line" style={{ lineColor: colors.primary, lineWidth: 4 }} />
@@ -428,9 +361,17 @@ export default function DiscoverScreen() {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink, marginBottom: 4 }} numberOfLines={1}>{v.store_name}</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="time" size={12} color={colors.inkMuted} />
-                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkMuted }}>~{v.etaMins} mins</Text>
-                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkGhost }}>•</Text>
+                            {/* Distance is only shown once we have a GPS fix —
+                                see processedVendors. */}
+                            {v.distanceKm !== null && (
+                              <>
+                                <Ionicons name="navigate" size={12} color={colors.inkMuted} />
+                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkMuted }}>
+                                  {v.distanceKm.toFixed(1)} km away
+                                </Text>
+                                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkGhost }}>•</Text>
+                              </>
+                            )}
                             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: v.isOpen ? colors.success : colors.error }}>{v.isOpen ? 'Open' : 'Closed'}</Text>
                           </View>
                         </View>
@@ -478,7 +419,10 @@ export default function DiscoverScreen() {
               borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted,
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>{filteredVendors.length} vendors nearby</Text>
+              {/* "nearby" only means something once we can measure distance. */}
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>
+                {filteredVendors.length} {userLocation ? 'vendors nearby' : 'vendors'}
+              </Text>
             </View>
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: Math.max(120, insets.bottom + 120) }} showsVerticalScrollIndicator={false}>
@@ -508,13 +452,14 @@ export default function DiscoverScreen() {
                         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkSoft }}>Store</Text>
                       </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: badge.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
-                        <Ionicons name="bicycle" size={12} color={badge.text} style={{ marginRight: 4 }} />
-                        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: badge.text }}>~{vendor.etaMins}m</Text>
+                    {vendor.distanceKm !== null && (
+                      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: badge.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                          <Ionicons name="navigate" size={12} color={badge.text} style={{ marginRight: 4 }} />
+                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: badge.text }}>{vendor.distanceKm.toFixed(1)} km</Text>
+                        </View>
                       </View>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkGhost }}>{vendor.distanceKm.toFixed(1)} km</Text>
-                    </View>
+                    )}
                   </Pressable>
                 );
               })}

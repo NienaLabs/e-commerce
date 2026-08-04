@@ -25,6 +25,8 @@ interface ShelfProduct {
   vendorAvatar?: string;
   reason_label: string;
   has_discount: boolean;
+  /** Omit only when the caller genuinely has no stock data. */
+  inStock?: boolean;
 }
 
 interface RecommendationShelfProps {
@@ -178,6 +180,7 @@ export const RecommendationShelfRow = ({
               vendorAvatar={product.vendorAvatar}
               reasonLabel={product.reason_label}
               hasDiscount={product.has_discount}
+              inStock={product.inStock}
               onPress={() =>
                 router.push(`/product/${product.product_id}` as any)
               }

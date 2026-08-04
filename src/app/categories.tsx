@@ -6,21 +6,25 @@ import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { CategoryCard } from '../components/CategoryCard';
 import { WebHeader } from '../components/WebHeader';
+import { resolveCategory } from '../utils/categoryIcons';
 
+// Icons resolved from the shared map — see src/utils/categoryIcons.ts. Ids are
+// left as they were so existing links keep working; the icon is derived from
+// the label, which is what actually describes the category.
 const ALL_CATEGORIES = [
-  { id: 'electronics', label: 'Electronics', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'fashion', label: 'Fashion', image: require('@/assets/3d icons/3d-clothes.png') },
-  { id: 'home', label: 'Home & Living', image: require('@/assets/3d icons/3d-house.png') },
-  { id: 'beauty', label: 'Accessories', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'sports', label: 'Sports', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'food', label: 'Food & Groceries', image: require('@/assets/3d icons/3d-food.png') },
-  { id: 'gaming', label: 'Gaming', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'books', label: 'Books', image: require('@/assets/3d icons/3d-house.png') },
-  { id: 'toys', label: 'Toys', image: require('@/assets/3d icons/3d-watch.png') },
-  { id: 'health', label: 'Health', image: require('@/assets/3d icons/3d-sports.png') },
-  { id: 'automotive', label: 'Automotive', image: require('@/assets/3d icons/3d-headphones.png') },
-  { id: 'art', label: 'Art & Collectibles', image: require('@/assets/3d icons/3d-house.png') },
-];
+  { id: 'electronics', label: 'Electronics' },
+  { id: 'fashion', label: 'Fashion' },
+  { id: 'home', label: 'Home & Living' },
+  { id: 'beauty', label: 'Accessories' },
+  { id: 'sports', label: 'Sports' },
+  { id: 'food', label: 'Food & Groceries' },
+  { id: 'gaming', label: 'Gaming' },
+  { id: 'books', label: 'Books' },
+  { id: 'toys', label: 'Toys' },
+  { id: 'health', label: 'Health' },
+  { id: 'automotive', label: 'Automotive' },
+  { id: 'art', label: 'Art & Collectibles' },
+].map(c => ({ ...c, image: resolveCategory(c.label).icon }));
 
 export default function AllCategoriesScreen() {
   const { colors } = useTheme();

@@ -139,7 +139,8 @@ export default function AddProductScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setIsUploading(true);
         const newUrls = await Promise.all(
-          result.assets.map(asset => uploadFile(asset.uri, token!))
+          // Product shots open full screen, so they keep the largest preset.
+          result.assets.map(asset => uploadFile(asset.uri, token!, 'product'))
         );
         setImages(prev => [...prev, ...newUrls].slice(0, 3));
       }

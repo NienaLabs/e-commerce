@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, ScrollView, Pressable, Image, Platform, useWindowDimensions } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -9,7 +8,7 @@ import { Button } from '../../components/Button';
 import { useWishlistStore } from '../../store/wishlistStore';
 import { useCartStore } from '../../store/cartStore';
 import { useToast } from '../../context/ToastContext';
-import { smoothSpringTransition } from '../../utils/transitions';
+import { Image as ExpoImage } from 'expo-image';
 
 export default function WishlistScreen() {
   const { colors } = useTheme();
@@ -84,7 +83,7 @@ export default function WishlistScreen() {
               onPress={() => router.push(`/product/${item.id}` as any)}
               style={{ backgroundColor: colors.surface, borderRadius: 20, flexDirection: 'row', overflow: 'hidden', borderWidth: 1, borderColor: colors.surfaceMuted, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: colors.isDark ? 0.2 : 0.05, shadowRadius: 8, elevation: 2 }}
             >
-              <Animated.Image source={{ uri: item.imageUrl }} style={{ width: 100, height: 100 }} resizeMode="cover" sharedTransitionTag={`product-image-${item.id}`} sharedTransitionStyle={smoothSpringTransition} />
+              <ExpoImage source={item.imageUrl} style={{ width: 100, height: 100 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.id} />
               <View style={{ flex: 1, padding: 12, justifyContent: 'space-between' }}>
                 <View>
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: colors.ink, marginBottom: 4 }} numberOfLines={2}>{item.name}</Text>
