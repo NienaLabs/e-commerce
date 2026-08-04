@@ -18,11 +18,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useMutation } from '@tanstack/react-query';
-import { register, login, getGoogleLoginUrl } from '../../api/auth';
+import { register, login } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+import { beginGoogleSignIn, consumePendingGoogleToken } from '../../utils/googleAuth';
 import KonuraLogo from '../../../assets/images/konura.svg';
 
 // Closes the browser tab that Google redirects back into. Must run at module
@@ -300,51 +300,51 @@ export default function RegisterScreen() {
    * so "sign up" and "sign in" are one flow to the backend. Kept byte-for-byte
    * consistent with login.tsx's handler so the two can't drift.
    */
+  const completeGoogleSignUp = React.useCallback(
+    async (token: string, landing?: string) => {
+      try {
+        const { getMe } = await import('../../api/auth');
+        const user = await getMe(token);
+        await signIn(token, user);
+
+        if (!user.onboarding_done) {
+          router.replace('/(auth)/onboarding' as any);
+        } else if (accountType === 'vendor') {
+          router.replace('/vendor-dashboard');
+        } else {
+          const target = landing ?? (returnUrl as string | undefined);
+          router.replace((target ?? '/(tabs)') as any);
+        }
+      } catch (error: any) {
+        console.error(error);
+        if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+          router.replace('/suspended' as any);
+          return;
+        }
+        alert('Google sign-up failed: ' + error.message);
+      }
+    },
+    [signIn, accountType, returnUrl],
+  );
+
+  // See login.tsx — on web Google comes back as a page load, not a popup result.
+  useEffect(() => {
+    const pending = consumePendingGoogleToken();
+    if (pending) void completeGoogleSignUp(pending.token, pending.returnTo);
+  }, [completeGoogleSignUp]);
+
   const handleGoogleSignUp = async () => {
     if (googleBusy) return;
     setGoogleBusy(true);
     try {
-      const authUrl = await getGoogleLoginUrl();
-      const redirectUri = Linking.createURL('/(auth)/register');
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-      if (result.type !== 'success' || !result.url) return; // user dismissed
-
-      const parsedUrl = Linking.parse(result.url);
-      // The backend delivers the session token in the URL fragment (#token=)
-      // so it never leaks into server logs or Referer headers. Fall back to
-      // the query param for backward compatibility.
-      let token: string | undefined =
-        typeof parsedUrl.queryParams?.token === 'string'
-          ? (parsedUrl.queryParams.token as string)
-          : undefined;
-      if (!token && result.url.includes('#')) {
-        const fragment = result.url.split('#')[1] ?? '';
-        token = new URLSearchParams(fragment).get('token') ?? undefined;
-      }
-      if (!token) {
-        alert('Google sign-up did not return a session. Please try again.');
-        return;
-      }
-
-      const { getMe } = await import('../../api/auth');
-      const user = await getMe(token);
-      await signIn(token, user);
-
-      if (!user.onboarding_done) {
-        router.replace('/(auth)/onboarding' as any);
-      } else if (accountType === 'vendor') {
-        router.replace('/vendor-dashboard');
-      } else if (returnUrl) {
-        router.replace(returnUrl as any);
-      } else {
-        router.replace('/(tabs)');
-      }
+      const token = await beginGoogleSignIn({
+        redirectPath: '/(auth)/register',
+        returnTo: (returnUrl as string | undefined) ?? undefined,
+      });
+      // Web navigates away and returns undefined; native gives us the token.
+      if (token) await completeGoogleSignUp(token);
     } catch (error: any) {
       console.error(error);
-      if ((error?.message ?? '').toLowerCase().includes('suspended')) {
-        router.replace('/suspended' as any);
-        return;
-      }
       alert('Google sign-up failed: ' + error.message);
     } finally {
       setGoogleBusy(false);

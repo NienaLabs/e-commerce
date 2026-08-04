@@ -16,7 +16,7 @@ export interface NotificationResponse {
 }
 
 export async function fetchNotifications(token: string): Promise<NotificationResponse[]> {
-  const res = await fetch(`${BASE_URL}/notifications/`, {
+  const res = await fetch(`${BASE_URL}/notifications`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Failed to fetch notifications');

@@ -64,7 +64,7 @@ export async function listCategories(skip = 0, limit = 100): Promise<Category[]>
   if (skip !== undefined) params.append('skip', String(skip));
   if (limit !== undefined) params.append('limit', String(limit));
 
-  const url = `${BASE_URL}/categories/?${params.toString()}`;
+  const url = `${BASE_URL}/categories?${params.toString()}`;
   const res = await fetch(url, {
     headers: {
       Accept: 'application/json',
@@ -74,7 +74,7 @@ export async function listCategories(skip = 0, limit = 100): Promise<Category[]>
 }
 
 export async function createCategory(token: string, data: CategoryCreate): Promise<Category> {
-  const url = `${BASE_URL}/categories/`;
+  const url = `${BASE_URL}/categories`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {

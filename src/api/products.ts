@@ -115,7 +115,7 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Pro
   if (params.category_id) query.set('category_id', params.category_id);
   if (params.has_discount !== undefined) query.set('has_discount', String(params.has_discount));
 
-  const res = await fetch(`${BASE_URL}/products/?${query.toString()}`);
+  const res = await fetch(`${BASE_URL}/products?${query.toString()}`);
   return handleResponse<Product[]>(res);
 }
 
@@ -169,7 +169,7 @@ export interface Category {
 
 /** GET /categories/ — get list of product categories */
 export async function listCategories(): Promise<Category[]> {
-  const res = await fetch(`${BASE_URL}/categories/`);
+  const res = await fetch(`${BASE_URL}/categories`);
   return handleResponse<Category[]>(res);
 }
 
@@ -184,7 +184,7 @@ export async function createProduct(
   token: string,
   payload: ProductCreatePayload
 ): Promise<Product> {
-  const res = await fetch(`${BASE_URL}/products/`, {
+  const res = await fetch(`${BASE_URL}/products`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

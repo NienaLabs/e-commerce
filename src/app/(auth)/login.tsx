@@ -18,10 +18,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
-import { login, getGoogleLoginUrl } from '../../api/auth';
+import { login } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
+import { beginGoogleSignIn, consumePendingGoogleToken } from '../../utils/googleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
 import KonuraLogo from '../../../assets/images/konura.svg';
 
@@ -267,45 +267,48 @@ export default function LoginScreen() {
     }
   };
 
+  /** Turn a session token into a signed-in user and send them onwards. */
+  const completeGoogleSignIn = React.useCallback(
+    async (token: string, landing?: string) => {
+      try {
+        const { getMe } = await import('../../api/auth');
+        const user = await getMe(token);
+        await signIn(token, user);
+        if (!user.onboarding_done) {
+          router.replace('/(auth)/onboarding' as any);
+        } else {
+          const target = landing ?? (returnUrl as string | undefined);
+          router.replace((target ?? '/(tabs)') as any);
+        }
+      } catch (error: any) {
+        console.error(error);
+        if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+          router.replace('/suspended' as any);
+          return;
+        }
+        alert('Google login failed: ' + error.message);
+      }
+    },
+    [signIn, returnUrl],
+  );
+
+  // Web returns from Google as a fresh page load carrying #token=… — there is
+  // no popup promise to resolve, so the token has to be picked up on mount.
+  useEffect(() => {
+    const pending = consumePendingGoogleToken();
+    if (pending) void completeGoogleSignIn(pending.token, pending.returnTo);
+  }, [completeGoogleSignIn]);
+
   const handleGoogleLogin = async () => {
     try {
-      const authUrl = await getGoogleLoginUrl();
-      const redirectUri = Linking.createURL('/(auth)/login');
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-      if (result.type === 'success' && result.url) {
-        const parsedUrl = Linking.parse(result.url);
-        // The backend delivers the session token in the URL fragment (#token=)
-        // so it never leaks into server logs or Referer headers. Fall back to
-        // the query param for backward compatibility.
-        let token: string | undefined =
-          typeof parsedUrl.queryParams?.token === 'string'
-            ? (parsedUrl.queryParams.token as string)
-            : undefined;
-        if (!token && result.url.includes('#')) {
-          const fragment = result.url.split('#')[1] ?? '';
-          token = new URLSearchParams(fragment).get('token') ?? undefined;
-        }
-        if (token && typeof token === 'string') {
-          const { getMe } = await import('../../api/auth');
-          const user = await getMe(token);
-          await signIn(token, user);
-          if (!user.onboarding_done) {
-            router.replace('/(auth)/onboarding' as any);
-          } else {
-            if (returnUrl) {
-              router.replace(returnUrl as any);
-            } else {
-              router.replace('/(tabs)');
-            }
-          }
-        }
-      }
+      const token = await beginGoogleSignIn({
+        redirectPath: '/(auth)/login',
+        returnTo: (returnUrl as string | undefined) ?? undefined,
+      });
+      // Web navigates away and returns undefined; native gives us the token.
+      if (token) await completeGoogleSignIn(token);
     } catch (error: any) {
       console.error(error);
-      if ((error?.message ?? '').toLowerCase().includes('suspended')) {
-        router.replace('/suspended' as any);
-        return;
-      }
       alert('Google login failed: ' + error.message);
     }
   };

@@ -59,7 +59,7 @@ function authHeaders(token: string) {
 
 /** GET /tickets — list the caller's tickets (newest first) */
 export async function getMyTickets(token: string): Promise<SupportTicket[]> {
-  const res = await fetch(`${BASE_URL}/tickets/`, {
+  const res = await fetch(`${BASE_URL}/tickets`, {
     headers: authHeaders(token),
   });
   return handleResponse<SupportTicket[]>(res);
@@ -75,7 +75,7 @@ export async function getTicket(token: string, ticketId: string): Promise<Suppor
 
 /** POST /tickets — create a new ticket */
 export async function createTicket(token: string, payload: CreateTicketPayload): Promise<SupportTicket> {
-  const res = await fetch(`${BASE_URL}/tickets/`, {
+  const res = await fetch(`${BASE_URL}/tickets`, {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify(payload),

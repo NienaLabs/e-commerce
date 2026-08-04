@@ -82,7 +82,7 @@ export async function listVendors(params: ListVendorsParams = {}): Promise<Vendo
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
 
-  const res = await fetch(`${BASE_URL}/vendors/?${query.toString()}`);
+  const res = await fetch(`${BASE_URL}/vendors?${query.toString()}`);
   return handleResponse<Vendor[]>(res);
 }
 
@@ -124,7 +124,7 @@ export async function createVendor(
   token: string,
   payload: CreateVendorPayload
 ): Promise<Vendor> {
-  const res = await fetch(`${BASE_URL}/vendors/`, {
+  const res = await fetch(`${BASE_URL}/vendors`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

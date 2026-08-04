@@ -63,7 +63,7 @@ export async function getRecommendations(
   perShelf: number = 20
 ): Promise<RecommendationResponse> {
   const res = await fetch(
-    `${BASE_URL}/api/v1/recommendations/?per_shelf=${perShelf}`,
+    `${BASE_URL}/api/v1/recommendations?per_shelf=${perShelf}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     }
