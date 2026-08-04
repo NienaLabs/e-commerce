@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
-import { login, getGoogleLoginUrl } from '../../api/auth';
+import { login, getGoogleLoginUrl, getMe } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -248,17 +248,15 @@ export default function LoginScreen() {
         const token = params.get('token');
         if (token) {
           setIsLoggingIn(true);
-          import('../../api/auth').then(({ getMe }) => {
-            return getMe(token).then((user) => {
-              return signIn(token, user).then(() => {
-                if (!user.onboarding_done) {
-                  router.replace('/(auth)/onboarding' as any);
-                } else if (returnUrl) {
-                  router.replace(returnUrl as any);
-                } else {
-                  router.replace('/(tabs)');
-                }
-              });
+          getMe(token).then((user) => {
+            return signIn(token, user).then(() => {
+              if (!user.onboarding_done) {
+                router.replace('/(auth)/onboarding' as any);
+              } else if (returnUrl) {
+                router.replace(returnUrl as any);
+              } else {
+                router.replace('/(tabs)');
+              }
             });
           }).catch((error: any) => {
             console.error(error);
@@ -278,7 +276,6 @@ export default function LoginScreen() {
     if (!email || !password) return;
     setIsLoggingIn(true);
     try {
-      const { getMe } = await import('../../api/auth');
       const session = await login({ username: email, password });
       const user = await getMe(session.token);
       await signIn(session.token, user);
@@ -330,7 +327,6 @@ export default function LoginScreen() {
           token = new URLSearchParams(fragment).get('token') ?? undefined;
         }
         if (token && typeof token === 'string') {
-          const { getMe } = await import('../../api/auth');
           const user = await getMe(token);
           await signIn(token, user);
           if (!user.onboarding_done) {
