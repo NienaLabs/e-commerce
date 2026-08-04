@@ -305,8 +305,15 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     try {
       const authUrl = await getGoogleLoginUrl();
-      // On web, Expo Router strips the (auth) group from the URL path, so the actual URL is /login.
-      // We must pass the exact URL that the popup will land on, or WebBrowser will ignore the popup's message.
+      
+      // On web, popups are often flaky or blocked, and window.opener communication can fail.
+      // Standard full-page redirect is the most reliable method for web OAuth.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = authUrl;
+        return; // The useEffect on mount will catch the token when Google redirects back
+      }
+
+      // On native mobile (iOS/Android), use the secure WebBrowser popup
       const redirectUri = Linking.createURL('/login');
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
       if (result.type === 'success' && result.url) {
