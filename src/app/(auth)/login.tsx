@@ -239,6 +239,41 @@ export default function LoginScreen() {
 
   const { signIn } = useAuth();
 
+  // Handle full-page redirects on Web (e.g., returning from Google OAuth)
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash && hash.includes('token=')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const token = params.get('token');
+        if (token) {
+          setIsLoggingIn(true);
+          import('../../api/auth').then(({ getMe }) => {
+            return getMe(token).then((user) => {
+              return signIn(token, user).then(() => {
+                if (!user.onboarding_done) {
+                  router.replace('/(auth)/onboarding' as any);
+                } else if (returnUrl) {
+                  router.replace(returnUrl as any);
+                } else {
+                  router.replace('/(tabs)');
+                }
+              });
+            });
+          }).catch((error: any) => {
+            console.error(error);
+            if ((error?.message ?? '').toLowerCase().includes('suspended')) {
+              router.replace('/suspended' as any);
+            } else {
+              alert('Google login failed: ' + error.message);
+            }
+            setIsLoggingIn(false);
+          });
+        }
+      }
+    }
+  }, []);
+
   const handleLogin = async () => {
     if (!email || !password) return;
     setIsLoggingIn(true);
@@ -270,7 +305,9 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     try {
       const authUrl = await getGoogleLoginUrl();
-      const redirectUri = Linking.createURL('/(auth)/login');
+      // On web, Expo Router strips the (auth) group from the URL path, so the actual URL is /login.
+      // We must pass the exact URL that the popup will land on, or WebBrowser will ignore the popup's message.
+      const redirectUri = Linking.createURL('/login');
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
       if (result.type === 'success' && result.url) {
         const parsedUrl = Linking.parse(result.url);
