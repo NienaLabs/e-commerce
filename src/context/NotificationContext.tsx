@@ -111,7 +111,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           is_read: event.is_read || false,
           created_at: event.created_at || new Date().toISOString(),
         } as NotificationResponse;
-        setNotifications((prev) => [newNotif, ...prev]);
+        // Dedupe by id: the same notification can arrive twice (a user who is
+        // also a vendor matches both the user and vendor broadcast, plus socket
+        // reconnects can replay), and it may already be in the fetched list.
+        setNotifications((prev) =>
+          prev.some((n) => n.id === newNotif.id) ? prev : [newNotif, ...prev]
+        );
       }
     });
     return unsubscribe;
