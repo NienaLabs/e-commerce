@@ -51,7 +51,14 @@ const WebSocketContext = createContext<WebSocketContextType>({
 
 // ── Provider ───────────────────────────────────────────────────────────────────
 
-const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000')
+// Deployed API Gateway WebSocket endpoint (wss://…/prod). When set we use the
+// single-endpoint model — one URL, identity passed via query params — because
+// API Gateway WebSocket APIs don't do path routing like /ws/user/{id}.
+const WS_GATEWAY_URL = process.env.EXPO_PUBLIC_WS_URL;
+
+// Fallback for local dev against the uvicorn backend, which DOES serve the
+// path-based @app.websocket routes.
+const LEGACY_WS_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000')
   .replace(/^http/, 'ws'); // → ws:// or wss://
 
 const RECONNECT_DELAY_MS = 3000;
@@ -72,9 +79,25 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const buildWsUrl = useCallback((): string | null => {
     if (!token) return null; // no session — don't connect
+
+    // Production: single API Gateway endpoint, identity in the query string.
+    if (WS_GATEWAY_URL) {
+      const p = new URLSearchParams({ token });
+      if (vendor?.id) {
+        p.set('role', 'vendor');
+        p.set('vendorId', vendor.id);
+      } else if (user?.id) {
+        p.set('role', 'user');
+      } else {
+        return null;
+      }
+      return `${WS_GATEWAY_URL}?${p.toString()}`;
+    }
+
+    // Local dev: path-based routing on uvicorn.
     const params = `?token=${encodeURIComponent(token)}`;
-    if (vendor?.id) return `${BASE_URL}/ws/vendor/${vendor.id}${params}`;
-    if (user?.id)   return `${BASE_URL}/ws/user/${user.id}${params}`;
+    if (vendor?.id) return `${LEGACY_WS_BASE}/ws/vendor/${vendor.id}${params}`;
+    if (user?.id)   return `${LEGACY_WS_BASE}/ws/user/${user.id}${params}`;
     return null;
   }, [vendor, user, token]);
 
