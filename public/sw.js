@@ -104,7 +104,7 @@ self.addEventListener('activate', (e) => {
 // browser fetches it directly with its own HTTP cache, exactly as it would
 // with no service worker at all.
 self.addEventListener('fetch', (e) => {
-  if (e.request.mode !== 'navigate') return;
+  if (e.request.mode !== 'navigate' || e.request.url.includes('/api/')) return;
 
   e.respondWith(
     fetch(e.request)

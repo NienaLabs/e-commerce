@@ -6,6 +6,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://6ddppysfz5onv3n37neep242em0fhxmm.lambda-url.us-east-2.on.aws/:path*"
+    },
+    {
       "source": "/:path*",
       "destination": "/"
     }
