@@ -225,11 +225,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error: any) {
         console.error('Failed to load user:', error);
-        await removeToken();
+        
         // A suspended account gets a dedicated screen instead of a silent
         // bounce back to login with no explanation.
         if ((error?.message ?? '').toLowerCase().includes('suspended')) {
           router.replace('/suspended' as any);
+        } else {
+          // Only remove the token and clear session on definite authentication failures (e.g. 401 Unauthorized, 403 Forbidden).
+          // Otherwise, it is likely a network issue/timeout/CORS/5xx, so we should keep the token to let the user retry.
+          const isAuthFailure = 
+            error?.status === 401 || 
+            error?.status === 403 || 
+            (error?.message ?? '').toLowerCase().includes('unauthorized') || 
+            (error?.message ?? '').toLowerCase().includes('credentials') ||
+            (error?.message ?? '').toLowerCase().includes('invalid token');
+
+          if (isAuthFailure) {
+            await removeToken();
+            setTokenState(null);
+            setUser(null);
+            setVendor(null);
+            setHasVendorAccount(false);
+          }
         }
       } finally {
         // Mark the initial load cycle as done, then let the routing guard run

@@ -131,7 +131,14 @@ function VendorDashboardShell() {
             <View>
               {/* Store header / Logo */}
               <Pressable
-                onPress={() => { sidebar.close(); router.push('/vendor/v1' as any); }}
+                onPress={() => {
+                  sidebar.close();
+                  if (vendor?.id) {
+                    router.push(`/vendor/${vendor.id}` as any);
+                  } else {
+                    router.push('/vendor-dashboard' as any);
+                  }
+                }}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 30 }}
               >
                 <View style={{ width: 40, height: 40, borderRadius: 12, overflow: 'hidden', backgroundColor: '#e8f5e9', alignItems: 'center', justifyContent: 'center', marginRight: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }}>
@@ -243,7 +250,13 @@ function VendorDashboardShell() {
             <View>
               {/* Store header / Logo — real vendor data */}
               <Pressable
-                onPress={() => router.push('/vendor/v1' as any)}
+                onPress={() => {
+                  if (vendor?.id) {
+                    router.push(`/vendor/${vendor.id}` as any);
+                  } else {
+                    router.push('/vendor-dashboard' as any);
+                  }
+                }}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 40 }}
               >
                 {/* Logo: image if available, else coloured initial */}

@@ -195,19 +195,32 @@ export default function VendorStorefront() {
   }
 
   if (vendorError || !vendor) {
+    const isDefinitelyNoProfile = (vendorError as any)?.status === 404;
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', padding: 32 }} edges={['top']}>
         <Ionicons name="storefront-outline" size={64} color={colors.inkGhost} />
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginTop: 16, marginBottom: 8 }}>Store not found</Text>
-        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center' }}>
-          This vendor may have been removed or doesn&apos;t exist.
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, marginTop: 16, marginBottom: 8 }}>
+          {isDefinitelyNoProfile ? 'Store not found' : 'Connection failed'}
         </Text>
-        <Pressable
-          onPress={() => router.back()}
-          style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: colors.ink, borderRadius: 24 }}
-        >
-          <Text style={{ fontFamily: 'Inter_700Bold', color: colors.surface }}>Go Back</Text>
-        </Pressable>
+        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted, textAlign: 'center' }}>
+          {isDefinitelyNoProfile 
+            ? "This vendor may have been removed or doesn't exist." 
+            : "We couldn't connect to the server. Please check your internet connection and try again."}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{ paddingHorizontal: 24, paddingVertical: 12, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.surfaceMuted, borderRadius: 24 }}
+          >
+            <Text style={{ fontFamily: 'Inter_700Bold', color: colors.ink }}>Go Back</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
+            style={{ paddingHorizontal: 24, paddingVertical: 12, backgroundColor: colors.ink, borderRadius: 24 }}
+          >
+            <Text style={{ fontFamily: 'Inter_700Bold', color: colors.surface }}>Try Again</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
@@ -296,7 +309,7 @@ export default function VendorStorefront() {
               shadowRadius: 10,
               elevation: 6,
             }}>
-              <VendorAvatar uri={vendor.logo_url} size={96} radius={48} />
+              <VendorAvatar uri={vendor.logo_url} size={avatarSize} radius={avatarSize / 2} />
             </View>
 
             {!isOwnStore && (

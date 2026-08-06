@@ -65,7 +65,8 @@ export const MapView: React.FC<MapViewProps> = ({
       <Map
         style={styles.map}
         mapStyle={mapStyle}
-        logo={false}
+        logoEnabled={true}
+        attributionEnabled={true}
         onPress={onPress}
       >
         <Camera

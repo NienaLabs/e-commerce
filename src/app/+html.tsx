@@ -15,6 +15,12 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
+        {/* iOS PWA Support */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Konura" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        
         {/* This is what paints the title/status bar of the installed app.
             It overrides the manifest's theme_color, so both must match —
             changing the manifest alone left the header the old template blue. */}
