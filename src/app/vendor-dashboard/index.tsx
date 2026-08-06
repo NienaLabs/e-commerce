@@ -14,8 +14,8 @@ import { AuthContext } from '../../context/AuthContext';
 import { Header, Section, Card, ScreenBody, EmptyState, Badge, Skeleton, useResponsive, font, glass } from '../../components/vendor/kit';
 import { useVendorDrawer } from '../../context/VendorDrawerContext';
 
-const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const compact = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${(n ?? 0).toFixed(0)}`);
+const money = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const compact = (n: number) => (n >= 1000 ? `GH₵ ${(n / 1000).toFixed(1)}k` : `GH₵ ${(n ?? 0).toFixed(0)}`);
 // Commission figures come from the backend in cedis — keep them in cedis.
 const cedis = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

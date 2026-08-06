@@ -21,12 +21,12 @@ export interface CategoryFilterSchema {
 }
 
 const PRICE_PRESET_OPTIONS: FilterOption[] = [
-  { label: 'Under $25', value: '0-25' },
-  { label: '$25 – $50', value: '25-50' },
-  { label: '$50 – $100', value: '50-100' },
-  { label: '$100 – $250', value: '100-250' },
-  { label: '$250 – $500', value: '250-500' },
-  { label: '$500+', value: '500-99999' },
+  { label: 'Under GH₵25', value: '0-25' },
+  { label: 'GH₵25 – GH₵50', value: '25-50' },
+  { label: 'GH₵50 – GH₵100', value: '50-100' },
+  { label: 'GH₵100 – GH₵250', value: '100-250' },
+  { label: 'GH₵250 – GH₵500', value: '250-500' },
+  { label: 'GH₵500+', value: '500-99999' },
 ];
 
 export const SORT_OPTIONS: FilterOption[] = [

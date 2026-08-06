@@ -15,5 +15,7 @@ const _rawBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1';
 
 export const API_BASE_URL: string =
   Platform.OS === 'web'
-    ? _rawBase.replace('127.0.0.1', 'localhost')
+    ? (_rawBase.startsWith('/')
+        ? (typeof window !== 'undefined' ? window.location.origin + _rawBase : _rawBase)
+        : _rawBase.replace('127.0.0.1', 'localhost'))
     : _rawBase;

@@ -14,7 +14,7 @@ interface Props {
   loading: boolean;
 }
 
-const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const PerformanceCards: React.FC<Props> = ({ data, loading }) => {
   if (loading || !data) {

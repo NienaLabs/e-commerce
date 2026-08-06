@@ -9,7 +9,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { getVendorSummary, getVendorRevenue, getVendorTopProducts, getVendorOrdersBreakdown } from '../../api/analytics';
 import { Header, ScreenBody, Section, Card, StatGrid, StatCard, EmptyState, Divider, font } from '../../components/vendor/kit';
 
-const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type Tone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 const STATUS_TONE: Record<string, Tone> = {
@@ -72,7 +72,7 @@ export default function VendorAnalyticsScreen() {
                     return (
                       <View key={d.period} style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={{ fontFamily: font.bold, fontSize: 10, color: isLast ? colors.ink : colors.inkMuted, marginBottom: 6 }}>
-                          {d.revenue >= 1000 ? `$${(d.revenue / 1000).toFixed(1)}k` : `$${d.revenue.toFixed(0)}`}
+                          {d.revenue >= 1000 ? `GH₵ ${(d.revenue / 1000).toFixed(1)}k` : `GH₵ ${d.revenue.toFixed(0)}`}
                         </Text>
                         {isLast ? (
                           <LinearGradient colors={[colors.primary, colors.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={{ width: '80%', height: barHeight, borderRadius: 9 }} />

@@ -16,7 +16,7 @@ interface Props {
   loading: boolean;
 }
 
-const money = (n: number) => `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number) => `GH₵ ${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const shortId = (id: string) => `#${(id ?? '').slice(0, 6).toUpperCase()}`;
 const prettyDay = (d: string) => {
   const date = new Date(d);

@@ -9,7 +9,7 @@ import { getVendorMe, getVendorProducts } from '../../api/vendors';
 import { AuthContext } from '../../context/AuthContext';
 import { Header, ScreenBody, Card, Badge, EmptyState, Btn, Skeleton, font } from '../../components/vendor/kit';
 
-const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
+const money = (n: number) => `GH₵ ${(n ?? 0).toFixed(2)}`;
 
 export default function VendorProductsScreen() {
   const { colors } = useTheme();
