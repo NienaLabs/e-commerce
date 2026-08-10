@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createVendor } from '../api/vendors';
+import { uploadFile } from '../api/upload';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
@@ -249,25 +250,41 @@ export default function BecomeVendorScreen() {
                 }
                 setStep(s => s + 1);
               } else {
+                if (!token) {
+                  showToast('You must be logged in to register as a vendor.', 'error');
+                  return;
+                }
                 setIsSubmitting(true);
                 try {
-                  if (token) {
-                    await createVendor(token, {
-                      store_name: form.storeName,
-                      store_slug: form.storeSlug,
-                      bio: form.description,
-                      // Logo & banner upload temporarily disabled — AWS S3 coming soon
-                      ...(form.latitude !== null && { latitude: form.latitude }),
-                      ...(form.longitude !== null && { longitude: form.longitude }),
-                    });
-
-                    showToast('Vendor account created! Pending admin review.', 'success');
-                    // Refresh vendor in context THEN navigate — the layout will show the pending screen
-                    await refreshVendor();
-                    router.replace('/vendor-dashboard' as any);
-                  } else {
-                    showToast('You must be logged in to register as a vendor.', 'error');
+                  // form.logoUrl / form.bannerUrl hold LOCAL image URIs until
+                  // now — upload them to S3 and use the returned public URLs.
+                  // Images are optional; a failed upload is surfaced and aborts
+                  // so the vendor isn't created with a broken/missing logo.
+                  let logo_url: string | undefined;
+                  let banner_url: string | undefined;
+                  try {
+                    if (form.logoUrl) logo_url = await uploadFile(form.logoUrl, token, 'logo');
+                    if (form.bannerUrl) banner_url = await uploadFile(form.bannerUrl, token, 'banner');
+                  } catch (uploadErr: any) {
+                    showToast(uploadErr?.message || 'Image upload failed. Please try again.', 'error');
+                    setIsSubmitting(false);
+                    return;
                   }
+
+                  await createVendor(token, {
+                    store_name: form.storeName,
+                    store_slug: form.storeSlug,
+                    bio: form.description,
+                    ...(logo_url && { logo_url }),
+                    ...(banner_url && { banner_url }),
+                    ...(form.latitude !== null && { latitude: form.latitude }),
+                    ...(form.longitude !== null && { longitude: form.longitude }),
+                  });
+
+                  showToast('Vendor account created! Pending admin review.', 'success');
+                  // Refresh vendor in context THEN navigate — the layout will show the pending screen
+                  await refreshVendor();
+                  router.replace('/vendor-dashboard' as any);
                 } catch (e: any) {
                   showToast(e.message || 'Failed to create vendor account', 'error');
                 } finally {

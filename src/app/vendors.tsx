@@ -20,7 +20,6 @@ import { getAllFollowing } from '../api/localFollows';
 import { VendorAvatar } from '../components/VendorAvatar';
 
 
-// ─── Vendor Grid Card ─────────────────────────────────────────────
 
 interface GridCardProps {
   vendor: Vendor;

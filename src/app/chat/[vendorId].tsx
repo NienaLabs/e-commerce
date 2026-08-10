@@ -1,192 +1,143 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
-import { View, Text, Pressable, TextInput, Platform, FlatList, ScrollView, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useTheme } from '../../theme/ThemeContext';
 import { AuthContext } from '../../context/AuthContext';
-import { API_BASE_URL } from '../../api/client';
+import { useWebSocket } from '../../context/WebSocketContext';
+import { useToast } from '../../context/ToastContext';
+import { ChatThread } from '../../components/ChatThread';
+import {
+  getVendorMessages, sendVendorMessage, canMessageVendor, ChatMessageDTO,
+} from '../../api/chat';
 
-// Was defaulting to :8000 — the API sits behind nginx on :80, so that
-// fallback could never have worked. Use the one shared origin.
-const BASE_URL = API_BASE_URL;
-const WS_URL = BASE_URL.replace(/^http/, 'ws');
+const QUICK_REPLIES = ['Where is my order?', 'Can we arrange delivery?', 'Is this still available?', 'Thank you!'];
+const POLL_MS = 4000;
 
-const QUICK_REPLIES = ['Is this in stock?', 'Can I get a discount?', 'What are the dimensions?', 'Do you offer returns?'];
+// Merge incoming messages into the list, de-duped by id and kept in time order.
+function mergeMessages(prev: ChatMessageDTO[], incoming: ChatMessageDTO[]): ChatMessageDTO[] {
+  const byId = new Map(prev.map((m) => [m.id, m]));
+  for (const m of incoming) byId.set(m.id, m);
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
 
-export default function ChatScreen() {
-  const { colors } = useTheme();
+export default function CustomerChatScreen() {
   const { vendorId, vendorName } = useLocalSearchParams<{ vendorId: string; vendorName?: string }>();
   const { user, token } = useContext(AuthContext);
-  const [input, setInput] = useState('');
-  const flatListRef = useRef<FlatList>(null);
-  const vId = Array.isArray(vendorId) ? vendorId[0] : (vendorId ?? 'unknown');
+  const { subscribe } = useWebSocket();
+  const { showToast } = useToast();
+
+  const vId = Array.isArray(vendorId) ? vendorId[0] : (vendorId ?? '');
   const displayName = Array.isArray(vendorName) ? vendorName[0] : (vendorName ?? 'Vendor Store');
-  const [messages, setMessages] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const ws = useRef<WebSocket | null>(null);
 
-  useEffect(() => {
-    if (!user?.id || !token) return;
+  const [messages, setMessages] = useState<ChatMessageDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [disabledReason, setDisabledReason] = useState<string | null>(null);
+  const vendorUserIdRef = useRef<string | null>(null);
 
-    // Fetch history
-    fetch(`${BASE_URL}/chat/history/${vId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setMessages(data);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setIsLoading(false);
-      });
-
-    // Connect WebSocket — the backend authenticates the socket via ?token=
-    const socket = new WebSocket(`${WS_URL}/chat/ws/${user.id}?token=${encodeURIComponent(token)}`);
-    ws.current = socket;
-
-    socket.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        // Map from "me" / "them" correctly based on sender
-        const isFromMe = msg.sender_id === user.id;
-        msg.from = isFromMe ? 'me' : 'vendor';
-        setMessages(prev => [...prev, msg]);
-      } catch (err) {
-        console.error("WS Message Error:", err);
+  const load = useCallback(async () => {
+    if (!token || !vId) return;
+    try {
+      const data = await getVendorMessages(vId, token);
+      setMessages((prev) => mergeMessages(prev, data));
+      setDisabledReason(null);
+      // Learn the vendor's user id from any message so we can match WS events.
+      const other = data.find((m) => m.from === 'them');
+      if (other) vendorUserIdRef.current = other.sender_id;
+    } catch (err: any) {
+      if (err?.status === 403) {
+        setDisabledReason('You can message this vendor after placing an order with them.');
+      } else if (err?.status !== undefined) {
+        // network/other — keep whatever we have, don't wipe the thread
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [token, vId]);
 
-    return () => {
-      socket.close();
-    };
-  }, [user?.id, token, vId]);
+  // Initial load + gate check.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!token || !vId) return;
+      const gate = await canMessageVendor(vId, token);
+      if (!alive) return;
+      if (!gate.allowed) {
+        setDisabledReason(
+          gate.reason === 'order_required'
+            ? 'You can message this vendor after placing an order with them.'
+            : 'Messaging is not available for this vendor.'
+        );
+        setLoading(false);
+        return;
+      }
+      load();
+    })();
+    return () => { alive = false; };
+  }, [token, vId, load]);
 
-  const handleSend = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-    
-    ws.current.send(JSON.stringify({
-      receiver_id: vId,
-      text: trimmed
-    }));
-    setInput('');
+  // Poll for new messages (reliable delivery path).
+  useEffect(() => {
+    if (disabledReason || !token) return;
+    const t = setInterval(load, POLL_MS);
+    return () => clearInterval(t);
+  }, [disabledReason, token, load]);
+
+  // Best-effort instant delivery via the realtime socket.
+  useEffect(() => {
+    if (!user?.id) return;
+    return subscribe((event: any) => {
+      if (event.type !== 'chat_message') return;
+      // Only add if we can confirm it belongs to THIS vendor conversation.
+      // Until the vendor's user id is known, polling picks it up instead —
+      // this avoids leaking another conversation's message into this thread.
+      const partner = vendorUserIdRef.current;
+      if (!partner || (event.sender_id !== partner && event.receiver_id !== partner)) return;
+      const isMe = event.sender_id === user.id;
+      setMessages((prev) => mergeMessages(prev, [{ ...event, from: isMe ? 'me' : 'them' }]));
+    });
+  }, [subscribe, user?.id]);
+
+  const handleSend = async (text: string) => {
+    if (!token || sending) return;
+    setSending(true);
+    // Optimistic append.
+    const optimisticId = `tmp-${Date.now()}`;
+    const optimistic: ChatMessageDTO = {
+      id: optimisticId, from: 'me', sender_id: user?.id ?? 'me', receiver_id: vendorUserIdRef.current ?? vId,
+      text, time: '', created_at: new Date().toISOString(), is_read: false,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    try {
+      const saved = await sendVendorMessage(vId, text, token);
+      if (!vendorUserIdRef.current) vendorUserIdRef.current = saved.receiver_id;
+      setMessages((prev) => mergeMessages(prev.filter((m) => m.id !== optimisticId), [saved]));
+    } catch (err: any) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      if (err?.status === 403) {
+        setDisabledReason('You can message this vendor after placing an order with them.');
+      } else {
+        showToast(err?.message || 'Could not send message. Please try again.', 'error');
+      }
+    } finally {
+      setSending(false);
+    }
   };
 
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  }, [messages]);
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted }}>
-        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ marginRight: 12, padding: 4 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.ink} />
-        </Pressable>
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-          <Ionicons name="storefront" size={20} color={colors.primaryDim} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: colors.ink }}>{displayName}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#22c55e', marginRight: 5 }} />
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: '#22c55e' }}>Online</Text>
-          </View>
-        </View>
-        <Pressable onPress={() => router.push(`/vendor/${vId}` as any)} style={{ padding: 8 }}>
-          <Ionicons name="storefront-outline" size={22} color={colors.ink} />
-        </Pressable>
-      </View>
-
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* Messages */}
-        {isLoading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : messages.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-            <Ionicons name="chatbubbles-outline" size={60} color={colors.surfaceMuted} style={{ marginBottom: 16 }} />
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.inkMuted, textAlign: 'center' }}>
-              Start a conversation with {displayName}
-            </Text>
-            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkGhost, marginTop: 6, textAlign: 'center' }}>
-              Ask about products, shipping, or anything else!
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={m => m.id}
-            contentContainerStyle={{ padding: 16, gap: 10 }}
-            renderItem={({ item }: { item: any }) => {
-              const isMe = item.from === 'me';
-              return (
-                <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                  <View style={{
-                    maxWidth: '75%',
-                    backgroundColor: isMe ? colors.ink : colors.surface,
-                    borderRadius: 18,
-                    borderBottomRightRadius: isMe ? 4 : 18,
-                    borderBottomLeftRadius: isMe ? 18 : 4,
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    borderWidth: isMe ? 0 : 1,
-                    borderColor: colors.surfaceMuted,
-                  }}>
-                    <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 14, color: isMe ? colors.surface : colors.ink, lineHeight: 21 }}>
-                      {item.text}
-                    </Text>
-                  </View>
-                  <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkGhost, marginTop: 4, marginHorizontal: 4 }}>{item.time}</Text>
-                </View>
-              );
-            }}
-          />
-        )}
-
-        {/* Quick Replies */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 8 }}>
-          {QUICK_REPLIES.map(qr => (
-            <Pressable key={qr} onPress={() => handleSend(qr)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.surfaceMuted }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.inkSoft }}>{qr}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Input */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.surfaceMuted, gap: 10 }}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Type a message..."
-            placeholderTextColor={colors.inkGhost}
-            style={{
-              flex: 1, height: 44, backgroundColor: colors.surfaceSoft, borderRadius: 22, paddingHorizontal: 16,
-              fontFamily: 'OpenSans_400Regular', fontSize: 15, color: colors.ink,
-              borderWidth: 1, borderColor: colors.surfaceMuted,
-              ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
-            }}
-            onSubmitEditing={() => handleSend(input)}
-            returnKeyType="send"
-          />
-          <Pressable
-            onPress={() => handleSend(input)}
-            style={({ pressed }) => ({
-              width: 44, height: 44, borderRadius: 22,
-              backgroundColor: pressed ? colors.primaryDim : colors.ink,
-              alignItems: 'center', justifyContent: 'center',
-            })}>
-            <Ionicons name="send" size={20} color={colors.surface} />
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <ChatThread
+      title={displayName}
+      subtitle={disabledReason ? undefined : 'Usually replies within a day'}
+      avatarIcon="storefront"
+      messages={messages}
+      loading={loading}
+      sending={sending}
+      onSend={handleSend}
+      onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+      disabledReason={disabledReason}
+      quickReplies={QUICK_REPLIES}
+      emptyHint="Ask about your order, delivery, or the products."
+      headerAction={{ icon: 'storefront-outline', onPress: () => router.push(`/vendor/${vId}` as any) }}
+    />
   );
 }

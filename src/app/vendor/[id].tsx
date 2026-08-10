@@ -16,6 +16,7 @@ import { ProductCard } from '../../components/ProductCard';
 import { useTheme } from '../../theme/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getVendor, getVendorProducts, getVendorFollowStatus, toggleVendorFollow } from '../../api/vendors';
+import { canMessageVendor } from '../../api/chat';
 import { mapProductToCard } from '../../api/products';
 import { useAuth } from '../../context/AuthContext';
 import { ToastAndroid } from 'react-native';
@@ -112,6 +113,13 @@ export default function VendorStorefront() {
   });
 
   const following = followStatus?.following ?? false;
+
+  // Messaging is gated on having ordered from this vendor.
+  const { data: canMsg } = useQuery({
+    queryKey: ['can-message-vendor', vendorId],
+    queryFn: () => canMessageVendor(vendorId, token!),
+    enabled: !!vendorId && !!token,
+  });
 
   useEffect(() => {
     if (followStatus) {
@@ -328,7 +336,14 @@ export default function VendorStorefront() {
                       router.push('/(auth)/login');
                       return;
                     }
-                    router.push(`/chat/${vendor.id}` as any);
+                    // Order gate: only customers who have ordered from this vendor may message.
+                    if (canMsg && !canMsg.allowed) {
+                      const msg = 'You can message this vendor after placing an order with them.';
+                      if (Platform.OS === 'web') alert(msg);
+                      else ToastAndroid.show(msg, ToastAndroid.SHORT);
+                      return;
+                    }
+                    router.push(`/chat/${vendor.id}?vendorName=${encodeURIComponent(vendor.store_name ?? 'Vendor Store')}` as any);
                   }}
                   style={({ pressed }) => ({
                     flex: isCompact ? 1 : undefined,

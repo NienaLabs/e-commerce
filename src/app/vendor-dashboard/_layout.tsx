@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { icon: 'grid-outline' as const, activeIcon: 'grid' as const, label: 'Dashboard', path: '/vendor-dashboard' },
   { icon: 'cube-outline' as const, activeIcon: 'cube' as const, label: 'Products', path: '/vendor-dashboard/products' },
   { icon: 'receipt-outline' as const, activeIcon: 'receipt' as const, label: 'Orders', path: '/vendor-dashboard/orders' },
-  { icon: 'headset-outline' as const, activeIcon: 'headset' as const, label: 'Support', path: '/vendor-dashboard/support' },
+  { icon: 'chatbubbles-outline' as const, activeIcon: 'chatbubbles' as const, label: 'Messages', path: '/vendor-dashboard/messages' },
   { icon: 'settings-outline' as const, activeIcon: 'settings' as const, label: 'Settings', path: '/vendor-dashboard/store-settings' },
 ];
 
@@ -23,6 +23,7 @@ const SIDE_NAV_ITEMS = [
   { icon: 'grid-outline' as const, activeIcon: 'grid' as const, label: 'Dashboard', path: '/vendor-dashboard' },
   { icon: 'cube-outline' as const, activeIcon: 'cube' as const, label: 'Products', path: '/vendor-dashboard/products' },
   { icon: 'receipt-outline' as const, activeIcon: 'receipt' as const, label: 'Orders', path: '/vendor-dashboard/orders' },
+  { icon: 'chatbubbles-outline' as const, activeIcon: 'chatbubbles' as const, label: 'Messages', path: '/vendor-dashboard/messages' },
   { icon: 'bar-chart-outline' as const, activeIcon: 'bar-chart' as const, label: 'Analytics', path: '/vendor-dashboard/analytics' },
   { icon: 'receipt-outline' as const, activeIcon: 'receipt' as const, label: 'Commissions', path: '/vendor-dashboard/commissions' },
   { icon: 'headset-outline' as const, activeIcon: 'headset' as const, label: 'Support', path: '/vendor-dashboard/support' },
