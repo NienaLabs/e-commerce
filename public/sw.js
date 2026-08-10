@@ -21,12 +21,12 @@ try {
   // process.env / self.EXPO_PUBLIC_* are always undefined in here. These are
   // public client identifiers, the same ones shipped in the web bundle.
   firebase.initializeApp({
-    apiKey: "AIzaSyB8TmubkjGN0DMdtzFx7qumGFZhMt8Uh88",
-    authDomain: "niena-f0339.firebaseapp.com",
-    projectId: "niena-f0339",
-    storageBucket: "niena-f0339.firebasestorage.app",
-    messagingSenderId: "137439028204",
-    appId: "1:137439028204:web:c2c0bae77e6433900116c9",
+    apiKey: "AIzaSyB9qIwhzOlXvHrJJpxI9fzKhvGjtRbN7ws",
+    authDomain: "konura-4450d.firebaseapp.com",
+    projectId: "konura-4450d",
+    storageBucket: "konura-4450d.firebasestorage.app",
+    messagingSenderId: "333244137876",
+    appId: "1:333244137876:web:cbe408322a062e399d0f81",
   });
 
   messaging = firebase.messaging();
