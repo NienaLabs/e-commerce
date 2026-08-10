@@ -6,7 +6,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { OptimizedImage } from './ui/OptimizedImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -158,12 +158,11 @@ export default function HeroBanner({
             blank frame the moment it rotates. The first is the largest thing
             on the home screen, hence the priority. */}
         {slides.map((uri, i) => (
-          <Image
+          <OptimizedImage
             key={i}
             source={uri}
             style={{ width: SCREEN_WIDTH, height }}
             contentFit="cover"
-            cachePolicy="memory-disk"
             loading="eager"
             priority={i === 0 ? 'high' : 'normal'}
           />

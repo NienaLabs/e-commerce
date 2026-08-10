@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, Pressable, useWindowDimensions, Platform, Animated as RNAnimated } from 'react-native';
-import { Image } from 'expo-image';
+import { OptimizedImage } from './ui/OptimizedImage';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, cancelAnimation, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -9,7 +9,6 @@ import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
 import { useEventStore } from '../store/eventStore';
-import { useSizedImage } from '../utils/imageUrl';
 import { Skeleton } from './Skeleton';
 
 interface ProductCardProps {
@@ -49,10 +48,6 @@ export const ProductCard = ({
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { showToast } = useToast();
   const addEvent = useEventStore((state) => state.addEvent);
-
-  // Cards are ~250px wide, so request the small rendition rather than
-  // downloading the full-size original for every tile in the grid.
-  const cardImage = useSizedImage(imageUrl, isDesktop ? 320 : 200);
 
   // ── Hover animation (desktop web only) ──
   const [hoverAnim] = useState(() => new RNAnimated.Value(0));
@@ -174,19 +169,11 @@ export const ProductCard = ({
         overflow: 'hidden',
         position: 'relative',
       }}>
-        {/* Cards are ~250px wide, so request the small rendition rather than
-            downloading the full-size original for every tile in the grid. */}
-        {/* expo-image rather than RN's Image: it keeps a disk cache (RN's has
-            none, so every cold start re-downloaded the whole grid), decodes at
-            the size of this box instead of full resolution, and on web renders
-            a real <img> that lazy-loads offscreen tiles. */}
-        <Image
-          source={cardImage.uri}
-          onError={cardImage.onError}
+        <OptimizedImage
+          source={imageUrl}
+          optimizedWidth={isDesktop ? 320 : 200}
           style={{ width: '100%', height: '100%' }}
           contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={200}
           recyclingKey={id}
         />
 
@@ -393,11 +380,11 @@ export const ProductCard = ({
             flexShrink: 0,
           }}>
             {vendorAvatar ? (
-              <Image
+              <OptimizedImage
                 source={vendorAvatar}
+                optimizedWidth={52}
                 style={{ width: '100%', height: '100%' }}
                 contentFit="cover"
-                cachePolicy="memory-disk"
               />
             ) : (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryGhost }}>

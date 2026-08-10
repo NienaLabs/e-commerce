@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Animated as RNAnimated,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { OptimizedImage } from './ui/OptimizedImage';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, cancelAnimation, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -56,7 +56,6 @@ export const RecommendationCard = ({
   const { showToast } = useToast();
   const [imageError, setImageError] = useState(false);
   const addEvent = useEventStore((state) => state.addEvent);
-  const cardImage = useSizedImage(imageUrl, isDesktop ? 240 : 160);
 
   const isItemInWishlist = useWishlistStore((state) =>
     state.items.some((i) => i.id === id)
@@ -234,18 +233,14 @@ export const RecommendationCard = ({
             affordable: on web it renders an <img> that defers offscreen tiles
             (only ~4 per shelf are visible), and on native it keeps a disk cache
             so a second app launch doesn't re-download the whole catalogue. */}
-        <Image
-          source={imageError ? fallbackImage : cardImage.uri}
+        <OptimizedImage
+          source={imageError ? fallbackImage : imageUrl}
+          optimizedWidth={isDesktop ? 240 : 160}
           style={{ width: '100%', height: '100%' }}
           contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={200}
           recyclingKey={id}
           onError={() => {
-            // First failure retries the full-size original; only once that
-            // fails too do we show the generic placeholder.
-            if (cardImage.isOriginal) setImageError(true);
-            else cardImage.onError();
+             setImageError(true);
           }}
         />
 
@@ -421,7 +416,7 @@ export const RecommendationCard = ({
               flexShrink: 0,
             }}>
               {vendorAvatar ? (
-                <Image source={vendorAvatar} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
+                <OptimizedImage source={vendorAvatar} optimizedWidth={20} style={{ width: '100%', height: '100%' }} contentFit="cover" />
               ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryGhost }}>
                   <Ionicons name="storefront-outline" size={10} color="#7a8a05" />

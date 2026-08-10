@@ -15,7 +15,7 @@ import { getProductCrossSell } from '../../api/recommendations';
 import { useAuth } from '../../context/AuthContext';
 import { getProduct } from '../../api/products';
 import { RecommendationShelfRow } from '../../components/RecommendationShelf';
-import { Image as ExpoImage } from 'expo-image';
+import { OptimizedImage } from '../../components/ui/OptimizedImage';
 import { Skeleton } from '../../components/Skeleton';
 
 export default function ProductDetail() {
@@ -220,12 +220,11 @@ export default function ProductDetail() {
               {/* Full-size original on purpose — this is the one place the
                   shopper actually inspects the photo. Lists use the thumbnail
                   rendition via sizedImageUrl. */}
-              <ExpoImage
+              <OptimizedImage
                 source={displayImage}
+                optimizedWidth={800}
                 style={{ width: '100%', height: '100%' }}
                 contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
                 recyclingKey={product.id}
                 priority="high"
               />
@@ -245,7 +244,7 @@ export default function ProductDetail() {
               >
                 {productImages.map((img, idx) => (
                   <View key={idx} style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === 0 ? 2 : 1, borderColor: idx === 0 ? colors.primary : colors.surfaceMuted, overflow: 'hidden', flexShrink: 0 }}>
-                    <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
+                    <OptimizedImage source={img} optimizedWidth={144} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                   </View>
                 ))}
               </ScrollView>
@@ -257,7 +256,7 @@ export default function ProductDetail() {
                   onPress={() => setSelectedImageIndex(idx)}
                   style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === selectedImageIndex ? 2 : 1, borderColor: idx === selectedImageIndex ? colors.primary : colors.surfaceMuted, overflow: 'hidden' }}
                 >
-                  <Image source={{ uri: img }} style={{ width: '100%', height: '100%' }} />
+                  <OptimizedImage source={img} optimizedWidth={144} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                 </Pressable>
               ))}
             </View>

@@ -6,7 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { OptimizedImage } from './ui/OptimizedImage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
@@ -57,11 +57,11 @@ function VendorCard({ vendor, isFollowed, colors }: VendorCardProps) {
         }}
       >
         {vendor.logo_url ? (
-          <Image
+          <OptimizedImage
             source={vendor.logo_url}
+            optimizedWidth={72}
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
-            cachePolicy="memory-disk"
             recyclingKey={vendor.id}
           />
         ) : (
