@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, usePathname, router } from "expo-router";
 import Head from "expo-router/head";
 import { SidebarProvider } from '../context/SidebarContext';
 import { Sidebar } from '../components/Sidebar';
@@ -22,6 +22,30 @@ import { EventTracker } from '../components/EventTracker';
 import { VendorStatusSync } from '../components/VendorStatusSync';
 import { useLocationStore } from '../store/locationStore';
 import { NotificationProvider } from '../context/NotificationContext';
+import { useMaintenanceStore, installMaintenanceInterceptor } from '../store/maintenanceStore';
+
+// Wrap fetch before any screen mounts, so the very first API call on cold
+// start is already covered.
+installMaintenanceInterceptor();
+
+/**
+ * Sends the user to the maintenance screen the moment any API call comes back
+ * with the backend's 503, and does nothing otherwise. Rendered inside the
+ * providers so it can navigate.
+ */
+function MaintenanceGate() {
+  const isDown = useMaintenanceStore((s) => s.isDown);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Navigating while already there would trap the screen in a replace loop.
+    if (isDown && pathname !== '/maintenance') {
+      router.replace('/maintenance' as any);
+    }
+  }, [isDown, pathname]);
+
+  return null;
+}
 
 
 SplashScreen.preventAutoHideAsync();
@@ -110,11 +134,15 @@ export default function RootLayout() {
               <VendorStatusSync />
               <NotificationProvider>
                 <SidebarProvider>
+                  <MaintenanceGate />
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="(auth)" />
                     <Stack.Screen name="(tabs)" />
                     <Stack.Screen name="suspended" />
+                    {/* No back gesture/header — there is nowhere to go back to
+                        while the platform is paused. */}
+                    <Stack.Screen name="maintenance" options={{ gestureEnabled: false }} />
                   </Stack>
                   <Sidebar />
                 </SidebarProvider>

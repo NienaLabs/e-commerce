@@ -63,7 +63,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       {optimizedSource && (
         <Image
           source={optimizedSource}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           cachePolicy="memory-disk"
           transition={200}
           {...props}
