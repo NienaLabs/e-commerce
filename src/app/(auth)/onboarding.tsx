@@ -33,7 +33,7 @@ import Animated, {
   LinearTransition,
 } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { Image } from 'expo-image';
+import { OptimizedImage } from '../../components/ui/OptimizedImage';
 
 // — Replace these with real URLs before shipping —
 const TERMS_URL = 'https://yourapp.com/terms';
@@ -157,7 +157,7 @@ function WavyBackground({ isDark }: { isDark: boolean }) {
 function FloatingImage({ source }: { source: any }) {
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 32, height: 260 }}>
-      <Image
+      <OptimizedImage
         source={source}
         style={{ width: '100%', height: '100%' }}
         contentFit="contain"
