@@ -1,5 +1,5 @@
 import React, { useContext, useMemo } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Platform, ScrollView, Image } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Platform, ScrollView, Image, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -105,16 +105,35 @@ export default function VendorDashboard() {
                   const statusColor = o.status === 'delivered' ? '#29B463' : o.status === 'cancelled' ? '#ff4d4d' : colors.inkMuted;
                   const statusLabel = o.status.charAt(0).toUpperCase() + o.status.slice(1);
                   return (
-                    <View key={o.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: i === recentOrders.length - 1 ? 0 : 1, borderBottomColor: colors.isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, width: isDesktop ? 80 : 60 }}>#{o.id.slice(-6).toUpperCase()}</Text>
-                      <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.ink, flex: 2 }} numberOfLines={1}>{o.customer_name}</Text>
-                      {isDesktop && (
-                        <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1.5 }}>
-                          {new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </Text>
+                    // Five columns squeezed into a phone left the amount in a
+                    // 60px box, so "GH₵1250.00" was cut off. On mobile the row
+                    // becomes two lines: who and what on top, money and status
+                    // beneath, each with room to breathe.
+                    <View key={o.id} style={{ paddingVertical: 12, borderBottomWidth: i === recentOrders.length - 1 ? 0 : 1, borderBottomColor: colors.isDark ? 'rgba(255,255,255,0.05)' : '#f0f0f0' }}>
+                      {isDesktop ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, width: 80 }}>#{o.id.slice(-6).toUpperCase()}</Text>
+                          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.ink, flex: 2 }} numberOfLines={1}>{o.customer_name}</Text>
+                          <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, flex: 1.5 }}>
+                            {new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </Text>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink, textAlign: 'right', minWidth: 96 }} numberOfLines={1}>{cedis(o.total_amount)}</Text>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: statusColor, width: 78, textAlign: 'right' }}>{statusLabel}</Text>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.ink, flex: 1 }} numberOfLines={1}>{o.customer_name}</Text>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: statusColor }}>{statusLabel}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4, gap: 8 }}>
+                            <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkMuted }}>
+                              #{o.id.slice(-6).toUpperCase()} · {new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </Text>
+                            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }} numberOfLines={1}>{cedis(o.total_amount)}</Text>
+                          </View>
+                        </>
                       )}
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: colors.ink, width: 60 }}>GH₵{o.total_amount.toFixed(2)}</Text>
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: statusColor, width: 70, textAlign: 'right' }}>{statusLabel}</Text>
                     </View>
                   );
                 })
@@ -337,17 +356,45 @@ function TopCategories({ vendorId, token }: { vendorId: string; token: string })
 // ─── Reusable TopStatCard Component (Green Theme) ────────────────────────────
 function TopStatCard({ title, value, desc, icon }: { title: string; value: string; desc: string; icon: keyof typeof Ionicons.glyphMap }) {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  // Below this the three cards wrapped into ~150px columns. With 50px of that
+  // reserved for the watermark, an amount like "GH₵ 12,500.00" had about 90px
+  // to live in and came out broken across lines. One card per row instead.
+  const narrow = width < 600;
+
   return (
     // minHeight rather than a fixed height: a long income figure (or a longer
     // description) used to be clipped by the 110px ceiling instead of making
     // the card taller.
-    <View style={{ flex: 1, minWidth: 140, minHeight: 110, borderRadius: 20, overflow: 'hidden' }}>
-      <LinearGradient colors={['#29B463', '#1e8449']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, padding: 16, paddingRight: 50 }}>
+    <View
+      style={{
+        flexGrow: 1,
+        flexBasis: narrow ? '100%' : 0,
+        minWidth: narrow ? '100%' : 140,
+        minHeight: narrow ? 96 : 110,
+        borderRadius: 20,
+        overflow: 'hidden',
+      }}
+    >
+      <LinearGradient
+        colors={['#29B463', '#1e8449']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ flex: 1, padding: 16, paddingRight: narrow ? 72 : 50 }}
+      >
         {/* Tilted Watermark Icon */}
         <Ionicons name={icon} size={70} color="rgba(255,255,255,0.15)" style={{ position: 'absolute', right: -15, bottom: -15, transform: [{ rotate: '-15deg' }] }} />
-        
+
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: '#fff', letterSpacing: 0.5, marginBottom: 4, opacity: 0.9 }}>{title}</Text>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: '#fff', marginBottom: 6 }}>{value}</Text>
+        <Text
+          // Shrink rather than wrap if a figure is unusually long.
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: '#fff', marginBottom: 6 }}
+        >
+          {value}
+        </Text>
         <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 10, color: '#fff', opacity: 0.8, lineHeight: 14, paddingRight: 20 }}>{desc}</Text>
       </LinearGradient>
     </View>

@@ -203,7 +203,6 @@ export const Sidebar: React.FC = () => {
             <SidebarItem icon="cube-outline" title="My Orders" onPress={() => handleNavigate('/profile/orders')} />
             <SidebarItem icon="heart-outline" title="Wishlist" onPress={() => handleNavigate('/profile/wishlist')} />
             <SidebarItem icon="flash-outline" title="Flash Sales" onPress={() => handleNavigate('/flash-sales')} />
-            <SidebarItem icon="star-outline" title="Rewards & Loyalty" onPress={() => handleNavigate('/rewards')} />
           </View>
 
           <Text style={[styles.sectionTitle, { color: colors.inkGhost }]}>Settings</Text>

@@ -119,6 +119,31 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Pro
   return handleResponse<Product[]>(res);
 }
 
+export interface FlashSaleProduct extends Product {
+  /** Sale-specific price set by the admin; overrides the product's discount. */
+  flash_price?: number | null;
+}
+
+export interface LiveFlashSale {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  starts_at: string;
+  ends_at: string;
+  products: FlashSaleProduct[];
+}
+
+/**
+ * GET /products/flash-sale — the sale running right now, or null.
+ *
+ * Replaces the old approach of pulling every product and treating anything
+ * discounted as "flash", with a countdown invented client-side.
+ */
+export async function getLiveFlashSale(): Promise<LiveFlashSale | null> {
+  const res = await fetch(`${BASE_URL}/products/flash-sale`);
+  return handleResponse<LiveFlashSale | null>(res);
+}
+
 /** GET /products/hero-banners — get active hero banners */
 export async function getHeroBanners(): Promise<HeroBanner[]> {
   const res = await fetch(`${BASE_URL}/products/hero-banners`);

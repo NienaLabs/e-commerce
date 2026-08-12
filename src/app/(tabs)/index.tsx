@@ -844,6 +844,7 @@ export default function Home() {
               groupedCategories.map((group) => (
                 <RecommendationShelfRow
                   key={group.category_id}
+                  categoryId={group.category_id}
                   slot="category"
                   label={group.category_name}
                   products={group.products.map(p => {

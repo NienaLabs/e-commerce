@@ -271,7 +271,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const isProtectedRoute = 
       segments[0] === 'checkout' || 
-      segments[0] === 'rewards' || 
       inVendorGroup || 
       isBecomingVendor;
 

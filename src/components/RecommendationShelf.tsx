@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { RecommendationCard, RecommendationCardSkeleton } from './RecommendationCard';
-import { SHELF_META } from '../api/recommendations';
+import { SHELF_META, EXPANDABLE_SHELF_SLOTS } from '../api/recommendations';
 import { router } from 'expo-router';
 
 interface ShelfProduct {
@@ -34,6 +34,8 @@ interface RecommendationShelfProps {
   label: string;
   products: ShelfProduct[];
   isLoading?: boolean;
+  /** Set on category rows so "See all" can page through that category. */
+  categoryId?: string;
 }
 
 export const RecommendationShelfRow = ({
@@ -41,10 +43,12 @@ export const RecommendationShelfRow = ({
   label,
   products,
   isLoading,
+  categoryId,
 }: RecommendationShelfProps) => {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const canExpand = Boolean(categoryId) || EXPANDABLE_SHELF_SLOTS.has(slot);
 
   let meta = SHELF_META[slot];
   if (!meta) {
@@ -117,12 +121,28 @@ export const RecommendationShelfRow = ({
           </Text>
         </View>
 
+        {/* Only offered when there is somewhere real to go: a category we can
+            page through, or a slot the recommender will actually serve.
+            `price_drop` is composed on the home screen and 404s if asked for. */}
+        {canExpand && (
         <Pressable
+          onPress={() =>
+            router.push({
+              pathname: '/collection',
+              // A category row can be paginated by id; a recommendation row is
+              // fetched by its slot instead.
+              params: categoryId ? { label, categoryId } : { label, slot },
+            } as any)
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`See all ${label}`}
+          hitSlop={8}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
             opacity: pressed ? 0.6 : 1,
             paddingLeft: 12,
+            paddingVertical: 6,
           })}
         >
           <Text
@@ -137,6 +157,7 @@ export const RecommendationShelfRow = ({
           </Text>
           <Ionicons name="chevron-forward" size={14} color={colors.inkMuted} />
         </Pressable>
+        )}
       </View>
 
       {/* ── Horizontal Scroll ── */}

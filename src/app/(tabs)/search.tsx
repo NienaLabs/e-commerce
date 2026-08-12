@@ -473,8 +473,10 @@ export default function Search() {
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
                       {results.map((hit) => {
-                  const p = hit.document || hit;
-                  const productId = p.id || p.objectID;
+                  // Results come from two shapes: our own API, and Algolia
+                  // hits which carry `objectID` instead of `id`.
+                  const p = (hit.document || hit) as SearchHit['document'] & { objectID?: string };
+                  const productId = p.id || p.objectID || '';
                   return (
                     <View key={productId} style={{ width: isDesktop ? '31%' : '100%', marginBottom: 16 }}>
                       <ProductCard

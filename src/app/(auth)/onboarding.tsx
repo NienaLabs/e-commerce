@@ -128,7 +128,7 @@ const ILLUSTRATIONS = {
 
 function WavyBackground({ isDark }: { isDark: boolean }) {
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="none">
         <Defs>
           <SvgLinearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">

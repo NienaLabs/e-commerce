@@ -163,13 +163,17 @@ export default function ProfileSupportScreen() {
         backgroundColor: colors.surfaceSoft,
       }}>
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: colors.ink }}>My Tickets</Text>
-        <Pressable
-          onPress={() => setShowNewModal(true)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 }}
-        >
-          <Ionicons name="add" size={16} color={colors.surface} />
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.surface }}>New</Text>
-        </Pressable>
+        {/* Desktop only. On mobile the page header above already carries a
+            "New" button, and rendering both put two of them on screen. */}
+        {isDesktop && (
+          <Pressable
+            onPress={() => setShowNewModal(true)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 }}
+          >
+            <Ionicons name="add" size={16} color={colors.surface} />
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: colors.surface }}>New</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* List */}
