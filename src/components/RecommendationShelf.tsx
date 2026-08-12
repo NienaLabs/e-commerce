@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { RecommendationCard, RecommendationCardSkeleton } from './RecommendationCard';
-import { SHELF_META } from '../api/recommendations';
+import { SHELF_META, EXPANDABLE_SHELF_SLOTS } from '../api/recommendations';
 import { router } from 'expo-router';
 
 interface ShelfProduct {
@@ -48,6 +48,7 @@ export const RecommendationShelfRow = ({
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  const canExpand = Boolean(categoryId) || EXPANDABLE_SHELF_SLOTS.has(slot);
 
   let meta = SHELF_META[slot];
   if (!meta) {
@@ -120,6 +121,10 @@ export const RecommendationShelfRow = ({
           </Text>
         </View>
 
+        {/* Only offered when there is somewhere real to go: a category we can
+            page through, or a slot the recommender will actually serve.
+            `price_drop` is composed on the home screen and 404s if asked for. */}
+        {canExpand && (
         <Pressable
           onPress={() =>
             router.push({
@@ -152,6 +157,7 @@ export const RecommendationShelfRow = ({
           </Text>
           <Ionicons name="chevron-forward" size={14} color={colors.inkMuted} />
         </Pressable>
+        )}
       </View>
 
       {/* ── Horizontal Scroll ── */}

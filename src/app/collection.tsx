@@ -30,7 +30,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { ProductCard } from '../components/ProductCard';
 import { listProducts, mapProductToCard } from '../api/products';
-import { getRecommendationShelf } from '../api/recommendations';
+import { getRecommendationShelf, MAX_SHELF_LIMIT } from '../api/recommendations';
 
 const PAGE_SIZE = 20;
 
@@ -86,7 +86,9 @@ export default function CollectionScreen() {
           setItems(prev => (mode === 'more' ? [...prev, ...mapped] : mapped));
           if (mapped.length < PAGE_SIZE) setExhausted(true);
         } else if (slot && token) {
-          const shelf = await getRecommendationShelf(token, slot, 60);
+          // MAX_SHELF_LIMIT, not more: the endpoint caps at 50 and answers 422
+          // for anything larger, which was failing every recommendation shelf.
+          const shelf = await getRecommendationShelf(token, slot, MAX_SHELF_LIMIT);
           setItems(
             (shelf.products ?? []).map((p: any) => ({
               id: p.product_id ?? p.id,
@@ -107,8 +109,13 @@ export default function CollectionScreen() {
           setItems([]);
           setExhausted(true);
         }
-      } catch {
-        setError("Couldn't load these products. Pull down to try again.");
+      } catch (e: any) {
+        // Say what actually went wrong — a generic message here cost real time
+        // diagnosing a 422 that looked identical to being offline.
+        const status = e?.status ? ` (${e.status})` : '';
+        setError(
+          `Couldn't load these products${status}. Pull down to try again.`
+        );
       } finally {
         setLoading(false);
         setLoadingMore(false);

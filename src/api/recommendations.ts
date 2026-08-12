@@ -72,6 +72,24 @@ export async function getRecommendations(
 }
 
 /** GET /api/v1/recommendations/shelf/{slot} — single shelf */
+/**
+ * Slots GET /shelf/{slot} will actually serve. Anything else 404s — notably
+ * `price_drop` and `category`, which the home screen composes locally rather
+ * than getting from the recommender. Used to decide whether a shelf can offer
+ * a "See all", so we never link somewhere that can't load.
+ */
+export const EXPANDABLE_SHELF_SLOTS = new Set([
+  'taste_profile',
+  'your_world',
+  'people_like_you',
+  'trending_near_you',
+  'hot_right_now',
+  'complete_the_set',
+]);
+
+/** The endpoint declares `le=50`; asking for more is a 422, not a bigger page. */
+export const MAX_SHELF_LIMIT = 50;
+
 export async function getRecommendationShelf(
   token: string,
   slot: string,
