@@ -41,19 +41,28 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const optimizedSource = useMemo(() => {
     if (!source) return null;
     
-    // If it's a number (local asset require), just pass it directly
-    if (typeof source === 'number') {
+    // Extract the actual URL string if it's an object
+    let urlString: string | undefined;
+    if (typeof source === 'string') {
+      urlString = source;
+    } else if (typeof source === 'object' && source !== null && 'uri' in source && typeof (source as any).uri === 'string') {
+      urlString = (source as any).uri;
+    } else {
+      // It's a number (local require) or something else we don't optimize
       return source;
     }
 
-    // Only optimize if we have a target width, otherwise load original (or don't load yet)
     if (targetWidth > 0 || optimizedWidth) {
-       // If layout hasn't happened but optimizedWidth is provided, targetWidth will be optimizedWidth
-       const finalWidth = targetWidth || 800; // Fallback
-       return { uri: getOptimizedUrl(source as string, finalWidth, quality) || undefined };
+       const finalWidth = targetWidth || 800;
+       // Only try to optimize if it's a remote URL
+       if (urlString.startsWith('http')) {
+         const optimizedUri = getOptimizedUrl(urlString, finalWidth, quality);
+         return { uri: optimizedUri || undefined };
+       }
+       // For local web assets (starting with '/'), just return the original source
+       return source;
     }
 
-    // While waiting for layout, we can return null to avoid loading the original massive image
     return null;
   }, [source, targetWidth, quality, optimizedWidth]);
 
