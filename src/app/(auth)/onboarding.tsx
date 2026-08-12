@@ -15,11 +15,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { submitOnboarding, OnboardingSubmitPayload } from '../../api/onboarding';
 import { listCategories, Category } from '../../api/categories';
+import {
+  OnboardingIllustration,
+  ONBOARDING_ILLUSTRATIONS,
+} from '../../components/OnboardingIllustration';
 
 // — Replace these with real URLs before shipping —
 const TERMS_URL = 'https://yourapp.com/terms';
@@ -47,6 +52,70 @@ const GENDER_OPTIONS: { id: NonNullable<OnboardingSubmitPayload['gender']>; labe
 ];
 
 const TOTAL_STEPS = 4;
+
+// ─── Date of birth ────────────────────────────────────────────────────────────
+// The backend expects a plain YYYY-MM-DD string. Everything below converts
+// between that and a Date without going near `toLocaleDateString`, so the value
+// can't shift by a day depending on the device's timezone.
+
+const MIN_AGE_YEARS = 13;   // below this we can't lawfully hold their data
+const MAX_AGE_YEARS = 120;
+
+const startOfToday = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+const shiftYears = (years: number) => {
+  const d = startOfToday();
+  d.setFullYear(d.getFullYear() - years);
+  return d;
+};
+
+/** Newest permitted birth date — i.e. someone who turns MIN_AGE today. */
+const MAX_DOB = shiftYears(MIN_AGE_YEARS);
+const MIN_DOB = shiftYears(MAX_AGE_YEARS);
+/** Where the spinner opens when nothing is chosen yet. */
+const DEFAULT_DOB = shiftYears(25);
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Date → "YYYY-MM-DD", using local parts so the calendar day is preserved. */
+function toIsoDate(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+/** "YYYY-MM-DD" → Date, or null if it isn't a real date. */
+function parseDobToDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  // Rejects things like 2025-02-31, which Date would silently roll forward.
+  if (date.getMonth() !== Number(m) - 1 || date.getDate() !== Number(d)) return null;
+  return date;
+}
+
+/** "1998-03-07" → "7 March 1998". */
+function formatDobForDisplay(value: string): string {
+  const date = parseDobToDate(value);
+  if (!date) return value;
+  return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** Returns an error message, or null when the date is acceptable. */
+function validateDob(value: string): string | null {
+  const date = parseDobToDate(value);
+  if (!date) return 'Please choose your date of birth.';
+  if (date > MAX_DOB) return `You need to be at least ${MIN_AGE_YEARS} to use the app.`;
+  if (date < MIN_DOB) return 'That date doesn’t look right.';
+  return null;
+}
 
 // ─── Animated step bar ────────────────────────────────────────────────────────
 function StepBar({ current }: { current: number }) {
@@ -169,12 +238,15 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { token, markOnboardingComplete } = useAuth();
 
-  const [step, setStep]               = useState(1);
+  // 0 is the welcome screen; 1–4 are the questions counted by the step bar.
+  const [step, setStep]               = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
   const [gdprConsent, setGdprConsent]         = useState(false);
   const [dob, setDob]                         = useState('');
+  const [showDatePicker, setShowDatePicker]   = useState(false);
+  const [dobError, setDobError]               = useState<string | null>(null);
   const [gender, setGender]                   = useState<OnboardingSubmitPayload['gender']>(undefined);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [budget, setBudget]                   = useState<OnboardingSubmitPayload['budget_preference']>(undefined);
@@ -217,9 +289,15 @@ export default function OnboardingScreen() {
       alert('Please accept the data processing terms to continue.');
       return;
     }
-    if (step === 2 && dob.length !== 10) {
-      alert('Please enter a valid date of birth (YYYY-MM-DD).');
-      return;
+    if (step === 2) {
+      // Previously this only checked the string was 10 characters long, so
+      // "1st Jan 90" sailed through and the backend rejected it later.
+      const error = validateDob(dob);
+      if (error) {
+        setDobError(error);
+        return;
+      }
+      setDobError(null);
     }
     if (step === 3 && selectedCategories.size === 0) {
       alert('Please select at least one category.');
@@ -229,7 +307,7 @@ export default function OnboardingScreen() {
   };
 
   const prevStep = () => {
-    if (step > 1) setStep(s => s - 1);
+    if (step > 0) setStep(s => s - 1);
   };
 
   const handleFinish = async () => {
@@ -323,7 +401,45 @@ export default function OnboardingScreen() {
             transform: [{ translateX: slideAnim }],
           }}
         >
+          {/* ── Step 0: Welcome ──────────────────────────────────────────────
+              Sits outside the step bar on purpose: it asks nothing, so
+              counting it as "1 of 5" would overstate how long this takes. */}
+          {step === 0 && (
+            <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 24 }}>
+              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.welcome} hero />
+              <Text style={[eyebrowStyle, { textAlign: 'center' }]}>Welcome</Text>
+              <Text style={[titleStyle, { textAlign: 'center' }]}>
+                Let&apos;s make this{'\n'}yours.
+              </Text>
+              <Text style={[subtitleStyle, { textAlign: 'center' }]}>
+                Four quick questions so we can show you things you&apos;ll actually
+                want. Takes under a minute, and you can skip whenever you like.
+              </Text>
+
+              <View style={{ marginTop: 32, gap: 14 }}>
+                {[
+                  { icon: 'pricetags-outline' as const, text: 'Deals in the categories you care about' },
+                  { icon: 'storefront-outline' as const, text: 'Stores near you, first' },
+                  { icon: 'lock-closed-outline' as const, text: 'Your data stays yours — change it any time' },
+                ].map(item => (
+                  <View key={item.text} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{
+                      width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSoft,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Ionicons name={item.icon} size={18} color={ink} />
+                    </View>
+                    <Text style={{ flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: inkSoft, lineHeight: 20 }}>
+                      {item.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Top bar */}
+          {step > 0 && (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             {step > 1 ? (
               <Pressable
@@ -346,13 +462,15 @@ export default function OnboardingScreen() {
               </Text>
             </Pressable>
           </View>
+          )}
 
           {/* Step bar */}
-          <StepBar current={step} />
+          {step > 0 && <StepBar current={step} />}
 
           {/* ── Step 1: Data consent ─────────────────────────────────────────── */}
           {step === 1 && (
             <View style={{ flex: 1 }}>
+              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.consent} />
               <Text style={eyebrowStyle}>Getting started</Text>
               <Text style={titleStyle}>A space built{'\n'}for you.</Text>
               <Text style={subtitleStyle}>
@@ -457,30 +575,80 @@ export default function OnboardingScreen() {
           {/* ── Step 2: DOB + gender ──────────────────────────────────────────── */}
           {step === 2 && (
             <View style={{ flex: 1 }}>
+              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.about} />
               <Text style={eyebrowStyle}>About you</Text>
               <Text style={titleStyle}>Tell us a little{'\n'}about yourself.</Text>
               <Text style={subtitleStyle}>Helps us verify your age and tailor content for you.</Text>
 
               <Text style={fieldLabelStyle}>Date of Birth</Text>
-              <TextInput
-                value={dob}
-                onChangeText={setDob}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.inkGhost}
-                keyboardType="default"
-                maxLength={10}
+
+              {/* Typing "YYYY-MM-DD" by hand was the single most error-prone
+                  thing in onboarding — the old field validated only that the
+                  string was ten characters long, so "1st Jan 90" passed. */}
+              <Pressable
+                onPress={() => setShowDatePicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  dob ? `Date of birth, ${formatDobForDisplay(dob)}. Change it.` : 'Choose your date of birth'
+                }
                 style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                   backgroundColor: cardBg,
                   borderWidth: 1,
-                  borderColor: colors.surfaceDeep,
+                  borderColor: dob ? colors.primary : colors.surfaceDeep,
                   borderRadius: 12,
                   padding: 16,
-                  fontSize: 16,
-                  color: colors.ink,
-                  fontFamily: 'Inter_400Regular',
-                  marginBottom: 24,
+                  minHeight: 56,
+                  marginBottom: dobError ? 8 : 24,
                 }}
-              />
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontFamily: 'Inter_400Regular',
+                    color: dob ? colors.ink : colors.inkGhost,
+                  }}
+                >
+                  {dob ? formatDobForDisplay(dob) : 'Select your date of birth'}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color={colors.inkMuted} />
+              </Pressable>
+
+              {dobError ? (
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.error, marginBottom: 24 }}>
+                  {dobError}
+                </Text>
+              ) : null}
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={parseDobToDate(dob) ?? DEFAULT_DOB}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  maximumDate={MAX_DOB}
+                  minimumDate={MIN_DOB}
+                  onChange={(event, selected) => {
+                    // Android fires once and dismisses itself; iOS keeps the
+                    // spinner mounted until we take it down.
+                    if (Platform.OS !== 'ios') setShowDatePicker(false);
+                    if (event.type === 'dismissed' || !selected) return;
+                    setDob(toIsoDate(selected));
+                    setDobError(null);
+                  }}
+                />
+              )}
+
+              {/* iOS spinner needs its own dismiss. */}
+              {showDatePicker && Platform.OS === 'ios' && (
+                <Pressable
+                  onPress={() => setShowDatePicker(false)}
+                  style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 12, marginBottom: 16 }}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>Done</Text>
+                </Pressable>
+              )}
 
               <Text style={fieldLabelStyle}>
                 Gender{' '}
@@ -506,6 +674,7 @@ export default function OnboardingScreen() {
           {/* ── Step 3: Categories + budget ──────────────────────────────────── */}
           {step === 3 && (
             <View style={{ flex: 1 }}>
+              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.interests} />
               <Text style={eyebrowStyle}>Your taste</Text>
               <Text style={titleStyle}>What catches{'\n'}your eye?</Text>
               <Text style={subtitleStyle}>Pick your favourite categories.</Text>
@@ -550,6 +719,7 @@ export default function OnboardingScreen() {
           {/* ── Step 4: Referral source + finish card ────────────────────────── */}
           {step === 4 && (
             <View style={{ flex: 1 }}>
+              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.finish} />
               <Text style={eyebrowStyle}>One last thing</Text>
               <Text style={titleStyle}>Almost{'\n'}there.</Text>
               <Text style={subtitleStyle}>How did you discover us?</Text>
@@ -612,7 +782,7 @@ export default function OnboardingScreen() {
                 })}
               >
                 <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.onPrimary, fontSize: 16, letterSpacing: 0.2 }}>
-                  Continue
+                  {step === 0 ? 'Get started' : 'Continue'}
                 </Text>
               </Pressable>
             ) : (

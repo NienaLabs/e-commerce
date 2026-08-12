@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Platform, useWindowDimensions, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,15 +7,23 @@ import { useTheme } from '../theme/ThemeContext';
 import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { createVendor } from '../api/vendors';
+import { createVendor, getVendorRegistrationStatus } from '../api/vendors';
 import { uploadFile } from '../api/upload';
+import {
+  VENDOR_TERMS,
+  VENDOR_TERMS_VERSION,
+  VENDOR_TERMS_IS_PLACEHOLDER,
+} from '../constants/vendorTerms';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
 const STEPS = [
   { key: 'store', label: 'Store Info', icon: 'storefront' },
   { key: 'media', label: 'Media & Location', icon: 'image' },
+  { key: 'terms', label: 'Terms', icon: 'document-text' },
 ];
+
+const LAST_STEP = STEPS.length - 1;
 
 function StepIndicator({ current, colors }: { current: number; colors: any }) {
   return (
@@ -90,6 +98,31 @@ export default function BecomeVendorScreen() {
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Whether the platform is accepting new vendors at all. `null` = still
+  // checking, so the form isn't flashed up before we know.
+  const [registrationOpen, setRegistrationOpen] = useState<boolean | null>(null);
+
+  // Terms gate: the agree control stays disabled until the vendor has actually
+  // scrolled to the end, so "I agree" means they were at least shown all of it.
+  const [termsScrolledToEnd, setTermsScrolledToEnd] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getVendorRegistrationStatus()
+      .then(({ open }) => {
+        if (!cancelled) setRegistrationOpen(open);
+      })
+      // If the check itself fails, don't block a legitimate vendor — the
+      // backend enforces this properly on submit either way.
+      .catch(() => {
+        if (!cancelled) setRegistrationOpen(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [form, setForm] = useState({
     storeName: '', storeSlug: '', description: '',
     logoUrl: '', bannerUrl: '',
@@ -147,6 +180,41 @@ export default function BecomeVendorScreen() {
         <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Become a Vendor</Text>
       </View>
 
+      {/* Still checking whether registration is open. */}
+      {registrationOpen === null && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primaryDim} />
+        </View>
+      )}
+
+      {/* Registration closed by an admin. An explanation, not a failed submit. */}
+      {registrationOpen === false && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <View style={{
+            width: 88, height: 88, borderRadius: 44, backgroundColor: colors.surfaceSoft,
+            alignItems: 'center', justifyContent: 'center', marginBottom: 24,
+          }}>
+            <Ionicons name="lock-closed-outline" size={40} color={colors.inkMuted} />
+          </View>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 22, color: colors.ink, textAlign: 'center' }}>
+            Applications are closed
+          </Text>
+          <Text style={{
+            fontFamily: 'OpenSans_400Regular', fontSize: 14, color: colors.inkMuted,
+            textAlign: 'center', lineHeight: 22, marginTop: 12, maxWidth: 320,
+          }}>
+            We&apos;re not taking on new vendors at the moment. This is temporary — check
+            back soon, or contact support if you think you should have access.
+          </Text>
+          <View style={{ height: 32 }} />
+          <Button
+            title="Back to profile"
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile' as any)}
+          />
+        </View>
+      )}
+
+      {registrationOpen === true && (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ maxWidth: isDesktop ? 640 : undefined, alignSelf: 'center', width: '100%' }}>
 
         {/* Stats Banner */}
@@ -239,17 +307,118 @@ export default function BecomeVendorScreen() {
             </View>
           )}
 
+          {/* Step 3 — Terms & Conditions */}
+          {step === 2 && (
+            <View>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: colors.ink, marginBottom: 6 }}>
+                Vendor terms
+              </Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, lineHeight: 20, marginBottom: 16 }}>
+                Please read these before submitting. You&apos;ll need to scroll to the end
+                to continue.
+              </Text>
+
+              {VENDOR_TERMS_IS_PLACEHOLDER && (
+                <View style={{
+                  flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12,
+                  backgroundColor: colors.surfaceSoft, borderWidth: 1,
+                  borderColor: colors.surfaceMuted, marginBottom: 16,
+                }}>
+                  <Ionicons name="alert-circle-outline" size={18} color={colors.inkMuted} />
+                  <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, lineHeight: 18 }}>
+                    Draft terms pending legal review.
+                  </Text>
+                </View>
+              )}
+
+              <ScrollView
+                nestedScrollEnabled
+                onScroll={({ nativeEvent: e }) => {
+                  // 24px of slack so it can't be impossible to satisfy from
+                  // rounding or an over-scroll bounce.
+                  const atEnd =
+                    e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 24;
+                  if (atEnd) setTermsScrolledToEnd(true);
+                }}
+                scrollEventThrottle={64}
+                style={{
+                  maxHeight: 320, borderWidth: 1, borderColor: colors.surfaceMuted,
+                  borderRadius: 14, backgroundColor: colors.surface, padding: 16,
+                }}
+              >
+                {VENDOR_TERMS.map(section => (
+                  <View key={section.heading} style={{ marginBottom: 18 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink, marginBottom: 6 }}>
+                      {section.heading}
+                    </Text>
+                    {section.body.map((paragraph, i) => (
+                      <Text
+                        key={i}
+                        style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkSoft, lineHeight: 21, marginBottom: 8 }}
+                      >
+                        {paragraph}
+                      </Text>
+                    ))}
+                  </View>
+                ))}
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 11, color: colors.inkGhost }}>
+                  Version {VENDOR_TERMS_VERSION}
+                </Text>
+              </ScrollView>
+
+              {!termsScrolledToEnd && (
+                <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 10, textAlign: 'center' }}>
+                  Scroll to the end to continue
+                </Text>
+              )}
+
+              <Pressable
+                onPress={() => termsScrolledToEnd && setTermsAgreed(a => !a)}
+                disabled={!termsScrolledToEnd}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: termsAgreed, disabled: !termsScrolledToEnd }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20,
+                  marginBottom: 24, padding: 16, borderRadius: 14,
+                  backgroundColor: termsAgreed ? colors.primaryGhost : colors.surface,
+                  borderWidth: 1.5,
+                  borderColor: termsAgreed ? colors.primary : colors.surfaceMuted,
+                  opacity: termsScrolledToEnd ? 1 : 0.5,
+                }}
+              >
+                <View style={{
+                  width: 24, height: 24, borderRadius: 6, borderWidth: 1.5,
+                  borderColor: termsAgreed ? colors.primary : colors.surfaceDeep,
+                  backgroundColor: termsAgreed ? colors.primary : 'transparent',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {termsAgreed && <Ionicons name="checkmark" size={16} color={colors.ink} />}
+                </View>
+                <Text style={{ flex: 1, fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.ink, lineHeight: 20 }}>
+                  I have read and agree to the vendor terms, and I confirm the details I
+                  have provided are accurate.
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           <Button
-            title={step < 1 ? 'Continue' : 'Submit Application'}
-            disabled={isSubmitting}
+            title={step < LAST_STEP ? 'Continue' : 'Submit Application'}
+            disabled={isSubmitting || (step === LAST_STEP && !termsAgreed)}
             onPress={async () => {
-              if (step < 1) {
+              if (step === 0) {
                 if (!form.storeName || !form.storeSlug || !form.description) {
                   showToast('Please fill out all required fields.', 'warning');
                   return;
                 }
                 setStep(s => s + 1);
+              } else if (step < LAST_STEP) {
+                setStep(s => s + 1);
               } else {
+                if (!termsAgreed) {
+                  showToast('Please accept the vendor terms to continue.', 'warning');
+                  return;
+                }
                 if (!token) {
                   showToast('You must be logged in to register as a vendor.', 'error');
                   return;
@@ -275,6 +444,10 @@ export default function BecomeVendorScreen() {
                     store_name: form.storeName,
                     store_slug: form.storeSlug,
                     bio: form.description,
+                    // Which version of the terms was accepted, and when. Without
+                    // this you can't later show what a vendor actually agreed to.
+                    terms_version: VENDOR_TERMS_VERSION,
+                    terms_accepted_at: new Date().toISOString(),
                     ...(logo_url && { logo_url }),
                     ...(banner_url && { banner_url }),
                     ...(form.latitude !== null && { latitude: form.latitude }),
@@ -286,6 +459,13 @@ export default function BecomeVendorScreen() {
                   await refreshVendor();
                   router.replace('/vendor-dashboard' as any);
                 } catch (e: any) {
+                  // 403 here means an admin closed registration between this
+                  // screen loading and the vendor submitting. Switch to the
+                  // closed screen rather than showing a bare error toast.
+                  if (e?.status === 403) {
+                    setRegistrationOpen(false);
+                    return;
+                  }
                   showToast(e.message || 'Failed to create vendor account', 'error');
                 } finally {
                   setIsSubmitting(false);
@@ -295,6 +475,7 @@ export default function BecomeVendorScreen() {
           />
         </View>
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

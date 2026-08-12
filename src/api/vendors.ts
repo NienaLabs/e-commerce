@@ -37,6 +37,9 @@ export interface CreateVendorPayload {
   banner_url?: string;
   latitude?: number;
   longitude?: number;
+  /** Which vendor-terms version was accepted, and when — recorded with the store. */
+  terms_version?: string;
+  terms_accepted_at?: string;
 }
 
 export type UpdateVendorPayload = Partial<CreateVendorPayload>;
@@ -84,6 +87,18 @@ export async function listVendors(params: ListVendorsParams = {}): Promise<Vendo
 
   const res = await fetch(`${BASE_URL}/vendors?${query.toString()}`);
   return handleResponse<Vendor[]>(res);
+}
+
+/**
+ * GET /vendors/registration-status — is the platform accepting new vendors?
+ *
+ * Checked before the become-a-vendor form renders. Without it a closed
+ * platform still let someone fill in every field and upload a logo, only to be
+ * refused on submit.
+ */
+export async function getVendorRegistrationStatus(): Promise<{ open: boolean }> {
+  const res = await fetch(`${BASE_URL}/vendors/registration-status`);
+  return handleResponse<{ open: boolean }>(res);
 }
 
 /** GET /vendors/{vendor_id} — single vendor with stats */
