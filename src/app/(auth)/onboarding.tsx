@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   Pressable,
   Platform,
-  useWindowDimensions,
   ScrollView,
   ActivityIndicator,
-  TextInput,
   KeyboardAvoidingView,
   Switch,
-  Animated,
   Linking,
+  StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,10 +20,20 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { submitOnboarding, OnboardingSubmitPayload } from '../../api/onboarding';
 import { listCategories, Category } from '../../api/categories';
-import {
-  OnboardingIllustration,
-  ONBOARDING_ILLUSTRATIONS,
-} from '../../components/OnboardingIllustration';
+import Animated, {
+  FadeInRight,
+  FadeOutLeft,
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+  withSequence,
+  LinearTransition,
+} from 'react-native-reanimated';
+import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { Image } from 'expo-image';
 
 // — Replace these with real URLs before shipping —
 const TERMS_URL = 'https://yourapp.com/terms';
@@ -54,11 +63,8 @@ const GENDER_OPTIONS: { id: NonNullable<OnboardingSubmitPayload['gender']>; labe
 const TOTAL_STEPS = 4;
 
 // ─── Date of birth ────────────────────────────────────────────────────────────
-// The backend expects a plain YYYY-MM-DD string. Everything below converts
-// between that and a Date without going near `toLocaleDateString`, so the value
-// can't shift by a day depending on the device's timezone.
 
-const MIN_AGE_YEARS = 13;   // below this we can't lawfully hold their data
+const MIN_AGE_YEARS = 13;
 const MAX_AGE_YEARS = 120;
 
 const startOfToday = () => {
@@ -72,10 +78,8 @@ const shiftYears = (years: number) => {
   return d;
 };
 
-/** Newest permitted birth date — i.e. someone who turns MIN_AGE today. */
 const MAX_DOB = shiftYears(MIN_AGE_YEARS);
 const MIN_DOB = shiftYears(MAX_AGE_YEARS);
-/** Where the spinner opens when nothing is chosen yet. */
 const DEFAULT_DOB = shiftYears(25);
 
 const MONTH_NAMES = [
@@ -85,30 +89,25 @@ const MONTH_NAMES = [
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** Date → "YYYY-MM-DD", using local parts so the calendar day is preserved. */
 function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
-/** "YYYY-MM-DD" → Date, or null if it isn't a real date. */
 function parseDobToDate(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
   const [, y, m, d] = match;
   const date = new Date(Number(y), Number(m) - 1, Number(d));
-  // Rejects things like 2025-02-31, which Date would silently roll forward.
   if (date.getMonth() !== Number(m) - 1 || date.getDate() !== Number(d)) return null;
   return date;
 }
 
-/** "1998-03-07" → "7 March 1998". */
 function formatDobForDisplay(value: string): string {
   const date = parseDobToDate(value);
   if (!date) return value;
   return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-/** Returns an error message, or null when the date is acceptable. */
 function validateDob(value: string): string | null {
   const date = parseDobToDate(value);
   if (!date) return 'Please choose your date of birth.';
@@ -117,23 +116,98 @@ function validateDob(value: string): string | null {
   return null;
 }
 
-// ─── Animated step bar ────────────────────────────────────────────────────────
-function StepBar({ current }: { current: number }) {
+// ─── Animations & Assets ────────────────────────────────────────────────────────
+
+const ILLUSTRATIONS = {
+  welcome: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop',
+  consent: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2670&auto=format&fit=crop',
+  about: 'https://images.unsplash.com/photo-1633596683562-4a47eb4883c5?q=80&w=2662&auto=format&fit=crop',
+  interests: 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=2670&auto=format&fit=crop',
+  finish: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=80&w=2574&auto=format&fit=crop',
+};
+
+function WavyBackground({ isDark }: { isDark: boolean }) {
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox="0 0 400 800" preserveAspectRatio="none">
+        <Defs>
+          <SvgLinearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={isDark ? '#1C1525' : '#FAF9FD'} stopOpacity="1" />
+            <Stop offset="100%" stopColor={isDark ? '#0A0510' : '#F0EAF8'} stopOpacity="1" />
+          </SvgLinearGradient>
+        </Defs>
+        <Path d="M0,0 L400,0 L400,800 L0,800 Z" fill="url(#bgGrad)" />
+        
+        {/* Top Wave */}
+        <Path
+          d="M0,150 C100,50 250,200 400,100 L400,0 L0,0 Z"
+          fill={isDark ? 'rgba(150, 100, 255, 0.05)' : 'rgba(120, 80, 255, 0.05)'}
+        />
+        
+        {/* Bottom Blob Wave */}
+        <Path
+          d="M0,650 C150,800 280,550 400,700 L400,800 L0,800 Z"
+          fill={isDark ? 'rgba(255, 80, 150, 0.05)' : 'rgba(255, 120, 180, 0.06)'}
+        />
+      </Svg>
+    </View>
+  );
+}
+
+function FloatingImage({ source }: { source: string }) {
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    translateY.value = withRepeat(
+      withSequence(
+        withTiming(-15, { duration: 3500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 3500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, [translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.View style={[animatedStyle, { alignItems: 'center', justifyContent: 'center', marginVertical: 32 }]}>
+      <View style={{
+        shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 10
+      }}>
+        <Image
+          source={source}
+          style={{ width: 200, height: 200, borderRadius: 100 }}
+          contentFit="cover"
+          transition={500}
+        />
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── UI Components ────────────────────────────────────────────────────────
+
+function ModernStepBar({ current, total }: { current: number; total: number }) {
   const { colors } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 32 }}>
-      {Array.from({ length: TOTAL_STEPS }, (_, i) => {
+    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 24, justifyContent: 'center' }}>
+      {Array.from({ length: total }, (_, i) => {
         const idx = i + 1;
-        const done   = idx < current;
         const active = idx === current;
+        const done = idx < current;
         return (
-          <View
+          <Animated.View
             key={idx}
+            layout={LinearTransition.springify().damping(18).stiffness(150)}
             style={{
-              height: 3,
-              flex: active ? 2.5 : 1,
+              height: 4,
+              width: active ? 32 : 12,
               borderRadius: 2,
               backgroundColor: done || active ? colors.primary : colors.surfaceDeep,
+              opacity: active ? 1 : 0.4,
             }}
           />
         );
@@ -142,139 +216,134 @@ function StepBar({ current }: { current: number }) {
   );
 }
 
-// ─── Pill / chip button ────────────────────────────────────────────────────────
-function Chip({
-  label,
-  selected,
-  onPress,
-  colors,
-  cardBg,
+function ModernChip({
+  label, selected, onPress, colors, isDark
 }: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-  cardBg: string;
+  label: string; selected: boolean; onPress: () => void; colors: any; isDark: boolean;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: selected ? colors.primary : colors.surfaceDeep,
-        backgroundColor: selected ? colors.primary : cardBg,
-        marginBottom: 8,
-        marginRight: 8,
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_500Medium',
-          fontSize: 13,
-          color: selected ? '#FFFFFF' : colors.ink,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-// ─── Radio-style row option ────────────────────────────────────────────────────
-function RowOption({
-  label,
-  sub,
-  selected,
-  onPress,
-  colors,
-  cardBg,
-}: {
-  label: string;
-  sub?: string;
-  selected: boolean;
-  onPress: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-  cardBg: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 15,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: selected ? colors.primary : colors.surfaceDeep,
-        backgroundColor: cardBg,
-        marginBottom: 8,
-      }}
-    >
-      <View style={{ flex: 1, paddingRight: 12 }}>
-        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.ink }}>
-          {label}
-        </Text>
-        {sub ? (
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.inkSoft, marginTop: 2 }}>
-            {sub}
+    <Pressable onPress={onPress}>
+      {({ pressed }) => (
+        <Animated.View
+          layout={LinearTransition.springify()}
+          style={{
+            paddingHorizontal: 20,
+            paddingVertical: 14,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: selected ? colors.primary : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            backgroundColor: selected ? colors.primary : isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
+            marginBottom: 10,
+            marginRight: 10,
+            transform: [{ scale: pressed ? 0.96 : 1 }],
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: selected ? 0.2 : 0,
+            shadowRadius: 8,
+            elevation: selected ? 4 : 0,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+              fontSize: 14,
+              color: selected ? '#FFFFFF' : colors.ink,
+            }}
+          >
+            {label}
           </Text>
-        ) : null}
-      </View>
-      {selected && (
-        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+        </Animated.View>
       )}
     </Pressable>
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+function ModernRowOption({
+  label, sub, selected, onPress, colors, isDark
+}: {
+  label: string; sub?: string; selected: boolean; onPress: () => void; colors: any; isDark: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress}>
+      {({ pressed }) => (
+        <Animated.View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 18,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: selected ? colors.primary : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            backgroundColor: isDark ? (selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)') : (selected ? '#FAFAFF' : '#FFFFFF'),
+            marginBottom: 12,
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+          }}
+        >
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: selected ? colors.primary : colors.ink }}>
+              {label}
+            </Text>
+            {sub ? (
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.inkSoft, marginTop: 4 }}>
+                {sub}
+              </Text>
+            ) : null}
+          </View>
+          <View style={{
+            width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+            borderColor: selected ? colors.primary : colors.surfaceDeep,
+            alignItems: 'center', justifyContent: 'center'
+          }}>
+            {selected && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary }} />}
+          </View>
+        </Animated.View>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { token, markOnboardingComplete } = useAuth();
+  const { width } = useWindowDimensions();
 
-  // 0 is the welcome screen; 1–4 are the questions counted by the step bar.
-  const [step, setStep]               = useState(0);
+  const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
-  const [gdprConsent, setGdprConsent]         = useState(false);
-  const [dob, setDob]                         = useState('');
-  const [showDatePicker, setShowDatePicker]   = useState(false);
-  const [dobError, setDobError]               = useState<string | null>(null);
-  const [gender, setGender]                   = useState<OnboardingSubmitPayload['gender']>(undefined);
+  const [gdprConsent, setGdprConsent] = useState(false);
+  const [dob, setDob] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dobError, setDobError] = useState<string | null>(null);
+  const [gender, setGender] = useState<OnboardingSubmitPayload['gender']>(undefined);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [budget, setBudget]                   = useState<OnboardingSubmitPayload['budget_preference']>(undefined);
-  const [source, setSource]                   = useState<OnboardingSubmitPayload['referral_source']>(undefined);
-  const [categories, setCategories]           = useState<Category[]>([]);
+  const [budget, setBudget] = useState<OnboardingSubmitPayload['budget_preference']>(undefined);
+  const [source, setSource] = useState<OnboardingSubmitPayload['referral_source']>(undefined);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
-  // Slide animation
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
-  const animateIn = () => {
-    slideAnim.setValue(40);
-    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
-  };
-
   useEffect(() => {
-    animateIn();
-  }, [step]);
-
-  useEffect(() => {
-    if (step === 3 && categories.length === 0) {
-      setLoadingCategories(true);
-      listCategories(0, 50)
-        .then(data => setCategories(data))
-        .catch(e => console.error('Failed to load categories', e))
-        .finally(() => setLoadingCategories(false));
-    }
-  }, [step]);
+    let active = true;
+    const fetchCats = async () => {
+      if (step === 3 && categories.length === 0) {
+        setLoadingCategories(true);
+        try {
+          const data = await listCategories(0, 50);
+          if (active) setCategories(data);
+        } catch (e) {
+          console.error('Failed to load categories', e);
+        } finally {
+          if (active) setLoadingCategories(false);
+        }
+      }
+    };
+    fetchCats();
+    return () => { active = false; };
+  }, [step, categories.length]);
 
   const toggleCategory = (id: string) => {
     setSelectedCategories(prev => {
@@ -290,8 +359,6 @@ export default function OnboardingScreen() {
       return;
     }
     if (step === 2) {
-      // Previously this only checked the string was 10 characters long, so
-      // "1st Jan 90" sailed through and the backend rejected it later.
       const error = validateDob(dob);
       if (error) {
         setDobError(error);
@@ -333,305 +400,188 @@ export default function OnboardingScreen() {
 
   const handleSkip = () => router.replace('/(tabs)');
 
-
-
-
-  // Theme shorthands
-  const bg       = isDark ? colors.surface   : '#F8F7FC';
-  const cardBg   = isDark ? colors.surfaceSoft : '#FFFFFF';
-  const ink      = colors.ink;
-  const inkSoft  = colors.inkSoft;
-  const inkGhost = colors.inkGhost;
+  const glassCardStyle = {
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.8)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 1)',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.03,
+    shadowRadius: 20,
+    elevation: 2,
+    marginBottom: 24,
+  };
 
   const eyebrowStyle = {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    letterSpacing: 1.4,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    letterSpacing: 1.5,
     textTransform: 'uppercase' as const,
     color: colors.primary,
-    marginBottom: 10,
+    marginBottom: 12,
+    textAlign: 'center' as const,
   };
 
   const titleStyle = {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 30,
-    color: ink,
-    lineHeight: 38,
-    marginBottom: 8,
+    fontFamily: 'Inter_800ExtraBold',
+    fontSize: 34,
+    color: colors.ink,
+    lineHeight: 42,
+    marginBottom: 12,
+    textAlign: 'center' as const,
+    letterSpacing: -0.5,
   };
 
   const subtitleStyle = {
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    color: inkSoft,
-    lineHeight: 22,
-    marginBottom: 28,
+    fontSize: 16,
+    color: colors.inkSoft,
+    lineHeight: 24,
+    marginBottom: 32,
+    textAlign: 'center' as const,
   };
 
-  const fieldLabelStyle = {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase' as const,
-    color: inkGhost,
-    marginBottom: 8,
-  };
+  const renderStepContent = () => {
+    switch (step) {
+      case 0:
+        return (
+          <Animated.View key="step0" entering={FadeInRight.duration(400)} exiting={FadeOutLeft.duration(300)}>
+            <FloatingImage source={ILLUSTRATIONS.welcome} />
+            <Text style={eyebrowStyle}>Welcome to the Future</Text>
+            <Text style={titleStyle}>Experience{'\n'}Shopping, Redefined.</Text>
+            <Text style={subtitleStyle}>
+              Tired of endless scrolling on ordinary platforms? Welcome to the ultimate curated marketplace. We eliminate the noise and deliver exactly what you desire.
+            </Text>
 
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top + 20,
-          paddingBottom: insets.bottom + 24,
-          alignItems: 'center',
-        }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Animated.View
-          style={{
-            width: '100%',
-            maxWidth: 480,
-            paddingHorizontal: 24,
-            flex: 1,
-            transform: [{ translateX: slideAnim }],
-          }}
-        >
-          {/* ── Step 0: Welcome ──────────────────────────────────────────────
-              Sits outside the step bar on purpose: it asks nothing, so
-              counting it as "1 of 5" would overstate how long this takes. */}
-          {step === 0 && (
-            <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 24 }}>
-              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.welcome} hero />
-              <Text style={[eyebrowStyle, { textAlign: 'center' }]}>Welcome</Text>
-              <Text style={[titleStyle, { textAlign: 'center' }]}>
-                Let&apos;s make this{'\n'}yours.
-              </Text>
-              <Text style={[subtitleStyle, { textAlign: 'center' }]}>
-                Four quick questions so we can show you things you&apos;ll actually
-                want. Takes under a minute, and you can skip whenever you like.
-              </Text>
-
-              <View style={{ marginTop: 32, gap: 14 }}>
-                {[
-                  { icon: 'pricetags-outline' as const, text: 'Deals in the categories you care about' },
-                  { icon: 'storefront-outline' as const, text: 'Stores near you, first' },
-                  { icon: 'lock-closed-outline' as const, text: 'Your data stays yours — change it any time' },
-                ].map(item => (
-                  <View key={item.text} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={{
-                      width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceSoft,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Ionicons name={item.icon} size={18} color={ink} />
-                    </View>
-                    <Text style={{ flex: 1, fontFamily: 'Inter_400Regular', fontSize: 14, color: inkSoft, lineHeight: 20 }}>
-                      {item.text}
-                    </Text>
+            <View style={glassCardStyle}>
+              {[
+                { icon: 'pricetags-outline' as const, text: 'Bespoke curation matched to your lifestyle.' },
+                { icon: 'storefront-outline' as const, text: 'Access local gems & global premium brands.' },
+                { icon: 'lock-closed-outline' as const, text: 'Uncompromised privacy. Your data is yours.' },
+              ].map((item, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: idx < 2 ? 16 : 0 }}>
+                  <View style={{
+                    width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.surfaceSoft,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Ionicons name={item.icon} size={20} color={colors.primary} />
                   </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Top bar */}
-          {step > 0 && (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            {step > 1 ? (
-              <Pressable
-                onPress={prevStep}
-                style={({ pressed }) => ({
-                  width: 36, height: 36, borderRadius: 18,
-                  backgroundColor: colors.surfaceSoft,
-                  alignItems: 'center', justifyContent: 'center',
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Ionicons name="arrow-back" size={18} color={ink} />
-              </Pressable>
-            ) : (
-              <View style={{ width: 36 }} />
-            )}
-            <Pressable onPress={handleSkip}>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: inkSoft }}>
-                Skip
-              </Text>
-            </Pressable>
-          </View>
-          )}
-
-          {/* Step bar */}
-          {step > 0 && <StepBar current={step} />}
-
-          {/* ── Step 1: Data consent ─────────────────────────────────────────── */}
-          {step === 1 && (
-            <View style={{ flex: 1 }}>
-              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.consent} />
-              <Text style={eyebrowStyle}>Getting started</Text>
-              <Text style={titleStyle}>A space built{'\n'}for you.</Text>
-              <Text style={subtitleStyle}>
-                Before we begin, we need your permission to personalise your experience.
-              </Text>
-
-              {/* Consent toggle card */}
-              <View
-                style={{
-                  backgroundColor: cardBg,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: gdprConsent ? colors.primary : colors.surfaceDeep,
-                  padding: 18,
-                  marginBottom: 12,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
-                  {/* Icon */}
-                  <View
-                    style={{
-                      width: 40, height: 40,
-                      borderRadius: 12,
-                      backgroundColor: colors.surfaceSoft,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                  >
-                    <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
-                  </View>
-
-                  {/* Text */}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: ink, marginBottom: 4 }}>
-                      Data Processing Consent
-                    </Text>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: inkSoft, lineHeight: 19 }}>
-                      I agree to the collection and processing of my personal data in accordance with GDPR.
-                    </Text>
-                  </View>
-
-                  {/* Toggle */}
-                  <Switch
-                    value={gdprConsent}
-                    onValueChange={setGdprConsent}
-                    trackColor={{ false: colors.surfaceDeep, true: colors.primary }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor={colors.surfaceDeep}
-                  />
+                  <Text style={{ flex: 1, fontFamily: 'Inter_500Medium', fontSize: 14, color: colors.inkSoft, lineHeight: 20 }}>
+                    {item.text}
+                  </Text>
                 </View>
-              </View>
+              ))}
+            </View>
+          </Animated.View>
+        );
+      case 1:
+        return (
+          <Animated.View key="step1" entering={FadeInRight.duration(400)} exiting={FadeOutLeft.duration(300)}>
+            <FloatingImage source={ILLUSTRATIONS.consent} />
+            <Text style={eyebrowStyle}>Getting started</Text>
+            <Text style={titleStyle}>A space built{'\n'}just for you.</Text>
+            <Text style={subtitleStyle}>Before we begin, we need your permission to personalise your experience.</Text>
 
-              {/* Links row */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: colors.surfaceSoft,
-                  borderRadius: 12,
-                  padding: 14,
-                  gap: 6,
-                }}
-              >
-                <Ionicons name="information-circle-outline" size={16} color={inkGhost} />
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: inkSoft, flex: 1, lineHeight: 18 }}>
-                  Read our{' '}
-                  <Text
-                    onPress={() => Linking.openURL(TERMS_URL)}
-                    style={{ fontFamily: 'Inter_600SemiBold', color: colors.primary, textDecorationLine: 'underline' }}
-                  >
-                    Terms of Service
+            <View style={[glassCardStyle, { padding: 20 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <View style={{
+                  width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.surfaceSoft,
+                  alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.ink, marginBottom: 4 }}>
+                    Data Processing
                   </Text>
-                  {' '}and{' '}
-                  <Text
-                    onPress={() => Linking.openURL(PRIVACY_URL)}
-                    style={{ fontFamily: 'Inter_600SemiBold', color: colors.primary, textDecorationLine: 'underline' }}
-                  >
-                    Privacy Policy
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.inkSoft, lineHeight: 18 }}>
+                    I agree to the collection and processing of my personal data in accordance with GDPR.
                   </Text>
-                  {' '}to learn exactly how your data is used.
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginTop: 14,
-                  padding: 12,
-                  backgroundColor: `${colors.primary}0A`,
-                  borderRadius: 10,
-                }}
-              >
-                <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: inkSoft }}>
-                  Your data is never sold. It's used only to personalise your feed.
-                </Text>
+                </View>
+                <Switch
+                  value={gdprConsent}
+                  onValueChange={setGdprConsent}
+                  trackColor={{ false: colors.surfaceDeep, true: colors.primary }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
             </View>
-          )}
 
-          {/* ── Step 2: DOB + gender ──────────────────────────────────────────── */}
-          {step === 2 && (
-            <View style={{ flex: 1 }}>
-              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.about} />
-              <Text style={eyebrowStyle}>About you</Text>
-              <Text style={titleStyle}>Tell us a little{'\n'}about yourself.</Text>
-              <Text style={subtitleStyle}>Helps us verify your age and tailor content for you.</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 }}>
+              <Ionicons name="information-circle" size={16} color={colors.inkGhost} />
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.inkSoft, flex: 1 }}>
+                Read our{' '}
+                <Text onPress={() => Linking.openURL(TERMS_URL)} style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Terms</Text>
+                {' '}and{' '}
+                <Text onPress={() => Linking.openURL(PRIVACY_URL)} style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Privacy Policy</Text>.
+              </Text>
+            </View>
+          </Animated.View>
+        );
+      case 2:
+        return (
+          <Animated.View key="step2" entering={FadeInRight.duration(400)} exiting={FadeOutLeft.duration(300)}>
+            <FloatingImage source={ILLUSTRATIONS.about} />
+            <Text style={eyebrowStyle}>About You</Text>
+            <Text style={titleStyle}>Tell us a little{'\n'}about yourself.</Text>
+            <Text style={subtitleStyle}>This helps us verify your age and tailor content for you.</Text>
 
-              <Text style={fieldLabelStyle}>Date of Birth</Text>
-
-              {/* Typing "YYYY-MM-DD" by hand was the single most error-prone
-                  thing in onboarding — the old field validated only that the
-                  string was ten characters long, so "1st Jan 90" passed. */}
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  dob ? `Date of birth, ${formatDobForDisplay(dob)}. Change it.` : 'Choose your date of birth'
-                }
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  backgroundColor: cardBg,
-                  borderWidth: 1,
-                  borderColor: dob ? colors.primary : colors.surfaceDeep,
-                  borderRadius: 12,
-                  padding: 16,
-                  minHeight: 56,
-                  marginBottom: dobError ? 8 : 24,
-                }}
-              >
-                <Text
+            <View style={glassCardStyle}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, textTransform: 'uppercase', color: colors.inkGhost, marginBottom: 12 }}>
+                Date of Birth
+              </Text>
+              
+              {Platform.OS === 'web' ? (
+                /* @ts-ignore */
+                <input
+                  type="date"
+                  value={dob || ''}
+                  max={toIsoDate(MAX_DOB)}
+                  min={toIsoDate(MIN_DOB)}
+                  onChange={(e: any) => { setDob(e.target.value); setDobError(null); }}
                   style={{
-                    fontSize: 16,
-                    fontFamily: 'Inter_400Regular',
+                    width: '100%', padding: 16, borderRadius: 16, borderWidth: 1,
+                    borderColor: dob ? colors.primary : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9F9FB',
                     color: dob ? colors.ink : colors.inkGhost,
+                    fontSize: 16, fontFamily: 'Inter_500Medium', outlineStyle: 'none',
+                    marginBottom: dobError ? 8 : 24,
+                  }}
+                />
+              ) : (
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    padding: 18, borderRadius: 16, borderWidth: 1,
+                    borderColor: dob ? colors.primary : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9F9FB',
+                    marginBottom: dobError ? 8 : 24,
                   }}
                 >
-                  {dob ? formatDobForDisplay(dob) : 'Select your date of birth'}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color={colors.inkMuted} />
-              </Pressable>
+                  <Text style={{ fontSize: 16, fontFamily: 'Inter_500Medium', color: dob ? colors.ink : colors.inkGhost }}>
+                    {dob ? formatDobForDisplay(dob) : 'Select your date of birth'}
+                  </Text>
+                  <Ionicons name="calendar" size={20} color={dob ? colors.primary : colors.inkMuted} />
+                </Pressable>
+              )}
 
-              {dobError ? (
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.error, marginBottom: 24 }}>
+              {dobError && (
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_500Medium', color: colors.error, marginBottom: 20 }}>
                   {dobError}
                 </Text>
-              ) : null}
+              )}
 
-              {showDatePicker && (
+              {showDatePicker && Platform.OS !== 'web' && (
                 <DateTimePicker
                   value={parseDobToDate(dob) ?? DEFAULT_DOB}
                   mode="date"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   maximumDate={MAX_DOB}
                   minimumDate={MIN_DOB}
-                  onChange={(event, selected) => {
-                    // Android fires once and dismisses itself; iOS keeps the
-                    // spinner mounted until we take it down.
+                  onChange={(event: any, selected?: Date) => {
                     if (Platform.OS !== 'ios') setShowDatePicker(false);
                     if (event.type === 'dismissed' || !selected) return;
                     setDob(toIsoDate(selected));
@@ -639,150 +589,179 @@ export default function OnboardingScreen() {
                   }}
                 />
               )}
-
-              {/* iOS spinner needs its own dismiss. */}
               {showDatePicker && Platform.OS === 'ios' && (
                 <Pressable
                   onPress={() => setShowDatePicker(false)}
-                  style={{ alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 12, marginBottom: 16 }}
+                  style={{ alignSelf: 'flex-end', padding: 8, marginBottom: 16 }}
                 >
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.ink }}>Done</Text>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: colors.primary }}>Done</Text>
                 </Pressable>
               )}
 
-              <Text style={fieldLabelStyle}>
-                Gender{' '}
-                <Text style={{ fontFamily: 'Inter_400Regular', textTransform: 'none', letterSpacing: 0, fontSize: 11, color: inkGhost }}>
-                  · optional
-                </Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, textTransform: 'uppercase', color: colors.inkGhost, marginBottom: 12 }}>
+                Gender <Text style={{ textTransform: 'none', color: colors.inkGhost }}>(Optional)</Text>
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 {GENDER_OPTIONS.map(g => (
-                  <Chip
-                    key={g.id}
-                    label={g.label}
-                    selected={gender === g.id}
+                  <ModernChip
+                    key={g.id} label={g.label} selected={gender === g.id}
                     onPress={() => setGender(gender === g.id ? undefined : g.id)}
-                    colors={colors}
-                    cardBg={cardBg}
+                    colors={colors} isDark={isDark}
                   />
                 ))}
               </View>
             </View>
-          )}
+          </Animated.View>
+        );
+      case 3:
+        return (
+          <Animated.View key="step3" entering={FadeInRight.duration(400)} exiting={FadeOutLeft.duration(300)}>
+            <FloatingImage source={ILLUSTRATIONS.interests} />
+            <Text style={eyebrowStyle}>Your Taste</Text>
+            <Text style={titleStyle}>What catches{'\n'}your eye?</Text>
+            <Text style={subtitleStyle}>Pick your favourite categories.</Text>
 
-          {/* ── Step 3: Categories + budget ──────────────────────────────────── */}
-          {step === 3 && (
-            <View style={{ flex: 1 }}>
-              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.interests} />
-              <Text style={eyebrowStyle}>Your taste</Text>
-              <Text style={titleStyle}>What catches{'\n'}your eye?</Text>
-              <Text style={subtitleStyle}>Pick your favourite categories.</Text>
-
+            <View style={glassCardStyle}>
               {loadingCategories ? (
-                <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+                <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 40 }} />
               ) : (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24 }}>
                   {categories.map(cat => (
-                    <Chip
-                      key={cat.id}
-                      label={cat.name}
-                      selected={selectedCategories.has(cat.id)}
-                      onPress={() => toggleCategory(cat.id)}
-                      colors={colors}
-                      cardBg={cardBg}
+                    <ModernChip
+                      key={cat.id} label={cat.name} selected={selectedCategories.has(cat.id)}
+                      onPress={() => toggleCategory(cat.id)} colors={colors} isDark={isDark}
                     />
                   ))}
                 </View>
               )}
 
-              <Text style={[fieldLabelStyle, { marginBottom: 12 }]}>
-                Budget preference{' '}
-                <Text style={{ fontFamily: 'Inter_400Regular', textTransform: 'none', letterSpacing: 0, fontSize: 11, color: inkGhost }}>
-                  · optional
-                </Text>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, textTransform: 'uppercase', color: colors.inkGhost, marginBottom: 16 }}>
+                Budget Preference <Text style={{ textTransform: 'none', color: colors.inkGhost }}>(Optional)</Text>
               </Text>
               {BUDGET_OPTIONS.map(opt => (
-                <RowOption
-                  key={opt.value}
-                  label={opt.label}
-                  sub={opt.sub}
-                  selected={budget === opt.value}
-                  onPress={() => setBudget(budget === opt.value ? undefined : opt.value)}
-                  colors={colors}
-                  cardBg={cardBg}
+                <ModernRowOption
+                  key={opt.value} label={opt.label} sub={opt.sub}
+                  selected={budget === opt.value} onPress={() => setBudget(budget === opt.value ? undefined : opt.value)}
+                  colors={colors} isDark={isDark}
                 />
               ))}
             </View>
-          )}
+          </Animated.View>
+        );
+      case 4:
+        return (
+          <Animated.View key="step4" entering={FadeInRight.duration(400)} exiting={FadeOutLeft.duration(300)}>
+            <FloatingImage source={ILLUSTRATIONS.finish} />
+            <Text style={eyebrowStyle}>One Last Thing</Text>
+            <Text style={titleStyle}>Almost{'\n'}there.</Text>
+            <Text style={subtitleStyle}>How did you discover us?</Text>
 
-          {/* ── Step 4: Referral source + finish card ────────────────────────── */}
-          {step === 4 && (
-            <View style={{ flex: 1 }}>
-              <OnboardingIllustration slot={ONBOARDING_ILLUSTRATIONS.finish} />
-              <Text style={eyebrowStyle}>One last thing</Text>
-              <Text style={titleStyle}>Almost{'\n'}there.</Text>
-              <Text style={subtitleStyle}>How did you discover us?</Text>
-
+            <View style={glassCardStyle}>
               {SOURCE_OPTIONS.map(opt => (
-                <RowOption
-                  key={opt.value}
-                  label={opt.label}
-                  selected={source === opt.value}
+                <ModernRowOption
+                  key={opt.value} label={opt.label} selected={source === opt.value}
                   onPress={() => setSource(source === opt.value ? undefined : opt.value)}
-                  colors={colors}
-                  cardBg={cardBg}
+                  colors={colors} isDark={isDark}
                 />
               ))}
-
-              {/* Finish card */}
-              <View
-                style={{
-                  marginTop: 20,
-                  alignItems: 'center',
-                  padding: 24,
-                  backgroundColor: `${colors.primary}0D`,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: `${colors.primary}20`,
-                }}
-              >
-                <View
-                  style={{
-                    width: 52, height: 52,
-                    borderRadius: 16,
-                    backgroundColor: `${colors.primary}18`,
-                    alignItems: 'center', justifyContent: 'center',
-                    marginBottom: 14,
-                  }}
-                >
-                  <Ionicons name="sparkles" size={26} color={colors.primary} />
-                </View>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: ink, marginBottom: 6 }}>
-                  Your feed is ready.
-                </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: inkSoft, textAlign: 'center', lineHeight: 20 }}>
-                  We've curated products around your preferences. The best is waiting.
-                </Text>
-              </View>
             </View>
+
+            <Animated.View entering={FadeInDown.delay(300).duration(500)} style={{
+              marginTop: 10, padding: 24, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : colors.surfaceSoft,
+              borderRadius: 24, alignItems: 'center'
+            }}>
+              <View style={{
+                width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary,
+                alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+                shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 8
+              }}>
+                <Ionicons name="sparkles" size={28} color="#FFF" />
+              </View>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink, marginBottom: 8 }}>
+                Your feed is ready.
+              </Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.inkSoft, textAlign: 'center', lineHeight: 22 }}>
+                We've curated an exclusive selection of products around your preferences. The best is waiting.
+              </Text>
+            </Animated.View>
+          </Animated.View>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: isDark ? '#1C1525' : '#FAF9FD' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <WavyBackground isDark={isDark} />
+      
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 32,
+          alignItems: 'center',
+        }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={{ width: '100%', maxWidth: 500, paddingHorizontal: 24, flex: 1 }}>
+          
+          {/* Top Nav Bar */}
+          {step > 0 && (
+            <Animated.View entering={FadeInDown} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              {step > 1 ? (
+                <Pressable
+                  onPress={prevStep}
+                  style={({ pressed }) => ({
+                    width: 44, height: 44, borderRadius: 22,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#FFF',
+                    alignItems: 'center', justifyContent: 'center',
+                    opacity: pressed ? 0.7 : 1,
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2
+                  })}
+                >
+                  <Ionicons name="arrow-back" size={20} color={colors.ink} />
+                </Pressable>
+              ) : (
+                <View style={{ width: 44 }} />
+              )}
+              
+              <ModernStepBar current={step} total={TOTAL_STEPS} />
+
+              <Pressable onPress={handleSkip} style={{ padding: 10 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.inkSoft }}>
+                  Skip
+                </Text>
+              </Pressable>
+            </Animated.View>
           )}
+
+          {renderStepContent()}
 
           {/* ── CTA button ───────────────────────────────────────────────────── */}
-          <View style={{ marginTop: 32 }}>
+          <Animated.View entering={FadeInDown.delay(200)} style={{ marginTop: 'auto', paddingTop: 32 }}>
             {step < TOTAL_STEPS ? (
               <Pressable
                 onPress={nextStep}
                 style={({ pressed }) => ({
-                  backgroundColor: colors.primary,
-                  paddingVertical: 16,
-                  borderRadius: 14,
+                  backgroundColor: colors.ink,
+                  paddingVertical: 18,
+                  borderRadius: 20,
                   alignItems: 'center',
-                  opacity: pressed ? 0.88 : 1,
+                  transform: [{ scale: pressed ? 0.97 : 1 }],
+                  shadowColor: colors.ink,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 12,
+                  elevation: 5,
                 })}
               >
-                <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.onPrimary, fontSize: 16, letterSpacing: 0.2 }}>
-                  {step === 0 ? 'Get started' : 'Continue'}
+                <Text style={{ fontFamily: 'Inter_600SemiBold', color: isDark ? '#000' : '#FFF', fontSize: 17, letterSpacing: 0.3 }}>
+                  {step === 0 ? 'Get Started' : 'Continue'}
                 </Text>
               </Pressable>
             ) : (
@@ -791,27 +770,36 @@ export default function OnboardingScreen() {
                 disabled={isSubmitting}
                 style={({ pressed }) => ({
                   backgroundColor: colors.primary,
-                  paddingVertical: 16,
-                  borderRadius: 14,
+                  paddingVertical: 18,
+                  borderRadius: 20,
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexDirection: 'row',
-                  gap: 8,
-                  opacity: pressed || isSubmitting ? 0.8 : 1,
+                  gap: 12,
+                  opacity: isSubmitting ? 0.7 : 1,
+                  transform: [{ scale: pressed ? 0.97 : 1 }],
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 16,
+                  elevation: 6,
                 })}
               >
                 {isSubmitting ? (
-                  <ActivityIndicator color={colors.onPrimary} size="small" />
+                  <ActivityIndicator color="#FFF" size="small" />
                 ) : (
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.onPrimary, fontSize: 16, letterSpacing: 0.2 }}>
-                    Let's Shop ✦
-                  </Text>
+                  <>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: '#FFF', fontSize: 17, letterSpacing: 0.5 }}>
+                      Let's Shop
+                    </Text>
+                    <Ionicons name="arrow-forward" size={20} color="#FFF" />
+                  </>
                 )}
               </Pressable>
             )}
-          </View>
+          </Animated.View>
 
-        </Animated.View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
