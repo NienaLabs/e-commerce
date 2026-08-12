@@ -1,13 +1,15 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Image, useWindowDimensions, Platform } from 'react-native';
+import { View, Image, useWindowDimensions, Platform, type ColorValue } from 'react-native';
 import { WebHeader } from '../../components/WebHeader';
 import { useRef, useEffect } from 'react';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeContext';
 import { useCartStore } from '../../store/cartStore';
 
-const AnimatedCartIcon = ({ color, focused, totalItems }: { color: string, focused: boolean, totalItems: number }) => {
+// `color` is whatever the tab bar hands us, which is ColorValue rather than a
+// bare string — it can be an opaque platform colour.
+const AnimatedCartIcon = ({ color, focused, totalItems }: { color: ColorValue, focused: boolean, totalItems: number }) => {
   const cartTranslateY = useSharedValue(0);
 
   useEffect(() => {

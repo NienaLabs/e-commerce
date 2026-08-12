@@ -34,6 +34,8 @@ interface RecommendationShelfProps {
   label: string;
   products: ShelfProduct[];
   isLoading?: boolean;
+  /** Set on category rows so "See all" can page through that category. */
+  categoryId?: string;
 }
 
 export const RecommendationShelfRow = ({
@@ -41,6 +43,7 @@ export const RecommendationShelfRow = ({
   label,
   products,
   isLoading,
+  categoryId,
 }: RecommendationShelfProps) => {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
@@ -118,11 +121,23 @@ export const RecommendationShelfRow = ({
         </View>
 
         <Pressable
+          onPress={() =>
+            router.push({
+              pathname: '/collection',
+              // A category row can be paginated by id; a recommendation row is
+              // fetched by its slot instead.
+              params: categoryId ? { label, categoryId } : { label, slot },
+            } as any)
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`See all ${label}`}
+          hitSlop={8}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
             opacity: pressed ? 0.6 : 1,
             paddingLeft: 12,
+            paddingVertical: 6,
           })}
         >
           <Text

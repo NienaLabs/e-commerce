@@ -6,24 +6,32 @@ import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { ProductCard } from '../components/ProductCard';
 import { useQuery } from '@tanstack/react-query';
-import { listProducts, mapProductToCard } from '../api/products';
+import { getLiveFlashSale, mapProductToCard } from '../api/products';
 
-// Removed static FLASH_PRODUCTS
+/**
+ * The countdown used to run to `Date.now() + 6 hours`, recomputed on every
+ * load, and "flash sale" meant any product that happened to carry a discount.
+ * Both now come from the sale the admin scheduled.
+ */
+function useCountdown(endsAt?: string) {
+  const targetMs = endsAt ? new Date(endsAt).getTime() : null;
+  const [remaining, setRemaining] = useState(() =>
+    targetMs === null ? 0 : targetMs - Date.now()
+  );
 
-// End time: 6 hours from now
-const END_TIME = Date.now() + 6 * 60 * 60 * 1000;
-
-function useCountdown(targetMs: number) {
-  const [remaining, setRemaining] = useState(targetMs - Date.now());
   useEffect(() => {
+    if (targetMs === null) return;
+    setRemaining(targetMs - Date.now());
     const interval = setInterval(() => setRemaining(targetMs - Date.now()), 1000);
     return () => clearInterval(interval);
   }, [targetMs]);
+
   const total = Math.max(0, remaining);
-  const h = Math.floor(total / 3600000).toString().padStart(2, '0');
+  const d = Math.floor(total / 86400000);
+  const h = Math.floor((total % 86400000) / 3600000).toString().padStart(2, '0');
   const m = Math.floor((total % 3600000) / 60000).toString().padStart(2, '0');
   const s = Math.floor((total % 60000) / 1000).toString().padStart(2, '0');
-  return { h, m, s };
+  return { d, h, m, s, expired: targetMs !== null && total === 0 };
 }
 
 function TimeUnit({ value, label, colors }: { value: string; label: string; colors: any }) {
@@ -41,18 +49,21 @@ export default function FlashSalesScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
-  const { h, m, s } = useCountdown(END_TIME);
-
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ['flash-products'],
-    queryFn: () => listProducts({ limit: 100 }),
+  const { data: sale, isLoading } = useQuery({
+    queryKey: ['flash-sale'],
+    queryFn: getLiveFlashSale,
+    // The window matters here — a stale sale would keep counting down after it
+    // has actually ended.
+    staleTime: 30_000,
   });
 
-  // Filter products that have a discount
-  const flashProducts = products
-    .filter(p => p.discount_price != null && p.discount_price < p.actual_price)
-    .map(mapProductToCard)
-    .slice(0, 10); // Limit to top 10 flash sales
+  const { d, h, m, s, expired } = useCountdown(sale?.ends_at);
+
+  const flashProducts = (sale?.products ?? []).map(p => {
+    const card = mapProductToCard(p);
+    // A sale-specific price overrides whatever discount the product carries.
+    return p.flash_price != null ? { ...card, salePrice: p.flash_price } : card;
+  });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
@@ -68,22 +79,29 @@ export default function FlashSalesScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.ink} />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="flash" size={22} color="#f59e0b" style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>Flash Sale</Text>
-            </View>
+            {/* No bolt glyph — the countdown already says "hurry" without it. */}
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: colors.ink }}>
+              {sale?.title || 'Flash Sale'}
+            </Text>
             <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 12, color: colors.inkMuted, marginTop: 2 }}>
-              Limited time, limited stock — grab it before it's gone!
+              {sale?.subtitle || 'Limited time offers, while they last.'}
             </Text>
           </View>
         </View>
 
-        {/* Countdown Banner */}
-        <View style={{ backgroundColor: colors.isDark ? '#1a0a00' : '#fff8ed', paddingVertical: 20, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.isDark ? '#2d1500' : '#fde68a40' }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#b45309', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>
+        {/* Countdown — only when a scheduled sale is actually running. */}
+        {sale && !expired && (
+        <View style={{ backgroundColor: colors.surfaceSoft, paddingVertical: 20, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.surfaceMuted }}>
+          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: colors.inkMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>
             Ends In
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {d > 0 && (
+              <>
+                <TimeUnit value={String(d).padStart(2, '0')} label={d === 1 ? 'Day' : 'Days'} colors={colors} />
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.inkMuted, marginBottom: 18 }}>:</Text>
+              </>
+            )}
             <TimeUnit value={h} label="Hours" colors={colors} />
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 28, color: colors.inkMuted, marginBottom: 18 }}>:</Text>
             <TimeUnit value={m} label="Mins" colors={colors} />
@@ -91,14 +109,23 @@ export default function FlashSalesScreen() {
             <TimeUnit value={s} label="Secs" colors={colors} />
           </View>
         </View>
+        )}
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
           {isLoading ? (
             <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.inkMuted, textAlign: 'center', width: '100%', marginTop: 24 }}>Loading flash sales...</Text>
-          ) : flashProducts.length === 0 ? (
-            <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.inkMuted, textAlign: 'center', width: '100%', marginTop: 24 }}>No active flash sales right now.</Text>
+          ) : !sale || expired || flashProducts.length === 0 ? (
+            <View style={{ width: '100%', alignItems: 'center', marginTop: 48, paddingHorizontal: 24 }}>
+              <Ionicons name="pricetags-outline" size={44} color={colors.inkGhost} />
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.ink, marginTop: 16 }}>
+                No sale running
+              </Text>
+              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: 13, color: colors.inkMuted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>
+                There&apos;s no flash sale on at the moment. Check back soon.
+              </Text>
+            </View>
           ) : flashProducts.map(product => (
             <View key={product.id} style={{ width: isDesktop ? '31%' : '100%' }}>
               {/* Stock badge */}
