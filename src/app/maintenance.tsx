@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,15 +7,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { useMaintenanceStore } from '../store/maintenanceStore';
 import KonuraLogo from '../../assets/images/konura.svg';
 
-/** How often to quietly ask whether maintenance has lifted. */
-const POLL_INTERVAL_MS = 15000;
-
 /**
  * Shown while the platform is paused by an admin.
- *
- * Recovers on its own: it polls /health in the background and drops the
- * shopper straight back into the app the moment maintenance lifts, so nobody
- * is left staring at a dead end wondering whether to reload.
  */
 export default function MaintenanceScreen() {
   const { colors } = useTheme();
@@ -28,10 +21,7 @@ export default function MaintenanceScreen() {
     if (backUp) router.replace('/(tabs)');
   }, [recheck]);
 
-  useEffect(() => {
-    const id = setInterval(leaveIfBackUp, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [leaveIfBackUp]);
+
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top', 'bottom']}>
@@ -76,23 +66,11 @@ export default function MaintenanceScreen() {
             lineHeight: 23,
             color: colors.inkMuted,
             textAlign: 'center',
-            marginBottom: 8,
+            marginBottom: 32,
             maxWidth: 360,
           }}
         >
           {message ?? 'Konura is under maintenance right now. Please try again in a few minutes.'}
-        </Text>
-
-        <Text
-          style={{
-            fontFamily: 'OpenSans_400Regular',
-            fontSize: 13,
-            color: colors.inkGhost,
-            textAlign: 'center',
-            marginBottom: 32,
-          }}
-        >
-          This page refreshes itself — you don&apos;t need to do anything.
         </Text>
 
         <Pressable
