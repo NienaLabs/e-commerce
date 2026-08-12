@@ -119,11 +119,11 @@ function validateDob(value: string): string | null {
 // ─── Animations & Assets ────────────────────────────────────────────────────────
 
 const ILLUSTRATIONS = {
-  welcome: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop',
-  consent: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2670&auto=format&fit=crop',
-  about: 'https://images.unsplash.com/photo-1633596683562-4a47eb4883c5?q=80&w=2662&auto=format&fit=crop',
-  interests: 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?q=80&w=2670&auto=format&fit=crop',
-  finish: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=80&w=2574&auto=format&fit=crop',
+  welcome: require('../../../../assets/onboarding/bird-welcome.png'),
+  consent: require('../../../../assets/onboarding/bird-about.png'),
+  about: require('../../../../assets/onboarding/bird-about.png'),
+  interests: require('../../../../assets/onboarding/bird-preferences.png'),
+  finish: require('../../../../assets/onboarding/bird-social.png'),
 };
 
 function WavyBackground({ isDark }: { isDark: boolean }) {
@@ -154,37 +154,16 @@ function WavyBackground({ isDark }: { isDark: boolean }) {
   );
 }
 
-function FloatingImage({ source }: { source: string }) {
-  const translateY = useSharedValue(0);
-
-  useEffect(() => {
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(-15, { duration: 3500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 3500, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-  }, [translateY]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-
+function FloatingImage({ source }: { source: any }) {
   return (
-    <Animated.View style={[animatedStyle, { alignItems: 'center', justifyContent: 'center', marginVertical: 32 }]}>
-      <View style={{
-        shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 10
-      }}>
-        <Image
-          source={source}
-          style={{ width: 200, height: 200, borderRadius: 100 }}
-          contentFit="cover"
-          transition={500}
-        />
-      </View>
-    </Animated.View>
+    <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 32, height: 260 }}>
+      <Image
+        source={source}
+        style={{ width: '100%', height: '100%' }}
+        contentFit="contain"
+        transition={500}
+      />
+    </View>
   );
 }
 
@@ -415,7 +394,7 @@ export default function OnboardingScreen() {
   };
 
   const eyebrowStyle = {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'OpenSans_700Bold',
     fontSize: 12,
     letterSpacing: 1.5,
     textTransform: 'uppercase' as const,
@@ -425,7 +404,7 @@ export default function OnboardingScreen() {
   };
 
   const titleStyle = {
-    fontFamily: 'Inter_800ExtraBold',
+    fontFamily: 'OpenSans_700Bold',
     fontSize: 34,
     color: colors.ink,
     lineHeight: 42,
