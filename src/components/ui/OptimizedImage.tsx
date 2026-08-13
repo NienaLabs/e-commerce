@@ -55,7 +55,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     if (targetWidth > 0 || optimizedWidth) {
        const finalWidth = targetWidth || 800;
        // Only try to optimize if it's a remote URL
-       if (urlString.startsWith('http')) {
+       if (urlString?.startsWith('http')) {
          const optimizedUri = getOptimizedUrl(urlString, finalWidth, quality);
          return { uri: optimizedUri || undefined };
        }

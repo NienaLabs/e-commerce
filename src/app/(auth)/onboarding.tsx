@@ -121,7 +121,7 @@ function validateDob(value: string): string | null {
 const ILLUSTRATIONS = {
   welcome: require('../../../assets/onboarding/bird-welcome.png'),
   consent: require('../../../assets/onboarding/bird-about.png'),
-  about: require('../../../assets/onboarding/bird-about.png'),
+  about: require('../../../assets/onboarding/bird-consent.png'),
   interests: require('../../../assets/onboarding/bird-preferences.png'),
   finish: require('../../../assets/onboarding/bird-social.png'),
 };
@@ -141,7 +141,7 @@ function WavyBackground({ isDark }: { isDark: boolean }) {
         {/* Top Wave */}
         <Path
           d="M0,150 C100,50 250,200 400,100 L400,0 L0,0 Z"
-          fill={isDark ? 'rgba(150, 100, 255, 0.05)' : 'rgba(120, 80, 255, 0.05)'}
+          fill={isDark ? 'rgba(100, 255, 150, 0.05)' : 'rgba(80, 200, 120, 0.05)'}
         />
         
         {/* Bottom Blob Wave */}
