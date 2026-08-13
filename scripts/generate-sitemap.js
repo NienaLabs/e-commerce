@@ -48,7 +48,7 @@ async function generateSitemap() {
       fs.mkdirSync(publicDir, { recursive: true });
     }
 
-    const outputPath = path.join(publicDir, 'sitemap.xml');
+    const outputPath = path.join(publicDir, '_sitemap.xml');
     fs.writeFileSync(outputPath, sitemap, 'utf8');
     
     console.log(`Sitemap successfully generated with ${products.length} products at ${outputPath}`);
