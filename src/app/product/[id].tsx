@@ -17,6 +17,7 @@ import { getProduct } from '../../api/products';
 import { RecommendationShelfRow } from '../../components/RecommendationShelf';
 import { OptimizedImage } from '../../components/ui/OptimizedImage';
 import { Skeleton } from '../../components/Skeleton';
+import { SEO } from '../../components/SEO';
 
 export default function ProductDetail() {
   const { colors } = useTheme();
@@ -178,6 +179,37 @@ export default function ProductDetail() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
+      <SEO
+        title={`${product.name} | Konura`}
+        description={product.description || `Buy ${product.name} at Konura.`}
+        image={firstImage}
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": product.name,
+          "image": product.images.map((img: any) => img.image_url),
+          "description": product.description,
+          "brand": {
+            "@type": "Brand",
+            "name": product.vendor_name || "Konura"
+          },
+          "offers": {
+            "@type": "Offer",
+            "url": `https://konura.store/product/${product.id}`,
+            "priceCurrency": "USD",
+            "price": product.discount_price || product.actual_price,
+            "itemCondition": "https://schema.org/NewCondition",
+            "availability": inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
+          },
+          ...(totalReviewsCount > 0 ? {
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": displayRating.toFixed(1),
+              "reviewCount": totalReviewsCount
+            }
+          } : {})
+        }}
+      />
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: gutter, paddingVertical: 16, backgroundColor: colors.surface, zIndex: 10 }}>
         <Pressable

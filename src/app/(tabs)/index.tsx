@@ -20,6 +20,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { SEO } from '@/components/SEO';
 import { CategoryCard } from '@/components/CategoryCard';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
 import { PromoCard } from '@/components/PromoCard';
@@ -552,6 +553,19 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
+      <SEO 
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "Konura",
+          "url": "https://konura.store",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://konura.store/search?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }}
+      />
 
       {/* ─── Header: Location + Search (Fixed & Animated) ─── */}
       <Animated.View style={[{
