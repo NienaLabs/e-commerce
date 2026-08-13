@@ -10,8 +10,8 @@ interface SEOProps {
 }
 
 export function SEO({
-  title = 'Konura | The Best E-commerce Store',
-  description = 'Shop the latest trends in fashion, electronics, and home goods on Konura. Fast shipping and great prices.',
+  title = 'Konura | The Best E-commerce Store in Kumasi',
+  description = 'Shop the latest trends in fashion, electronics, and home goods on Konura. Fast shipping and great prices in Kumasi, Ghana.',
   image = '/icon-192x192.png',
   url = 'https://konura.store',
   schema,

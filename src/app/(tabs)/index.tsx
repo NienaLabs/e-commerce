@@ -554,17 +554,32 @@ export default function Home() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSoft }} edges={['top']}>
       <SEO 
-        schema={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          "name": "Konura",
-          "url": "https://konura.store",
-          "potentialAction": {
-            "@type": "SearchAction",
-            "target": "https://konura.store/search?q={search_term_string}",
-            "query-input": "required name=search_term_string"
+        schema={[
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Konura",
+            "url": "https://konura.store",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://konura.store/search?q={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            "name": "Konura",
+            "image": "https://konura.store/icon-192x192.png",
+            "url": "https://konura.store",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Kumasi",
+              "addressRegion": "Ashanti",
+              "addressCountry": "GH"
+            }
           }
-        }}
+        ]}
       />
 
       {/* ─── Header: Location + Search (Fixed & Animated) ─── */}

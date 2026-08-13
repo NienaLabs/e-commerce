@@ -113,11 +113,11 @@ function validateDob(value: string): string | null {
 // ─── Animations & Assets ────────────────────────────────────────────────────────
 
 const ILLUSTRATIONS = {
-  welcome: require('../../../assets/onboarding/bird-welcome.png'),
-  consent: require('../../../assets/onboarding/bird-about.png'),
-  about: require('../../../assets/onboarding/bird-consent.png'),
-  interests: require('../../../assets/onboarding/bird-preferences.png'),
-  finish: require('../../../assets/onboarding/bird-social.png'),
+  welcome: require('../../../assets/onboarding/bird-welcome.webp'),
+  consent: require('../../../assets/onboarding/bird-about.webp'),
+  about: require('../../../assets/onboarding/bird-consent.webp'),
+  interests: require('../../../assets/onboarding/bird-preferences.webp'),
+  finish: require('../../../assets/onboarding/bird-social.webp'),
 };
 
 function WavyBackground({ isDark }: { isDark: boolean }) {

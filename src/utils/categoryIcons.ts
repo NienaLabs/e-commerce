@@ -11,23 +11,23 @@
  */
 
 // ── The icons we actually have art for ───────────────────────────────
-const HEADPHONES = require('@/assets/3d icons/3d-headphones.png');
-const CLOTHES = require('@/assets/3d icons/3d-clothes.png');
-const HOUSE = require('@/assets/3d icons/3d-house.png');
-const WATCH = require('@/assets/3d icons/3d-watch.png');
-const SPORTS = require('@/assets/3d icons/3d-sports.png');
-const FOOD = require('@/assets/3d icons/3d-food.png');
-const BEAUTY = require('@/assets/3d icons/3d-beauty.png');
-const HEALTH = require('@/assets/3d icons/3d-health.png');
-const AUTOMOTIVE = require('@/assets/3d icons/3d-automotives.png');
-const ARTS = require('@/assets/3d icons/3d-arts.png');
-const PHONE = require('@/assets/3d icons/3d-phone.png');
-const LAPTOP = require('@/assets/3d icons/3d-laptop.png');
-const CAMERA = require('@/assets/3d icons/3d-camera.png');
-const GAMING = require('@/assets/3d icons/3d-gaming.png');
-const BOOKS = require('@/assets/3d icons/3d-books.png');
-const TOYS = require('@/assets/3d icons/3d-toys.png');
-const PETS = require('@/assets/3d icons/3d-pets.png');
+const HEADPHONES = require('@/assets/3d icons/3d-headphones.webp');
+const CLOTHES = require('@/assets/3d icons/3d-clothes.webp');
+const HOUSE = require('@/assets/3d icons/3d-house.webp');
+const WATCH = require('@/assets/3d icons/3d-watch.webp');
+const SPORTS = require('@/assets/3d icons/3d-sports.webp');
+const FOOD = require('@/assets/3d icons/3d-food.webp');
+const BEAUTY = require('@/assets/3d icons/3d-beauty.webp');
+const HEALTH = require('@/assets/3d icons/3d-health.webp');
+const AUTOMOTIVE = require('@/assets/3d icons/3d-automotives.webp');
+const ARTS = require('@/assets/3d icons/3d-arts.webp');
+const PHONE = require('@/assets/3d icons/3d-phone.webp');
+const LAPTOP = require('@/assets/3d icons/3d-laptop.webp');
+const CAMERA = require('@/assets/3d icons/3d-camera.webp');
+const GAMING = require('@/assets/3d icons/3d-gaming.webp');
+const BOOKS = require('@/assets/3d icons/3d-books.webp');
+const TOYS = require('@/assets/3d icons/3d-toys.webp');
+const PETS = require('@/assets/3d icons/3d-pets.webp');
 
 export interface CategoryVisual {
   /** Image source, or undefined when no icon exists for this category yet. */
