@@ -15,12 +15,26 @@ async function generateSitemap() {
     const siteUrl = process.env.SITE_URL || 'https://konura.store';
     
     console.log(`Fetching products from ${baseUrl}...`);
-    // Using global fetch (available in Node 18+)
-    const response = await fetch(`${baseUrl}/products?limit=1000`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch products: ${response.statusText}`);
+    
+    let products = [];
+    let skip = 0;
+    const limit = 100;
+    
+    while (true) {
+      const response = await fetch(`${baseUrl}/products?limit=${limit}&skip=${skip}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch products at skip ${skip}: ${response.statusText}`);
+      }
+      const chunk = await response.json();
+      if (chunk.length === 0) {
+        break;
+      }
+      products.push(...chunk);
+      skip += limit;
+      
+      // Safety break
+      if (products.length > 10000) break;
     }
-    const products = await response.json();
 
     let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
