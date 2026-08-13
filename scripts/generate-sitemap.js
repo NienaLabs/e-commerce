@@ -4,7 +4,14 @@ const path = require('path');
 
 async function generateSitemap() {
   try {
-    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
+    let baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
+    
+    // Node.js fetch() requires absolute URLs. If Vercel sets the env to '/api', 
+    // route directly to the AWS Lambda backend instead.
+    if (baseUrl.startsWith('/')) {
+      baseUrl = 'https://6ddppysfz5onv3n37neep242em0fhxmm.lambda-url.us-east-2.on.aws';
+    }
+    
     const siteUrl = process.env.SITE_URL || 'https://konura.store';
     
     console.log(`Fetching products from ${baseUrl}...`);
