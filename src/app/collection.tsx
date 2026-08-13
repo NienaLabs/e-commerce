@@ -29,7 +29,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { ProductCard } from '../components/ProductCard';
-import { listProducts, mapProductToCard } from '../api/products';
+import { listProducts, getProduct, mapProductToCard, Product } from '../api/products';
 import { getRecommendationShelf, MAX_SHELF_LIMIT } from '../api/recommendations';
 
 const PAGE_SIZE = 20;
@@ -89,19 +89,18 @@ export default function CollectionScreen() {
           // MAX_SHELF_LIMIT, not more: the endpoint caps at 50 and answers 422
           // for anything larger, which was failing every recommendation shelf.
           const shelf = await getRecommendationShelf(token, slot, MAX_SHELF_LIMIT);
+          // The /shelf/{slot} endpoint returns ranked product IDs plus metadata
+          // only — no name, price, or image. The home screen hydrates these
+          // against its own product feed; this screen has no such feed, so the
+          // cards rendered blank (an empty "See all"). Fetch each product to
+          // fill them in, preserving the server's ranking order and dropping any
+          // that 404 (e.g. a product deleted since the shelf was built).
+          const ids = (shelf.products ?? []).map(p => p.product_id);
+          const settled = await Promise.allSettled(ids.map(id => getProduct(id)));
           setItems(
-            (shelf.products ?? []).map((p: any) => ({
-              id: p.product_id ?? p.id,
-              name: p.name,
-              price: p.price,
-              salePrice: p.salePrice ?? p.discount_price ?? undefined,
-              imageUrl: p.imageUrl ?? p.image_url,
-              vendorId: p.vendorId ?? p.vendor_id,
-              vendorName: p.vendorName ?? p.vendor_name,
-              vendorAvatar: p.vendorAvatar ?? p.vendor_logo_url,
-              inStock: p.inStock ?? true,
-              categoryId: p.category_id,
-            })) as Card[]
+            settled
+              .filter((r): r is PromiseFulfilledResult<Product> => r.status === 'fulfilled')
+              .map(r => mapProductToCard(r.value)) as Card[]
           );
           setExhausted(true);
         } else {
