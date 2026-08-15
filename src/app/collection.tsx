@@ -31,6 +31,7 @@ import { useAuth } from '../context/AuthContext';
 import { ProductCard } from '../components/ProductCard';
 import { listProducts, getProduct, mapProductToCard, Product } from '../api/products';
 import { getRecommendationShelf, MAX_SHELF_LIMIT } from '../api/recommendations';
+import { useImpressionScroll } from '../hooks/useImpression';
 
 const PAGE_SIZE = 20;
 
@@ -40,6 +41,8 @@ export default function CollectionScreen() {
   const { colors } = useTheme();
   const { token } = useAuth();
   const { width } = useWindowDimensions();
+  // Lets product cards below the fold register an impression once scrolled to.
+  const impressionScroll = useImpressionScroll();
   const params = useLocalSearchParams<{
     label?: string;
     categoryId?: string;
@@ -176,6 +179,7 @@ export default function CollectionScreen() {
         </View>
       ) : (
         <FlatList
+          {...impressionScroll}
           data={items}
           keyExtractor={item => item.id}
           numColumns={columns}

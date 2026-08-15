@@ -13,6 +13,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSequence, cancelAnimati
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../theme/ThemeContext';
+import { useImpression } from '../hooks/useImpression';
 import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
@@ -56,6 +57,9 @@ export const RecommendationCard = ({
   const { showToast } = useToast();
   const [imageError, setImageError] = useState(false);
   const addEvent = useEventStore((state) => state.addEvent);
+  // See ProductCard: product_impression means "was on screen", product_view
+  // below means "was opened". They must not be the same event.
+  const { ref: impressionRef, onLayout: onImpressionLayout } = useImpression(id, vendorId);
 
   const isItemInWishlist = useWishlistStore((state) =>
     state.items.some((i) => i.id === id)
@@ -179,6 +183,8 @@ export const RecommendationCard = ({
 
   return (
     <RNAnimated.View
+      ref={impressionRef as any}
+      onLayout={onImpressionLayout}
       style={[
         isDesktop && {
           transform: [{ scale: hoverScale }, { translateY: hoverTranslateY }],

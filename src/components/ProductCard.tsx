@@ -9,6 +9,7 @@ import { useCartStore } from '../store/cartStore';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useToast } from '../context/ToastContext';
 import { useEventStore } from '../store/eventStore';
+import { useImpression } from '../hooks/useImpression';
 import { Skeleton } from './Skeleton';
 
 interface ProductCardProps {
@@ -48,6 +49,11 @@ export const ProductCard = ({
   const isDesktop = width >= 768 && Platform.OS === 'web';
   const { showToast } = useToast();
   const addEvent = useEventStore((state) => state.addEvent);
+  // Fires product_impression once this card is genuinely on screen. Distinct
+  // from the product_view below, which means the shopper opened it — keeping
+  // "seen" and "clicked" apart is what lets a vendor tell a visibility problem
+  // from a pricing one.
+  const { ref: impressionRef, onLayout: onImpressionLayout } = useImpression(id, vendorId);
 
   // ── Hover animation (desktop web only) ──
   const [hoverAnim] = useState(() => new RNAnimated.Value(0));
@@ -124,6 +130,8 @@ export const ProductCard = ({
 
   return (
     <RNAnimated.View
+      ref={impressionRef as any}
+      onLayout={onImpressionLayout}
       style={[
         { width: '100%' },
         isDesktop && {

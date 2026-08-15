@@ -10,9 +10,12 @@ import { fetchSuggestions, fetchSearchResults, fetchVendorSearchResults, fetchTr
 import { ProductCard } from '../../components/ProductCard';
 import { useSearchStore } from '../../store/searchStore';
 import { useEventStore } from '../../store/eventStore';
+import { useImpressionScroll } from '../../hooks/useImpression';
 
 export default function Search() {
   const { colors } = useTheme();
+  // Lets product cards below the fold register an impression once scrolled to.
+  const impressionScroll = useImpressionScroll();
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -122,30 +125,43 @@ export default function Search() {
     setCommittedQuery(trimmedQuery);
     
     addRecentSearch(trimmedQuery);
-    
-    addEvent({
-      event_type: 'product_search',
-      metadata: { query: trimmedQuery }
-    });
-    
+
+    // The search event is logged *after* the results come back, so it can carry
+    // how many there were — the search-gap report reads results_count to find
+    // the queries shoppers make that this catalogue cannot answer, and nothing
+    // was ever sending it, so that figure was always 0.
+    //
+    // The timestamp is captured here rather than at logging time, so the event
+    // still records when the shopper actually searched rather than when the
+    // network happened to reply.
+    const searchedAt = new Date().toISOString();
+
     // Explicitly fetch on submit for instant feedback, though useEffect handles debounced
     setHasSearched(true);
     setIsSearching(true);
-    
+
     const [response, vendorResponse] = await Promise.all([
       fetchSearchResults(trimmedQuery),
       fetchVendorSearchResults(trimmedQuery)
     ]);
 
+    let resultsCount = 0;
     if (response && response.hits) {
       setResults(response.hits);
       setTotalFound(response.found ?? response.hits.length);
+      resultsCount = response.found ?? response.hits.length;
       setPage(1);
     } else {
       setResults([]);
       setTotalFound(0);
       setPage(1);
     }
+
+    addEvent({
+      event_type: 'product_search',
+      occurred_at: searchedAt,
+      metadata: { query: trimmedQuery, results_count: resultsCount },
+    });
 
     if (vendorResponse && vendorResponse.hits) {
       setVendorResults(vendorResponse.hits.map((h: any) => h.document || h));
@@ -261,11 +277,12 @@ export default function Search() {
         </View>
       </View>
 
-      <ScrollView 
-        style={{ flex: 1 }} 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         keyboardShouldPersistTaps="handled"
+        {...impressionScroll}
       >
         {query.length === 0 ? (
           <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>

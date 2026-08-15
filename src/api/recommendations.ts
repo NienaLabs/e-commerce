@@ -142,9 +142,16 @@ export interface RecommendationEventPayload {
   event_type: string;
   product_id?: string;
   vendor_id?: string;
+  /** Set automatically by the event store — see addEvent. */
   session_id?: string;
   referrer_source?: string;
   metadata?: Record<string, any>;
+  /**
+   * ISO timestamp of when the interaction happened, stamped on the device.
+   * Set automatically by the event store. The server clamps it to a sane
+   * window and falls back to receive time when absent.
+   */
+  occurred_at?: string;
 }
 
 /** POST /api/v1/recommendations/batch-events — log multiple events efficiently */

@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { ToastAndroid } from 'react-native';
 import { setFollowState } from '../../api/localFollows';
 import { VendorAvatar } from '../../components/VendorAvatar';
+import { useImpressionScroll } from '../../hooks/useImpression';
 
 const FALLBACK_BANNER = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=1200';
 
@@ -88,6 +89,8 @@ const StatBox = ({ value, label, colors }: { value: string; label: string; color
 
 export default function VendorStorefront() {
   const { colors } = useTheme();
+  // Lets product cards below the fold register an impression once scrolled to.
+  const impressionScroll = useImpressionScroll();
   const { id } = useLocalSearchParams<{ id: string }>();
   const vendorId = Array.isArray(id) ? id[0] : id as string;
   const { token, user } = useAuth();
@@ -259,7 +262,7 @@ export default function VendorStorefront() {
         </Pressable>
       </View>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} {...impressionScroll}>
         {/* Centres the storefront on wide monitors instead of stretching it. */}
         <View style={{ width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
 

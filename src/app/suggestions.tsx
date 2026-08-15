@@ -8,11 +8,14 @@ import { ProductCard } from '../components/ProductCard';
 import { WebHeader } from '../components/WebHeader';
 import { useQuery } from '@tanstack/react-query';
 import { listProducts, mapProductToCard } from '../api/products';
+import { useImpressionScroll } from '../hooks/useImpression';
 
 export default function SuggestionsScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  // Lets product cards below the fold register an impression once scrolled to.
+  const impressionScroll = useImpressionScroll();
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products', 'suggestions'],
@@ -47,7 +50,7 @@ export default function SuggestionsScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }} {...impressionScroll}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
             {mapped.map(product => (
               <View key={product.id} style={{ width: isDesktop ? '31%' : '100%', marginBottom: 16 }}>

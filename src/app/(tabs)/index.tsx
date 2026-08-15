@@ -17,6 +17,7 @@ import Animated, {
   useAnimatedStyle,
   interpolate,
   interpolateColor,
+  runOnJS,
   Extrapolation,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +42,7 @@ import HeroBanner from '@/components/HeroBanner';
 import { useSidebar } from '../../context/SidebarContext';
 import { useLocationStore } from '../../store/locationStore';
 import { resolveCategory, iconForSchemaKey } from '../../utils/categoryIcons';
+import { notifyScroll } from '../../hooks/useImpression';
 
 
 // Icons come from the shared map so this list, the live-category matcher below,
@@ -140,6 +142,10 @@ export default function Home() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
+      // Let impression tracking re-check which cards are on screen. notifyScroll
+      // throttles itself, so hopping to the JS thread here stays cheap even at
+      // this handler's 16ms throttle.
+      runOnJS(notifyScroll)();
     },
   });
 

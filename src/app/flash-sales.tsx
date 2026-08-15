@@ -7,6 +7,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { ProductCard } from '../components/ProductCard';
 import { useQuery } from '@tanstack/react-query';
 import { getLiveFlashSale, mapProductToCard } from '../api/products';
+import { useImpressionScroll } from '../hooks/useImpression';
 
 /**
  * The countdown used to run to `Date.now() + 6 hours`, recomputed on every
@@ -49,6 +50,8 @@ export default function FlashSalesScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768 && Platform.OS === 'web';
+  // Lets product cards below the fold register an impression once scrolled to.
+  const impressionScroll = useImpressionScroll();
   const { data: sale, isLoading } = useQuery({
     queryKey: ['flash-sale'],
     queryFn: getLiveFlashSale,
@@ -112,7 +115,7 @@ export default function FlashSalesScreen() {
         )}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} {...impressionScroll}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
           {isLoading ? (
             <Text style={{ fontFamily: 'OpenSans_400Regular', color: colors.inkMuted, textAlign: 'center', width: '100%', marginTop: 24 }}>Loading flash sales...</Text>
