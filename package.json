@@ -61,6 +61,7 @@
     "eslint": "^9.0.0",
     "eslint-config-expo": "~56.0.4",
     "react-native-svg-transformer": "^1.5.3",
+    "sharp": "^0.35.3",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -69,6 +70,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:web": "node scripts/generate-sitemap.js && expo export -p web",
     "lint": "expo lint"
   },
   "private": true

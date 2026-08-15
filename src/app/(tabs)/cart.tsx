@@ -270,7 +270,7 @@ export default function Cart() {
           </>
         ) : (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 200 }}>
-            <Image source={require('@/assets/3d icons/empty cart.png')} style={{ width: 160, height: 160, marginBottom: 24 }} contentFit="contain" />
+            <Image source={require('@/assets/3d icons/empty cart.webp')} style={{ width: 160, height: 160, marginBottom: 24 }} contentFit="contain" />
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 22, color: colors.ink, marginBottom: 8 }}>
               Your cart is empty
             </Text>

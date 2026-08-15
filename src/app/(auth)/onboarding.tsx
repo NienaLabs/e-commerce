@@ -24,20 +24,14 @@ import Animated, {
   FadeInRight,
   FadeOutLeft,
   FadeInDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  Easing,
-  withSequence,
   LinearTransition,
 } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { OptimizedImage } from '../../components/ui/OptimizedImage';
 
-// — Replace these with real URLs before shipping —
-const TERMS_URL = 'https://yourapp.com/terms';
-const PRIVACY_URL = 'https://yourapp.com/privacy';
+// — Real URLs for terms and privacy —
+const TERMS_URL = '/terms' as any;
+const PRIVACY_URL = '/privacy' as any;
 
 const BUDGET_OPTIONS: { value: NonNullable<OnboardingSubmitPayload['budget_preference']>; label: string; sub: string }[] = [
   { value: 'budget',  label: 'Budget-friendly',   sub: 'Great finds, great prices'    },
@@ -119,11 +113,11 @@ function validateDob(value: string): string | null {
 // ─── Animations & Assets ────────────────────────────────────────────────────────
 
 const ILLUSTRATIONS = {
-  welcome: require('../../../assets/onboarding/bird-welcome.png'),
-  consent: require('../../../assets/onboarding/bird-about.png'),
-  about: require('../../../assets/onboarding/bird-consent.png'),
-  interests: require('../../../assets/onboarding/bird-preferences.png'),
-  finish: require('../../../assets/onboarding/bird-social.png'),
+  welcome: require('../../../assets/onboarding/bird-welcome.webp'),
+  consent: require('../../../assets/onboarding/bird-about.webp'),
+  about: require('../../../assets/onboarding/bird-consent.webp'),
+  interests: require('../../../assets/onboarding/bird-preferences.webp'),
+  finish: require('../../../assets/onboarding/bird-social.webp'),
 };
 
 function WavyBackground({ isDark }: { isDark: boolean }) {
@@ -476,7 +470,7 @@ export default function OnboardingScreen() {
                     Data Processing
                   </Text>
                   <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.inkSoft, lineHeight: 18 }}>
-                    I agree to the collection and processing of my personal data in accordance with GDPR.
+                    I agree to the collection and processing of my personal data in accordance with all Data Protection Laws.
                   </Text>
                 </View>
                 <Switch
@@ -492,9 +486,9 @@ export default function OnboardingScreen() {
               <Ionicons name="information-circle" size={16} color={colors.inkGhost} />
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.inkSoft, flex: 1 }}>
                 Read our{' '}
-                <Text onPress={() => Linking.openURL(TERMS_URL)} style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Terms</Text>
+                <Text onPress={() => router.push(TERMS_URL)} style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Terms</Text>
                 {' '}and{' '}
-                <Text onPress={() => Linking.openURL(PRIVACY_URL)} style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Privacy Policy</Text>.
+                <Text onPress={() => router.push(PRIVACY_URL)} style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Privacy Policy</Text>.
               </Text>
             </View>
           </Animated.View>

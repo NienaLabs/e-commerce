@@ -145,7 +145,7 @@ export default function VendorDashboard() {
           <View style={{ flex: 1, minWidth: 280, gap: 24 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 20, color: colors.ink }}>Summary</Text>
-              <Image source={require('../../../assets/3d icons/piggy-bank.png')} style={{ width: 48, height: 48 }} resizeMode="contain" />
+              <Image source={require('../../../assets/3d icons/piggy-bank.webp')} style={{ width: 48, height: 48 }} resizeMode="contain" />
             </View>
 
             {/* Commission owed — vendors collect from customers directly, so

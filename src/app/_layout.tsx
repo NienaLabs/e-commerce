@@ -3,7 +3,7 @@ import Head from "expo-router/head";
 import { SidebarProvider } from '../context/SidebarContext';
 import { Sidebar } from '../components/Sidebar';
 import "../../global.css";
-import { useFonts } from 'expo-font';
+import { useFonts, FontDisplay } from 'expo-font';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { OpenSans_400Regular, OpenSans_600SemiBold } from '@expo-google-fonts/open-sans';
 import * as SplashScreen from 'expo-splash-screen';
@@ -94,6 +94,10 @@ export default function RootLayout() {
     'Inter_700Bold': Inter_700Bold,
     'OpenSans_400Regular': OpenSans_400Regular,
     'OpenSans_600SemiBold': OpenSans_600SemiBold,
+    Ionicons: {
+      uri: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+      display: FontDisplay.SWAP,
+    },
   });
 
   useEffect(() => {

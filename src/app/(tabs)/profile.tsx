@@ -66,7 +66,7 @@ export default function Profile() {
             borderColor: colors.surfaceMuted,
           }}>
             <Image 
-              source={require('@/assets/3d icons/konura-bird.png')}
+              source={require('@/assets/3d icons/konura-bird.webp')}
               style={{ width: 120, height: 120, marginBottom: 16 }}
               resizeMode="contain"
             />

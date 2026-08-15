@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { StyleProp, ViewStyle, View } from 'react-native';
 import { MapContext } from './MapContext';
 
@@ -101,6 +100,8 @@ export const MapView: React.FC<MapViewProps> = ({
   }, [onPress]);
 
   useEffect(() => {
+    // Dynamically import CSS so it doesn't block initial page load
+    import('maplibre-gl/dist/maplibre-gl.css').catch(err => console.warn('Failed to load map CSS', err));
     if (map.current) return; // initialize map only once
     
     if (mapContainer.current) {
