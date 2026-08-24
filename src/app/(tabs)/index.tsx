@@ -580,8 +580,6 @@ export default function Home() {
             "url": "https://konura.store",
             "address": {
               "@type": "PostalAddress",
-              "addressLocality": "Kumasi",
-              "addressRegion": "Ashanti",
               "addressCountry": "GH"
             }
           }

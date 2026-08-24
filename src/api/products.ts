@@ -239,12 +239,12 @@ export async function updateProduct(
   return handleResponse<Product>(res);
 }
 
-/** DELETE /products/{product_id} — delete a product (requires auth token) */
+/** DELETE /vendors/me/products/{product_id} — delete a vendor's product (requires auth token) */
 export async function deleteProduct(
   token: string,
   productId: string
 ): Promise<void> {
-  const res = await fetch(`${BASE_URL}/products/${productId}`, {
+  const res = await fetch(`${BASE_URL}/vendors/me/products/${productId}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${token}`,
