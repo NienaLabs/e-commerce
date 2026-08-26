@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createVendor, getVendorRegistrationStatus } from '../api/vendors';
 import { uploadFile } from '../api/upload';
+import { ImageCropModal } from '../components/ImageCropModal';
 import {
   VENDOR_TERMS,
   VENDOR_TERMS_VERSION,
@@ -131,17 +132,25 @@ export default function BecomeVendorScreen() {
   });
 
   const [isLocating, setIsLocating] = useState(false);
+  // On web there's no OS crop tool, so we crop in-app after picking.
+  const [crop, setCrop] = useState<{ uri: string; field: 'logoUrl' | 'bannerUrl' } | null>(null);
 
   const pickImage = async (field: 'logoUrl' | 'bannerUrl') => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      // Native gets the OS crop tool; web has none, so we crop in-app below.
+      allowsEditing: Platform.OS !== 'web',
       aspect: field === 'logoUrl' ? [1, 1] : [3, 1],
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      setForm(prev => ({ ...prev, [field]: result.assets[0].uri }));
+      const uri = result.assets[0].uri;
+      if (Platform.OS === 'web') {
+        setCrop({ uri, field });
+      } else {
+        setForm(prev => ({ ...prev, [field]: uri }));
+      }
     }
   };
 
@@ -476,6 +485,19 @@ export default function BecomeVendorScreen() {
         </View>
       </ScrollView>
       )}
+
+      <ImageCropModal
+        visible={crop !== null}
+        imageUri={crop?.uri ?? null}
+        aspect={crop?.field === 'logoUrl' ? 1 : 3}
+        label={crop?.field === 'logoUrl' ? 'logo' : 'banner'}
+        onCancel={() => setCrop(null)}
+        onCropped={(uri) => {
+          const field = crop?.field;
+          setCrop(null);
+          if (field) setForm(prev => ({ ...prev, [field]: uri }));
+        }}
+      />
     </SafeAreaView>
   );
 }

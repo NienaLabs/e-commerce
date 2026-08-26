@@ -10,6 +10,7 @@ import { getVendorMe, updateVendor, deleteVendor } from '../../../api/vendors';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { uploadFile } from '../../../api/upload';
+import { ImageCropModal } from '../../../components/ImageCropModal';
 import { Header, ScreenBody, Section, Card, Field, Btn, Badge, font } from '../../../components/vendor/kit';
 
 export default function GeneralSettingsScreen() {
@@ -20,6 +21,8 @@ export default function GeneralSettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [uploading, setUploading] = useState<'logoUrl' | 'bannerUrl' | null>(null);
+  // On web there is no OS crop tool, so we crop in-app after picking.
+  const [crop, setCrop] = useState<{ uri: string; field: 'logoUrl' | 'bannerUrl' } | null>(null);
   const [form, setForm] = useState({
     storeName: '', storeSlug: '', bio: '', logoUrl: '', bannerUrl: '',
     latitude: null as number | null, longitude: null as number | null,
@@ -99,24 +102,11 @@ export default function GeneralSettingsScreen() {
     }
   };
 
-  const pickImage = async (field: 'logoUrl' | 'bannerUrl') => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: field === 'logoUrl' ? [1, 1] : [3, 1],
-      quality: 0.8,
-    });
-    if (result.canceled) return;
-
-    const localUri = result.assets[0].uri;
-    // Show the local file immediately so the picker feels responsive…
+  // Upload a (already-cropped) local image and store its public URL. The picker
+  // hands back a device-local URI (file:// on native, blob: on web) that only
+  // that one device can resolve, so we must upload and persist the public URL.
+  const uploadPicked = async (localUri: string, field: 'logoUrl' | 'bannerUrl') => {
     setForm(prev => ({ ...prev, [field]: localUri }));
-
-    // …but the picker hands back a device-local URI (file:// on native,
-    // blob: on web). That was being saved to the vendor profile verbatim, so
-    // logo_url pointed at a path only that one device could resolve — it
-    // looked fine to the vendor until they reloaded, and was never visible to
-    // anyone else. Upload it and store the public URL instead.
     setUploading(field);
     try {
       // A logo is never drawn larger than 96px; a banner spans the page.
@@ -131,6 +121,24 @@ export default function GeneralSettingsScreen() {
       showToast(e?.message ?? 'Could not upload image. Please try again.', 'error');
     } finally {
       setUploading(null);
+    }
+  };
+
+  const pickImage = async (field: 'logoUrl' | 'bannerUrl') => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      // Native gets the OS crop tool; web has none, so we crop in-app below.
+      allowsEditing: Platform.OS !== 'web',
+      aspect: field === 'logoUrl' ? [1, 1] : [3, 1],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    const localUri = result.assets[0].uri;
+    if (Platform.OS === 'web') {
+      setCrop({ uri: localUri, field });
+    } else {
+      uploadPicked(localUri, field);
     }
   };
 
@@ -236,6 +244,19 @@ export default function GeneralSettingsScreen() {
           </Section>
         </ScreenBody>
       )}
+
+      <ImageCropModal
+        visible={crop !== null}
+        imageUri={crop?.uri ?? null}
+        aspect={crop?.field === 'logoUrl' ? 1 : 3}
+        label={crop?.field === 'logoUrl' ? 'logo' : 'banner'}
+        onCancel={() => setCrop(null)}
+        onCropped={(uri) => {
+          const field = crop?.field;
+          setCrop(null);
+          if (field) uploadPicked(uri, field);
+        }}
+      />
     </View>
   );
 }
