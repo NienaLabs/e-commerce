@@ -14,11 +14,11 @@ import { THUMB_SUFFIX } from '../utils/imageUrl';
  * logo rendered in a 96px circle was being stored at 1080×1926.
  */
 export const UPLOAD_PRESETS = {
-  /** Store logo / avatar — rendered at 96px at the largest. */
-  logo: { maxWidth: 320, quality: 0.82 },
-  /** Storefront banner — full width, but short. */
-  banner: { maxWidth: 1440, quality: 0.8 },
-  /** Product photography — opened full screen on the product page. */
+  /** Store logo / avatar — rendered at 96px at the largest, always square. */
+  logo: { maxWidth: 320, quality: 0.82, aspect: [1, 1] as [number, number] },
+  /** Storefront banner — full width, but short and wide. */
+  banner: { maxWidth: 1440, quality: 0.8, aspect: [3, 1] as [number, number] },
+  /** Product photography — opened full screen; no forced aspect. */
   product: { maxWidth: 1080, quality: 0.8 },
 } as const;
 
@@ -44,17 +44,56 @@ export async function uploadFile(
   token: string,
   preset: UploadPreset = 'product',
 ): Promise<string> {
-  const { maxWidth, quality } = UPLOAD_PRESETS[preset] ?? UPLOAD_PRESETS.product;
+  const cfg = UPLOAD_PRESETS[preset] ?? UPLOAD_PRESETS.product;
+  const { maxWidth, quality } = cfg;
+  const aspect: [number, number] | undefined = "aspect" in cfg ? cfg.aspect : undefined;
 
-  // 1. Compress. Only ever scale DOWN — resizing to a fixed width also
-  // upscales anything smaller, which inflates the file for no added detail.
   const size = await getImageSize(fileUri);
-  const targetWidth = size ? Math.min(size.width, maxWidth) : maxWidth;
+
+  const actions: ImageManipulator.Action[] = [];
+  // Track the width the image will have going into the resize step: the crop
+  // width if we crop, otherwise the source width.
+  let effectiveWidth = size?.width;
+
+  // 1. Crop to the preset's aspect ratio (logo = 1:1, banner = 3:1) so the
+  // stored image fits its slot on every platform. Native ImagePicker offers an
+  // interactive crop (allowsEditing + aspect), but that's a no-op on web — so we
+  // centre-crop the largest matching rectangle here. Harmless on native, where
+  // the image already matches, and it guarantees the storefront never distorts
+  // or arbitrarily crops a mismatched logo/banner.
+  if (aspect && size) {
+    const targetRatio = aspect[0] / aspect[1];
+    const srcRatio = size.width / size.height;
+    let cropW = size.width;
+    let cropH = size.height;
+    if (srcRatio > targetRatio) {
+      cropW = Math.round(size.height * targetRatio);
+    } else if (srcRatio < targetRatio) {
+      cropH = Math.round(size.width / targetRatio);
+    }
+    if (cropW !== size.width || cropH !== size.height) {
+      actions.push({
+        crop: {
+          originX: Math.round((size.width - cropW) / 2),
+          originY: Math.round((size.height - cropH) / 2),
+          width: cropW,
+          height: cropH,
+        },
+      });
+      effectiveWidth = cropW;
+    }
+  }
+
+  // 2. Compress. Only ever scale DOWN — resizing to a fixed width also upscales
+  // anything smaller, which inflates the file for no added detail. Measured
+  // against the post-crop width, not the original.
+  if (!effectiveWidth || effectiveWidth > maxWidth) {
+    actions.push({ resize: { width: maxWidth } });
+  }
 
   const manipResult = await ImageManipulator.manipulateAsync(
     fileUri,
-    // ImageManipulator keeps the aspect ratio when only width is given.
-    size && size.width <= maxWidth ? [] : [{ resize: { width: targetWidth } }],
+    actions,
     { compress: quality, format: ImageManipulator.SaveFormat.JPEG },
   );
 
