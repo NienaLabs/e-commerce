@@ -10,6 +10,17 @@
       "destination": "https://6ddppysfz5onv3n37neep242em0fhxmm.lambda-url.us-east-2.on.aws/:path*"
     },
     {
+      "source": "/product/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(facebookexternalhit|facebot|twitterbot|whatsapp|slackbot|slack-imgproxy|telegrambot|discordbot|linkedinbot|pinterest|redditbot|embedly|quora|showyoubot|outbrain|vkshare|w3c_validator|applebot|skypeuripreview|googlebot|bingbot|google-inspectiontool|iframely).*"
+        }
+      ],
+      "destination": "https://6ddppysfz5onv3n37neep242em0fhxmm.lambda-url.us-east-2.on.aws/og/product/:id"
+    },
+    {
       "source": "/:path*",
       "destination": "/"
     }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions, Platform, Share } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -162,7 +162,9 @@ export default function ProductDetail() {
 
   const productColors = product.colors.map(c => c.name);
   const productImages = product.images.map(i => i.image_url);
-  const firstImage = productImages[0] ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800';
+  // Prefer the primary image for the card/share preview, falling back to the first.
+  const primaryImageUrl = product.images.find((i: any) => i.is_primary)?.image_url;
+  const firstImage = primaryImageUrl ?? productImages[0] ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800';
   const displayImage = productImages[selectedImageIndex] ?? firstImage;
   const displayColors = productColors.length > 0 ? productColors : ['Default'];
   const currentColor = selectedColor || displayColors[0];
@@ -176,6 +178,34 @@ export default function ProductDetail() {
   const totalBackendScore = product.avg_rating * product.review_count;
   const totalLocalScore = localReviews.reduce((sum, r) => sum + r.rating, 0);
   const displayRating = totalReviewsCount === 0 ? 0 : (totalBackendScore + totalLocalScore) / totalReviewsCount;
+
+  // Share this product. The link is the normal product URL; when a crawler
+  // fetches it, Vercel serves an OG page (see backend /og/product) so the
+  // preview shows the product's image and description.
+  const shareUrl = `https://konura.store/product/${productId}`;
+  const handleShare = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+        if (nav?.share) {
+          await nav.share({ title: product.name, text: product.name, url: shareUrl });
+        } else if (nav?.clipboard?.writeText) {
+          await nav.clipboard.writeText(shareUrl);
+          showToast('Link copied to clipboard', 'success');
+        } else {
+          showToast(shareUrl, 'info');
+        }
+      } else {
+        await Share.share({
+          message: `${product.name} on Konura — ${shareUrl}`,
+          url: shareUrl,
+          title: product.name,
+        });
+      }
+    } catch {
+      // User dismissed the share sheet, or sharing is unavailable — no-op.
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
@@ -221,19 +251,29 @@ export default function ProductDetail() {
           <Ionicons name="chevron-back" size={24} color={colors.ink} />
         </Pressable>
         <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: colors.ink, flex: 1, textAlign: 'center' }}>Details</Text>
-        <Pressable 
-          onPress={() => router.push('/cart')}
-          accessibilityRole="button"
-          accessibilityLabel="Open cart"
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-        >
-          <Ionicons name="cart-outline" size={24} color={colors.ink} />
-          {totalCartItems > 0 && (
-            <View style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.onPrimary }}>{totalCartItems}</Text>
-            </View>
-          )}
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <Pressable
+            onPress={handleShare}
+            accessibilityRole="button"
+            accessibilityLabel="Share this product"
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="share-outline" size={22} color={colors.ink} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/cart')}
+            accessibilityRole="button"
+            accessibilityLabel="Open cart"
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="cart-outline" size={24} color={colors.ink} />
+            {totalCartItems > 0 && (
+              <View style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: colors.onPrimary }}>{totalCartItems}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
