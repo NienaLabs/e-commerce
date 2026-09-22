@@ -24,7 +24,10 @@ export default function VendorProductsScreen() {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['vendor-products', vendor?.id],
-    queryFn: () => getVendorProducts(vendor!.id),
+    // The vendor manages their whole catalogue here, so pull the full page
+    // (the endpoint caps at 100) instead of the default 20 — otherwise a store
+    // with more than 20 products looks like the rest are missing.
+    queryFn: () => getVendorProducts(vendor!.id, { limit: 100 }),
     enabled: !!vendor?.id,
   });
 
