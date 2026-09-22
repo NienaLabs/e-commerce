@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProductCard } from '../../components/ProductCard';
 import { useTheme } from '../../theme/ThemeContext';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getVendor, getVendorProducts, getVendorFollowStatus, toggleVendorFollow } from '../../api/vendors';
 import { canMessageVendor } from '../../api/chat';
 import { mapProductToCard } from '../../api/products';
@@ -188,13 +188,25 @@ export default function VendorStorefront() {
     },
   });
 
-  const { data: rawProducts = [], isLoading: productsLoading } = useQuery({
+  // Paged so a shop with a big catalogue doesn't pull everything at once.
+  const PRODUCTS_PAGE = 12;
+  const {
+    data: productPages,
+    isLoading: productsLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['vendor-products', vendorId],
-    queryFn: () => getVendorProducts(vendorId, { limit: 50 }),
+    queryFn: ({ pageParam }) => getVendorProducts(vendorId, { skip: pageParam, limit: PRODUCTS_PAGE }),
+    initialPageParam: 0,
+    // A short page means the server has nothing left to give.
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < PRODUCTS_PAGE ? undefined : allPages.length * PRODUCTS_PAGE,
     enabled: !!vendorId,
   });
 
-  const productList = rawProducts.map(mapProductToCard);
+  const productList = (productPages?.pages.flat() ?? []).map(mapProductToCard);
 
   if (vendorLoading) {
     return (
@@ -494,22 +506,45 @@ export default function VendorStorefront() {
               </Text>
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-              {productList.map(product => (
-                <View key={product.id} style={{ width: cardWidth }}>
-                  <ProductCard
-                    id={product.id}
-                    name={product.name}
-                    price={product.price}
-                    salePrice={product.salePrice}
-                    imageUrl={product.imageUrl}
-                    vendorId={product.vendorId}
-                    inStock={product.inStock}
-                    onPress={() => router.push(`/product/${product.id}` as any)}
-                  />
-                </View>
-              ))}
-            </View>
+            <>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
+                {productList.map(product => (
+                  <View key={product.id} style={{ width: cardWidth }}>
+                    <ProductCard
+                      id={product.id}
+                      name={product.name}
+                      price={product.price}
+                      salePrice={product.salePrice}
+                      imageUrl={product.imageUrl}
+                      vendorId={product.vendorId}
+                      inStock={product.inStock}
+                      onPress={() => router.push(`/product/${product.id}` as any)}
+                    />
+                  </View>
+                ))}
+              </View>
+
+              {hasNextPage && (
+                <Pressable
+                  onPress={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    alignSelf: 'center', marginTop: 24,
+                    paddingHorizontal: 24, paddingVertical: 14, borderRadius: 24,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1, borderColor: colors.surfaceMuted,
+                    opacity: pressed || isFetchingNextPage ? 0.7 : 1,
+                  })}
+                >
+                  {isFetchingNextPage && <ActivityIndicator size="small" color={colors.primary} />}
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: colors.ink }}>
+                    {isFetchingNextPage ? 'Loading…' : 'Load more'}
+                  </Text>
+                </Pressable>
+              )}
+            </>
           )}
         </View>
 
