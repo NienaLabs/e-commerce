@@ -726,7 +726,11 @@ export default function Home() {
             <Skeleton width="100%" height={350} borderRadius={24} />
           </View>
         ) : (
-          <HeroBanner images={heroBanners.length > 0 ? heroBanners.map((b: any) => b.image_url) : undefined} height={350} />
+          <HeroBanner
+            images={heroBanners.length > 0 ? heroBanners.map((b: any) => b.image_url) : undefined}
+            links={heroBanners.length > 0 ? heroBanners.map((b: any) => b.link_url) : undefined}
+            height={350}
+          />
         )}
 
         {/* ─── Categories ─── */}

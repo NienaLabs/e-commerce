@@ -124,13 +124,24 @@ export interface FlashSaleProduct extends Product {
   flash_price?: number | null;
 }
 
+export interface FlashSaleShopGroup {
+  vendor_id: string;
+  store_name?: string | null;
+  /** % off applied to the whole shop for the sale; null = featured at current prices. */
+  discount_percent?: number | null;
+  products: FlashSaleProduct[];
+}
+
 export interface LiveFlashSale {
   id: string;
   title: string;
   subtitle?: string | null;
   starts_at: string;
   ends_at: string;
+  /** Individually-featured products. */
   products: FlashSaleProduct[];
+  /** Whole shops added to the sale, each with its products. */
+  shops?: FlashSaleShopGroup[];
 }
 
 /**

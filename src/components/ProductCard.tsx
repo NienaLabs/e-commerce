@@ -318,18 +318,20 @@ export const ProductCard = ({
         justifyContent: 'space-between',
         marginBottom: 10,
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flex: 1 }}>
+        {/* Wraps so a long struck-through original price (e.g. GH₵27,500)
+            drops to a second line instead of running off the card edge. */}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 6, rowGap: 2, flex: 1, minWidth: 0 }}>
           {salePrice ? (
             <>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: '#d93651' }}>
+              <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: '#d93651' }}>
                 GH₵{salePrice.toFixed(2)}
               </Text>
-              <Text style={{ fontFamily: 'OpenSans_400Regular', fontSize: isDesktop ? 14 : 12, color: colors.inkGhost, textDecorationLine: 'line-through' }}>
+              <Text numberOfLines={1} style={{ fontFamily: 'OpenSans_400Regular', fontSize: isDesktop ? 14 : 12, color: colors.inkGhost, textDecorationLine: 'line-through' }}>
                 GH₵{price.toFixed(2)}
               </Text>
             </>
           ) : (
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: colors.ink }}>
+            <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: isDesktop ? 20 : 16, color: colors.ink }}>
               GH₵{price.toFixed(2)}
             </Text>
           )}

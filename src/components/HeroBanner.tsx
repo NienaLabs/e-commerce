@@ -5,7 +5,9 @@ import {
   useWindowDimensions,
   Pressable,
   ScrollView,
+  Linking,
 } from 'react-native';
+import { router } from 'expo-router';
 import { OptimizedImage } from './ui/OptimizedImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeContext';
@@ -21,6 +23,10 @@ const DEFAULT_IMAGES = [
 interface AutoPlayCarouselProps {
   /** Array of image URLs or local image assets to cycle through */
   images?: any[];
+  /** Optional destination per slide (parallel to `images`). A path like
+   *  "/flash-sales" navigates in-app; a full http(s) URL opens externally
+   *  (konura.store URLs are routed in-app). Empty/undefined = not tappable. */
+  links?: (string | null | undefined)[];
   /** Time each image stays on screen, in ms */
   interval?: number;
   /** Height of the carousel frame */
@@ -33,6 +39,7 @@ interface AutoPlayCarouselProps {
 
 export default function HeroBanner({
   images = DEFAULT_IMAGES,
+  links,
   interval = 4000,
   height = 250,
   slideDuration = 450,
@@ -139,6 +146,24 @@ export default function HeroBanner({
     startAutoPlay();
   };
 
+  const openLink = (link?: string | null) => {
+    const l = (link ?? '').trim();
+    if (!l) return;
+    if (/^https?:\/\//i.test(l)) {
+      try {
+        const u = new URL(l);
+        // Keep konura.store links in-app rather than bouncing to the browser.
+        if (u.hostname.replace(/^www\./, '').includes('konura.store')) {
+          router.push((u.pathname + u.search) as any);
+          return;
+        }
+      } catch {}
+      Linking.openURL(l).catch(() => {});
+    } else {
+      router.push((l.startsWith('/') ? l : '/' + l) as any);
+    }
+  };
+
   return (
     <View style={[styles.frame, { height, width: SCREEN_WIDTH }]}>
       <ScrollView
@@ -157,16 +182,32 @@ export default function HeroBanner({
             the carousel auto-advances every 4s, so deferring them just means a
             blank frame the moment it rotates. The first is the largest thing
             on the home screen, hence the priority. */}
-        {slides.map((uri, i) => (
-          <OptimizedImage
-            key={i}
-            source={uri}
-            style={{ width: SCREEN_WIDTH, height }}
-            contentFit="cover"
-            loading="eager"
-            priority={i === 0 ? 'high' : 'normal'}
-          />
-        ))}
+        {slides.map((uri, i) => {
+          const link = links?.[i % images.length];
+          const image = (
+            <OptimizedImage
+              source={uri}
+              style={{ width: SCREEN_WIDTH, height }}
+              contentFit="cover"
+              loading="eager"
+              priority={i === 0 ? 'high' : 'normal'}
+            />
+          );
+          return link ? (
+            <Pressable
+              key={i}
+              onPress={() => openLink(link)}
+              accessibilityRole="link"
+              style={{ width: SCREEN_WIDTH, height }}
+            >
+              {image}
+            </Pressable>
+          ) : (
+            <View key={i} style={{ width: SCREEN_WIDTH, height }}>
+              {image}
+            </View>
+          );
+        })}
       </ScrollView>
 
       <LinearGradient

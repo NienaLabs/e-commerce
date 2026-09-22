@@ -370,9 +370,11 @@ export const RecommendationCard = ({
           {name}
         </Text>
 
-        {/* Price */}
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+        {/* Price — wraps so a long struck-through original price doesn't
+            overflow the card on high-value items. */}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 4, rowGap: 2, minWidth: 0 }}>
           <Text
+            numberOfLines={1}
             style={{
               fontFamily: 'Inter_700Bold',
               fontSize: isDesktop ? 16 : 14,
@@ -383,6 +385,7 @@ export const RecommendationCard = ({
           </Text>
           {salePrice && price > salePrice && (
             <Text
+              numberOfLines={1}
               style={{
                 fontFamily: 'OpenSans_400Regular',
                 fontSize: 10,
