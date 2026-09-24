@@ -89,6 +89,10 @@ export default function ProductDetail() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const REVIEWS_PAGE_SIZE = 5;
 
+  // Reset to the first photo whenever the product changes. Must live here with
+  // the other hooks — never after the early returns below (Rules of Hooks).
+  useEffect(() => { setSelectedImageIndex(0); }, [productId]);
+
   const isWishlisted = useWishlistStore((state) => state.items.some(i => i.id === productId));
   const toggleWishlistItem = useWishlistStore((state) => state.toggleItem);
 
@@ -166,9 +170,6 @@ export default function ProductDetail() {
   const primaryImageUrl = product.images.find((i: any) => i.is_primary)?.image_url;
   const firstImage = primaryImageUrl ?? productImages[0] ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800';
   const displayImage = productImages[selectedImageIndex] ?? firstImage;
-
-  // Reset to the first photo whenever we land on a different product.
-  useEffect(() => { setSelectedImageIndex(0); }, [product.id]);
 
   const goPrev = () => setSelectedImageIndex(i => (i - 1 + productImages.length) % productImages.length);
   const goNext = () => setSelectedImageIndex(i => (i + 1) % productImages.length);
