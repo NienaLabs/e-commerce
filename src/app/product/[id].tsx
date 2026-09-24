@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, Pressable, ActivityIndicator, useWindowDimensions, Platform, Share } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -166,6 +166,12 @@ export default function ProductDetail() {
   const primaryImageUrl = product.images.find((i: any) => i.is_primary)?.image_url;
   const firstImage = primaryImageUrl ?? productImages[0] ?? 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800';
   const displayImage = productImages[selectedImageIndex] ?? firstImage;
+
+  // Reset to the first photo whenever we land on a different product.
+  useEffect(() => { setSelectedImageIndex(0); }, [product.id]);
+
+  const goPrev = () => setSelectedImageIndex(i => (i - 1 + productImages.length) % productImages.length);
+  const goNext = () => setSelectedImageIndex(i => (i + 1) % productImages.length);
   const displayColors = productColors.length > 0 ? productColors : ['Default'];
   const currentColor = selectedColor || displayColors[0];
   const inStock = product.stock_quantity > 0;
@@ -289,15 +295,15 @@ export default function ProductDetail() {
           {/* Image Gallery */}
           <View style={{ flex: isDesktop ? 1 : undefined, minWidth: 0 }}>
             <View style={{ width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceSoft, borderRadius: 24, overflow: 'hidden', marginBottom: 16 }}>
-              {/* Full-size original on purpose — this is the one place the
-                  shopper actually inspects the photo. Lists use the thumbnail
-                  rendition via sizedImageUrl. */}
+              {/* recyclingKey MUST vary with the image, or expo-image reuses the
+                  same view and the picture doesn't update when you switch. */}
               <OptimizedImage
                 source={displayImage}
                 optimizedWidth={800}
                 style={{ width: '100%', height: '100%' }}
                 contentFit="cover"
-                recyclingKey={product.id}
+                recyclingKey={displayImage}
+                transition={150}
                 priority="high"
               />
               {product.discount_price && (
@@ -305,33 +311,57 @@ export default function ProductDetail() {
                   <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: '#ffffff', letterSpacing: 1 }}>SALE</Text>
                 </View>
               )}
+
+              {/* Prev / next arrows + counter — only with more than one photo. */}
+              {productImages.length > 1 && (
+                <>
+                  <Pressable
+                    onPress={goPrev}
+                    accessibilityRole="button"
+                    accessibilityLabel="Previous image"
+                    hitSlop={8}
+                    style={({ pressed }) => ({ position: 'absolute', left: 12, top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, backgroundColor: pressed ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' })}
+                  >
+                    <Ionicons name="chevron-back" size={24} color="#fff" />
+                  </Pressable>
+                  <Pressable
+                    onPress={goNext}
+                    accessibilityRole="button"
+                    accessibilityLabel="Next image"
+                    hitSlop={8}
+                    style={({ pressed }) => ({ position: 'absolute', right: 12, top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, backgroundColor: pressed ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' })}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color="#fff" />
+                  </Pressable>
+                  <View style={{ position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#fff' }}>
+                      {selectedImageIndex + 1}/{productImages.length}
+                    </Text>
+                  </View>
+                </>
+              )}
             </View>
-            {/* Four 72px thumbs plus gaps are wider than a 360px screen, so the
-                strip scrolls horizontally rather than clipping the last one. */}
-            {productImages.length > 0 && (
+
+            {/* Single thumbnail strip — scrolls horizontally, tap to switch. */}
+            {productImages.length > 1 && (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ flexDirection: 'row', gap: 12, paddingRight: 4 }}
               >
                 {productImages.map((img, idx) => (
-                  <View key={idx} style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === 0 ? 2 : 1, borderColor: idx === 0 ? colors.primary : colors.surfaceMuted, overflow: 'hidden', flexShrink: 0 }}>
+                  <Pressable
+                    key={idx}
+                    onPress={() => setSelectedImageIndex(idx)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View image ${idx + 1}`}
+                    style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === selectedImageIndex ? 2 : 1, borderColor: idx === selectedImageIndex ? colors.primary : colors.surfaceMuted, overflow: 'hidden', flexShrink: 0, opacity: idx === selectedImageIndex ? 1 : 0.7 }}
+                  >
                     <OptimizedImage source={img} optimizedWidth={144} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-                  </View>
+                  </Pressable>
                 ))}
               </ScrollView>
             )}
-            <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
-              {productImages.map((img, idx) => (
-                <Pressable 
-                  key={idx} 
-                  onPress={() => setSelectedImageIndex(idx)}
-                  style={{ width: 72, height: 72, borderRadius: 12, borderWidth: idx === selectedImageIndex ? 2 : 1, borderColor: idx === selectedImageIndex ? colors.primary : colors.surfaceMuted, overflow: 'hidden' }}
-                >
-                  <OptimizedImage source={img} optimizedWidth={144} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-                </Pressable>
-              ))}
-            </View>
           </View>
 
           {/* Product Info */}
